@@ -1,0 +1,459 @@
+"""Turn raw extractions into validated records: quote check, dates, normalization, dedupe.
+
+Runs before anything is saved. Items whose quote is not in the source text are
+dropped (CLAUDE.md rule 3) and reported as warnings so the user can re-add them.
+"""
+from __future__ import annotations
+
+import re
+import unicodedata
+from dataclasses import dataclass, field
+from datetime import date, datetime
+
+from core import config
+from core.text import contains_phrase, normalize_name
+from extraction import schemas
+from extraction.records import (
+    BulletRec, CertificationRec, ClaimRec, Profile, ProjectRec, RoleRec, new_id,
+)
+from extraction.synonyms import CLAIM_SYNONYMS
+
+# --- Quote check ------------------------------------------------------------------
+
+_PUNCT = str.maketrans({
+    "‘": "'", "’": "'", "“": '"', "”": '"',
+    "–": "-", "—": "-", "−": "-", " ": " ",
+    "•": " ", "▪": " ", "●": " ", "·": " ", "": " ",
+})
+
+
+def _norm(text: str) -> str:
+    text = unicodedata.normalize("NFKC", text).translate(_PUNCT)
+    return " ".join(text.casefold().split())
+
+
+class QuoteIndex:
+    """Normalized views of one source text for tolerant-but-exact quote lookup.
+
+    Tolerates case, whitespace/line breaks, curly quotes, dashes, bullet glyphs and
+    PDF line-break hyphenation. It does not tolerate paraphrase.
+    """
+
+    def __init__(self, text: str):
+        self.plain = _norm(text)
+        self.dehyphenated = _norm(re.sub(r"-[ \t]*\n[ \t]*", "", text))
+        self.compact = re.sub(r"\s+", "", self.dehyphenated)
+        self.compact_plain = re.sub(r"\s+", "", self.plain)
+
+    def contains(self, quote: str | None) -> bool:
+        if not quote or not quote.strip():
+            return False
+        q = _norm(quote)
+        if q in self.plain or q in self.dehyphenated:
+            return True
+        # PDF extraction sometimes drops or adds spaces between words.
+        qc = q.replace(" ", "")
+        return qc in self.compact or qc in self.compact_plain
+
+
+# --- Dates --------------------------------------------------------------------------
+
+_PRESENT = {"present", "current", "now", "today", "ongoing"}
+_FORMATS = ("%b %Y", "%B %Y", "%m/%Y", "%m-%Y", "%Y/%m", "%b. %Y")
+
+
+@dataclass
+class ParsedDate:
+    value: date | None
+    year_only: bool = False
+    unparsed: bool = False
+    present: bool = False
+
+
+def parse_month(raw: str | None, *, is_end: bool) -> ParsedDate:
+    """YYYY-MM → first of month; YYYY → January (start) / December (end), flagged year_only."""
+    if raw is None or not str(raw).strip():
+        return ParsedDate(None)
+    s = str(raw).strip()
+    if s.casefold() in _PRESENT:
+        return ParsedDate(None, present=True)
+    m = re.fullmatch(r"(\d{4})-(\d{1,2})(?:-\d{1,2})?", s)
+    if m and 1 <= int(m.group(2)) <= 12:
+        return ParsedDate(date(int(m.group(1)), int(m.group(2)), 1))
+    m = re.fullmatch(r"(\d{4})", s)
+    if m:
+        return ParsedDate(date(int(s), 12 if is_end else 1, 1), year_only=True)
+    for fmt in _FORMATS:
+        try:
+            d = datetime.strptime(s, fmt).date()
+            return ParsedDate(date(d.year, d.month, 1))
+        except ValueError:
+            continue
+    return ParsedDate(None, unparsed=True)
+
+
+def _month(d: date) -> int:
+    return d.year * 12 + d.month - 1
+
+
+def resolve_dates(
+    start_raw: str | None, end_raw: str | None, is_current: bool, *, today: date, is_role: bool,
+) -> tuple[date | None, date | None, bool, list[str]]:
+    """Normalize a start/end pair and collect review reasons (01 edge cases)."""
+    start, end = parse_month(start_raw, is_end=False), parse_month(end_raw, is_end=True)
+    reasons: list[str] = []
+    current = is_current or end.present
+    if start.year_only:
+        reasons.append("year_only_start")
+    if end.year_only and not current:
+        reasons.append("year_only_end")
+    if start.unparsed:
+        reasons.append("unparsed_start_date")
+    if end.unparsed:
+        reasons.append("unparsed_end_date")
+    s, e = start.value, None if current else end.value
+    if is_role:
+        if s is None and not start.unparsed:
+            reasons.append("missing_start_date")
+        if s is not None and e is None and not current and not end.unparsed:
+            e = s
+            reasons.append("missing_end_date")
+    now = _month(today)
+    if (s and _month(s) > now) or (e and _month(e) > now):
+        reasons.append("future_date")
+    if s and e and e < s:
+        reasons.append("end_before_start")
+    return s, e, current, reasons
+
+
+# --- Claim names ----------------------------------------------------------------------
+
+def normalize_claim(name: str) -> str:
+    n = normalize_name(name)
+    return CLAIM_SYNONYMS.get(n, n)
+
+
+# --- Per-source validation -----------------------------------------------------------
+
+@dataclass
+class SourceDoc:
+    """One evidence item ready for extraction/validation."""
+    evidence_id: str
+    type: str                        # resume | linkedin_pdf | portfolio | github_repo
+    text: str
+    label: str                       # human-readable, used in warnings
+    repo: object | None = None       # ingest.github.Repo for github_repo
+
+
+@dataclass
+class DroppedItem:
+    """An extracted item whose quote was not found in the source. Kept so the user can add it back."""
+    item_type: str                   # role | project | bullet | claim | certification
+    text: str                        # shown in the review step
+    payload: dict                    # the raw extracted item (schemas.* model_dump)
+    evidence_id: str
+    parent_type: str | None = None   # bullets: role | project
+    parent_id: str | None = None
+    reason: str = "quote_not_found"
+    id: str = field(default_factory=new_id)
+
+
+@dataclass
+class ValidationReport:
+    warnings: list[str] = field(default_factory=list)
+    dropped_items: list[DroppedItem] = field(default_factory=list)
+    kept: int = 0
+    merged: int = 0
+    role_remap: dict[str, str] = field(default_factory=dict)      # merged-away id → surviving id
+    project_remap: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def dropped(self) -> int:
+        return len(self.dropped_items)
+
+    def drop(self, doc: "SourceDoc", item: DroppedItem, what: str) -> None:
+        self.dropped_items.append(item)
+        self.warnings.append(f"{doc.label}: dropped {what} (quote not found in the source).")
+
+
+# --- Record builders (shared by validation and "Add back") ---------------------------
+
+def role_rec(r: schemas.Role, evidence_id: str | None, today: date, source: str = "extracted") -> RoleRec:
+    start, end, current, reasons = resolve_dates(r.start, r.end, r.is_current, today=today, is_role=True)
+    return RoleRec(
+        title=r.title.strip(), employer=r.employer, industry=r.industry,
+        start_date=start, end_date=end, is_current=current, team_size=r.team_size,
+        quote=r.source.quote, evidence_id=evidence_id, review_reasons=reasons, source=source,
+    )
+
+
+def project_rec(p: schemas.Project, evidence_id: str | None, today: date, role_id: str | None = None,
+                source: str = "extracted") -> ProjectRec:
+    start, end, _, reasons = resolve_dates(p.start, p.end, False, today=today, is_role=False)
+    return ProjectRec(
+        kind=p.kind, name=p.name.strip(), description=p.description, url=p.url,
+        start_date=start, end_date=end, quote=p.source.quote, evidence_id=evidence_id,
+        role_id=role_id, review_reasons=reasons, source=source,
+    )
+
+
+def bullet_rec(b: schemas.Bullet, evidence_id: str | None, source: str = "extracted") -> BulletRec:
+    return BulletRec(text=b.text.strip(), location=b.source.location, evidence_id=evidence_id, source=source)
+
+
+def claim_rec(c: schemas.Claim, evidence_id: str | None, bullet_id: str | None = None,
+              source: str = "extracted") -> ClaimRec:
+    return ClaimRec(kind=c.kind, name_raw=c.name.strip(), name_norm=normalize_claim(c.name),
+                    quote=c.source.quote, evidence_id=evidence_id, bullet_id=bullet_id, source=source)
+
+
+def certification_rec(c: schemas.Certification, evidence_id: str | None,
+                      source: str = "extracted") -> CertificationRec:
+    return CertificationRec(name=c.name.strip(), issuer=c.issuer,
+                            issued_date=parse_month(c.date, is_end=False).value,
+                            credential_id=c.credential_id, verify_url=c.verify_url,
+                            evidence_id=evidence_id, source=source)
+
+
+def _bullets(raw: list[schemas.Bullet], index: QuoteIndex, doc: SourceDoc, report: ValidationReport,
+             owner: str, parent_type: str, parent_id: str) -> list[BulletRec]:
+    out = []
+    for b in raw:
+        if not index.contains(b.source.quote):
+            report.drop(doc, DroppedItem("bullet", b.text, b.model_dump(), doc.evidence_id, parent_type, parent_id),
+                        f"a bullet under {owner}")
+            continue
+        out.append(bullet_rec(b, doc.evidence_id))
+    return out
+
+
+def _link_claim(claim: schemas.Claim, bullets: list[BulletRec]) -> str | None:
+    if claim.bullet_ref is None:
+        return None
+    for b in bullets:
+        if b.location and normalize_name(b.location) == normalize_name(claim.bullet_ref):
+            return b.id
+    for b in bullets:  # fall back to the first bullet that names it
+        if contains_phrase(b.text, claim.name):
+            return b.id
+    return None
+
+
+def validate_extraction(
+    doc: SourceDoc,
+    extract: schemas.ProfileExtract | schemas.PortfolioExtract,
+    today: date | None = None,
+) -> tuple[Profile, ValidationReport]:
+    """Keep items whose quote is in the source text; record the rest as DroppedItems."""
+    today = today or config.today()
+    index = QuoteIndex(doc.text)
+    report = ValidationReport()
+    profile = Profile()
+
+    def drop(item_type: str, raw, text: str, what: str) -> None:
+        report.drop(doc, DroppedItem(item_type, text, raw.model_dump(), doc.evidence_id), what)
+
+    role_ids: dict[int, str] = {}
+    for i, r in enumerate(getattr(extract, "roles", [])):
+        if not index.contains(r.source.quote):
+            drop("role", r, f"{r.title}" + (f" at {r.employer}" if r.employer else ""), f"role '{r.title}'")
+            continue
+        rec = role_rec(r, doc.evidence_id, today)
+        rec.bullets = _bullets(r.bullets, index, doc, report, f"'{rec.title}'", "role", rec.id)
+        profile.roles.append(rec)
+        role_ids[i] = rec.id
+
+    for p in extract.projects:
+        if not index.contains(p.source.quote):
+            drop("project", p, p.name, f"project '{p.name}'")
+            continue
+        rec = project_rec(p, doc.evidence_id, today,
+                          role_id=role_ids.get(p.role_index) if p.role_index is not None else None)
+        rec.bullets = _bullets(p.bullets, index, doc, report, f"'{rec.name}'", "project", rec.id)
+        profile.projects.append(rec)
+
+    bullets = profile.all_bullets()
+    for c in extract.claims:
+        if not index.contains(c.source.quote):
+            drop("claim", c, f"{c.kind}: {c.name}", f"{c.kind} '{c.name}'")
+            continue
+        profile.claims.append(claim_rec(c, doc.evidence_id, _link_claim(c, bullets)))
+
+    for c in getattr(extract, "certifications", []):
+        if not index.contains(c.source.quote):
+            drop("certification", c, c.name, f"certification '{c.name}'")
+            continue
+        profile.certifications.append(certification_rec(c, doc.evidence_id))
+
+    report.kept = (len(profile.roles) + len(profile.projects) + len(profile.all_bullets())
+                   + len(profile.claims) + len(profile.certifications))
+    return profile, report
+
+
+def repo_profile(doc: SourceDoc, readme_extract: schemas.PortfolioExtract | None,
+                 today: date | None = None) -> tuple[Profile, ValidationReport]:
+    """A GitHub repo becomes one project from API metadata; its README adds bullets and tool claims."""
+    repo = doc.repo
+    pushed = date.fromisoformat(repo.pushed_at[:10]) if repo.pushed_at else None
+    created = date.fromisoformat(repo.created_at[:10]) if repo.created_at else None
+    project = ProjectRec(
+        kind="repo", name=repo.name, description=repo.description, url=repo.html_url,
+        start_date=created.replace(day=1) if created else None,
+        end_date=pushed.replace(day=1) if pushed else None,
+        quote=f"Repository: {repo.full_name}", evidence_id=doc.evidence_id,
+        is_fork=repo.is_fork, own_commits=repo.own_commits,
+    )
+    profile, report = Profile(projects=[project]), ValidationReport()
+    if readme_extract is not None:
+        sub, report = validate_extraction(doc, readme_extract, today)
+        for p in sub.projects:  # fold README "projects" into the repo instead of duplicating it
+            project.bullets += p.bullets
+            project.description = project.description or p.description
+            report.project_remap[p.id] = project.id
+        for d in report.dropped_items:  # dropped README bullets now belong to the repo project
+            if d.parent_id in report.project_remap:
+                d.parent_id = report.project_remap[d.parent_id]
+        profile.claims = sub.claims
+    return profile, report
+
+
+# --- Dedupe across all sources -------------------------------------------------------
+
+def _overlap(a_start, a_end, a_current, b_start, b_end, b_current) -> bool:
+    if not a_start or not b_start:
+        return True  # cannot tell; same title + employer is treated as the same role
+    far = date(9999, 12, 1)
+    a_end = far if a_current else (a_end or a_start)
+    b_end = far if b_current else (b_end or b_start)
+    return a_start <= b_end and b_start <= a_end
+
+
+_ROLE_STOPWORDS = {"the", "of", "for", "and", "at", "in", "a", "an", "inc", "ltd", "llc", "co", "corp", "company"}
+
+
+def _role_tokens(*parts: str | None) -> set[str]:
+    return set(normalize_name(" ".join(p or "" for p in parts)).split()) - _ROLE_STOPWORDS
+
+
+def role_similarity(a: RoleRec, b: RoleRec) -> float:
+    """Share of the shorter (title + employer) word set found in the other one (0..1)."""
+    ta, tb = _role_tokens(a.title, a.employer), _role_tokens(b.title, b.employer)
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / min(len(ta), len(tb))
+
+
+def _same_role_score(kept: RoleRec, new: RoleRec, absorbed_sources: set) -> float | None:
+    """How well `new` matches an already-kept role; None if it must not be merged.
+
+    Exact title + employer: same role (any source). Otherwise only across sources (a resume and a
+    LinkedIn PDF word the same job differently): dates overlap, titles share a word, and most words
+    of title + employer match (config.ROLE_MATCH_THRESHOLD). A kept role absorbs at most one role
+    per other source, so two concurrent jobs listed in both sources pair up one-to-one.
+    """
+    if not _overlap(kept.start_date, kept.end_date, kept.is_current, new.start_date, new.end_date, new.is_current):
+        return None
+    if normalize_name(kept.title) == normalize_name(new.title) and \
+            normalize_name(kept.employer) == normalize_name(new.employer):
+        return 2.0
+    if new.evidence_id is None or new.evidence_id == kept.evidence_id or new.evidence_id in absorbed_sources:
+        return None
+    if not (_role_tokens(kept.title) & _role_tokens(new.title)):
+        return None
+    score = role_similarity(kept, new)
+    if score < config.ROLE_MATCH_THRESHOLD:
+        return None
+    same_start = kept.start_date is not None and kept.start_date == new.start_date
+    return score + (0.01 if same_start else 0.0)
+
+
+def _merge_bullets(into: list[BulletRec], extra: list[BulletRec]) -> dict[str, str]:
+    """Append bullets not already present (by normalized text). Returns dropped-id → kept-id."""
+    seen = {_norm(b.text): b.id for b in into}
+    remap = {}
+    for b in extra:
+        key = _norm(b.text)
+        if key in seen:
+            remap[b.id] = seen[key]
+        else:
+            seen[key] = b.id
+            into.append(b)
+    return remap
+
+
+def _fill(target, source, fields: tuple[str, ...]) -> None:
+    for f in fields:
+        if getattr(target, f) in (None, "") and getattr(source, f) not in (None, ""):
+            setattr(target, f, getattr(source, f))
+
+
+def merge_profiles(profiles: list[Profile]) -> tuple[Profile, ValidationReport]:
+    """Merge per-source profiles in order (resume first). Earlier sources win on conflicts."""
+    out, report = Profile(), ValidationReport()
+    bullet_remap: dict[str, str] = {}
+    role_remap: dict[str, str] = {}
+    absorbed: dict[str, set] = {}          # kept role id → evidence ids already merged into it
+
+    for prof in profiles:
+        for role in prof.roles:
+            role.bullets = _dedupe_own_bullets(role.bullets, bullet_remap)
+            scored = [(s, r) for r in out.roles
+                      if (s := _same_role_score(r, role, absorbed.get(r.id, set()))) is not None]
+            match = max(scored, key=lambda x: x[0])[1] if scored else None
+            if match is None:
+                out.roles.append(role)
+                absorbed[role.id] = {role.evidence_id}
+                continue
+            absorbed.setdefault(match.id, set()).add(role.evidence_id)
+            _fill(match, role, ("employer", "industry", "start_date", "end_date", "team_size"))
+            match.is_current = match.is_current or role.is_current
+            bullet_remap.update(_merge_bullets(match.bullets, role.bullets))
+            role_remap[role.id] = match.id
+            report.role_remap[role.id] = match.id
+            report.merged += 1
+
+        for project in prof.projects:
+            project.bullets = _dedupe_own_bullets(project.bullets, bullet_remap)
+            if project.role_id in role_remap:
+                project.role_id = role_remap[project.role_id]
+            match = next((p for p in out.projects if normalize_name(p.name) == normalize_name(project.name)), None)
+            if match is None:
+                out.projects.append(project)
+                continue
+            _fill(match, project, ("description", "url", "start_date", "end_date", "role_id"))
+            if project.is_github and not match.is_github:
+                match.is_fork, match.own_commits = project.is_fork, project.own_commits
+                if project.end_date and (match.end_date is None or project.end_date > match.end_date):
+                    match.end_date = project.end_date
+            bullet_remap.update(_merge_bullets(match.bullets, project.bullets))
+            report.project_remap[project.id] = match.id
+            report.merged += 1
+
+        for claim in prof.claims:
+            if claim.bullet_id in bullet_remap:
+                claim.bullet_id = bullet_remap[claim.bullet_id]
+            match = next((c for c in out.claims if c.name_norm == claim.name_norm), None)
+            if match is None:
+                out.claims.append(claim)
+            elif match.bullet_id is None and claim.bullet_id is not None:
+                out.claims[out.claims.index(match)] = claim  # keep the in-bullet occurrence
+                report.merged += 1
+            else:
+                report.merged += 1
+
+        for cert in prof.certifications:
+            match = next((c for c in out.certifications if normalize_name(c.name) == normalize_name(cert.name)), None)
+            if match is None:
+                out.certifications.append(cert)
+            else:
+                _fill(match, cert, ("issuer", "issued_date", "credential_id", "verify_url"))
+                report.merged += 1
+
+        out.references += prof.references
+    return out, report
+
+
+def _dedupe_own_bullets(bullets: list[BulletRec], remap: dict[str, str]) -> list[BulletRec]:
+    kept: list[BulletRec] = []
+    remap.update(_merge_bullets(kept, bullets))
+    return kept
