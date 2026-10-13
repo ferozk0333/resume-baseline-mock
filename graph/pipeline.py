@@ -21,7 +21,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
-from core import config, db
+from core import config, db, timing
 from core.db import new_id, now_iso
 from extraction import schemas, store
 from extraction.extract import extract_all, output_type
@@ -289,8 +289,9 @@ def _gap_analysis(deps: Deps):
         try:
             baseline = db.get_baseline(conn, state["baseline_id"])
             ranked = rank_gaps(subscores, state["weights"], baseline)
-            plan = generate_plan(conn, state["run_id"], subscores, state["weights"], baseline,
-                                 store.load_profile(conn, state["candidate_id"]), deps.planner)
+            with timing.span(timing.PLAN, "improvement_plan"):
+                plan = generate_plan(conn, state["run_id"], subscores, state["weights"], baseline,
+                                     store.load_profile(conn, state["candidate_id"]), deps.planner)
         except Exception as exc:  # the scores are saved; a plan problem must not fail the run
             log.exception("gap analysis failed")
             return {"plan_error": f"{exc.__class__.__name__}: {exc}", "ranked_gaps": []}
@@ -376,9 +377,11 @@ class Pipeline:
     `on_progress(line)` receives a short line each time a step finishes (for the UI's progress log).
     """
 
-    def __init__(self, deps: Deps, checkpointer=None):
+    def __init__(self, deps: Deps, checkpointer=None, print_timings: bool | None = None):
         self.deps = deps
         self.graph = build_graph(deps).compile(checkpointer=checkpointer or InMemorySaver())
+        self.print_timings = config.PRINT_TIMINGS if print_timings is None else print_timings
+        self.recorders: dict[str, timing.Recorder] = {}     # thread_id → timings (onboarding + scoring)
 
     @staticmethod
     def _cfg(thread_id: str) -> dict:
@@ -391,17 +394,50 @@ class Pipeline:
         on_event(event):   every node start/end, including inside subgraphs (live graph view).
         """
         cfg = self._cfg(thread_id)
-        for namespace, _mode, chunk in self.graph.stream(payload, cfg, stream_mode=["tasks"], subgraphs=True):
-            event = task_event(namespace, chunk)
-            if on_event is not None:
-                on_event(event)
-            if on_progress is not None and event.kind == "end" and not event.error:
-                line = describe(namespace, event.node)
-                if line:
-                    on_progress(line)
+        rec = self.recorders.setdefault(thread_id, timing.Recorder())
+        started: dict[str, float] = {}
+        with timing.recording(rec):
+            for namespace, _mode, chunk in self.graph.stream(payload, cfg, stream_mode=["tasks"], subgraphs=True):
+                event = task_event(namespace, chunk)
+                self._time(rec, started, event, chunk)
+                if on_event is not None:
+                    on_event(event)
+                if on_progress is not None and event.kind == "end" and not event.error:
+                    line = describe(namespace, event.node)
+                    if line:
+                        on_progress(line)
         snapshot = self.graph.get_state(cfg)
         pending = snapshot.interrupts
-        return {**snapshot.values, "thread_id": thread_id, "awaiting_review": pending[0].value if pending else None}
+        values = snapshot.values
+        if values.get("run_id") and values.get("final") is not None and not pending:
+            self._save_timings(values["run_id"], rec)
+        return {**values, "thread_id": thread_id, "awaiting_review": pending[0].value if pending else None}
+
+    @staticmethod
+    def _time(rec: timing.Recorder, started: dict, event: TaskEvent, chunk: dict) -> None:
+        """Wall-clock time of every graph node, from the task stream (specs/09 §1)."""
+        task_id = chunk.get("id")
+        if event.kind == "start":
+            started[task_id] = rec.now()
+            return
+        start = started.pop(task_id, None)
+        if start is None:
+            return
+        attrs = {"error": event.error} if event.error else {}
+        if event.path:
+            rec.add(timing.NODE, event.node, start, rec.now() - start, path=list(event.path), **attrs)
+        else:
+            rec.add(timing.STEP, event.node, start, rec.now() - start, **attrs)
+
+    def _save_timings(self, run_id: str, rec: timing.Recorder) -> None:
+        summary = rec.summary()
+        conn = db.connect(self.deps.db_path)
+        try:
+            db.save_run_timings(conn, run_id, summary)
+        finally:
+            conn.close()
+        if self.print_timings:
+            print(f"\nTimings for run {run_id}:\n{timing.table(summary)}", flush=True)
 
     def start_onboarding(self, inputs: OnboardingInputs, baseline_id: str, weights: dict | None = None,
                          on_progress=None, on_event=None) -> dict:

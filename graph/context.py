@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
 
-from core import config, db
+from core import config, db, timing
 from core.models import Baseline
 from extraction import store
 from extraction.records import Profile, ProjectRec, RoleRec
@@ -225,7 +225,7 @@ def resolve(ctx: Ctx, asks: list[Ask], *, call: bool) -> Labels:
 
     if call and len(asks) > 1:
         with ThreadPoolExecutor(max_workers=ctx.deps.max_parallel_calls) as pool:
-            found = dict(pool.map(one, asks))
+            found = dict(pool.map(timing.bind(one), asks))
     else:
         found = dict(map(one, asks))
     return Labels(found, asks)

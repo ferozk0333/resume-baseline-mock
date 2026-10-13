@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -143,7 +143,24 @@ CREATE TABLE IF NOT EXISTS runs (
   started_at TEXT, finished_at TEXT,
   logic_version TEXT,
   baseline_hash TEXT,
-  models_json TEXT
+  models_json TEXT,
+  timings_json TEXT
+);
+
+CREATE TABLE IF NOT EXISTS document_texts (
+  file_sha256 TEXT,
+  normalizer TEXT,
+  text TEXT,
+  created_at TEXT,
+  PRIMARY KEY (file_sha256, normalizer)
+);
+
+CREATE TABLE IF NOT EXISTS http_cache (
+  key TEXT PRIMARY KEY,           -- URL + Accept header; never the token
+  status INTEGER,
+  headers_json TEXT,              -- ETag, Link, Content-Type
+  body TEXT,
+  fetched_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS judgments (
@@ -236,6 +253,12 @@ def init_db(conn: sqlite3.Connection) -> None:
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
+DOCUMENT_TEXTS = """CREATE TABLE IF NOT EXISTS document_texts (
+  file_sha256 TEXT, normalizer TEXT, text TEXT, created_at TEXT, PRIMARY KEY (file_sha256, normalizer))"""
+HTTP_CACHE = """CREATE TABLE IF NOT EXISTS http_cache (
+  key TEXT PRIMARY KEY, status INTEGER, headers_json TEXT, body TEXT, fetched_at TEXT)"""
+
+
 # Steps that bring an older DB up to SCHEMA. New DBs get SCHEMA directly.
 MIGRATIONS: list[tuple[int, list[str]]] = [
     (2, [
@@ -267,6 +290,8 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
          "ALTER TABLE runs ADD COLUMN baseline_hash TEXT",
          "ALTER TABLE runs ADD COLUMN models_json TEXT"]),
     (8, ["ALTER TABLE gap_reports ADD COLUMN plan_json TEXT"]),
+    (9, ["ALTER TABLE runs ADD COLUMN timings_json TEXT"]),
+    (10, [DOCUMENT_TEXTS, HTTP_CACHE]),
 ]
 
 
@@ -404,6 +429,12 @@ def create_run(conn: sqlite3.Connection, candidate_id: str, baseline_id: str, we
 def finish_run(conn: sqlite3.Connection, run_id: str, status: str = "done") -> None:
     with conn:
         conn.execute("UPDATE runs SET status = ?, finished_at = ? WHERE id = ?", (status, now_iso(), run_id))
+
+
+def save_run_timings(conn: sqlite3.Connection, run_id: str, timings: dict) -> None:
+    """Per-run timing summary (specs/09 §1)."""
+    with conn:
+        conn.execute("UPDATE runs SET timings_json = ? WHERE id = ?", (json.dumps(timings), run_id))
 
 
 def list_runs(conn: sqlite3.Connection, candidate_id: str | None = None) -> list[dict]:

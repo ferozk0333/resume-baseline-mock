@@ -17,7 +17,7 @@ import logging
 import sqlite3
 import threading
 
-from core import config
+from core import config, timing
 from core.db import new_id, now_iso
 from core.models import Baseline
 from judges.base import Judge, Judgment, JudgeError, ask, question, render_context
@@ -78,7 +78,11 @@ class JudgmentService:
     def _call(self, judge: Judge, key: str, subject_id: str, context: dict) -> Judgment:
         with self._lock:
             self.calls += 1
-        return ask(judge, question(key), {**context, "_subject_id": subject_id})
+        with timing.span(timing.JUDGE, key) as t:
+            judgment = ask(judge, question(key), {**context, "_subject_id": subject_id})
+            t.update(method=judgment.method, model=judgment.model_version,
+                     fallback=judgment.fallback_from is not None)
+        return judgment
 
     def ask(self, key: str, subject_type: str, subject_id: str, context: dict,
             baseline: Baseline | None = None, *, judge: Judge | None = None,

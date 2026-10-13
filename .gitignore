@@ -16,3 +16,4 @@ tests/fixtures/profiles/rendered/
 rightstaff-test-profiles/rendered/
 *.sqlite
 *.db
+timings/

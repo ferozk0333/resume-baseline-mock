@@ -16,7 +16,7 @@ import time
 
 import requests
 
-from core import config
+from core import config, timing
 from core.limits import jev_slots
 from judges.base import Judge, Judgment, JudgeError, _as_text, question
 from judges.questions import Question
@@ -105,7 +105,8 @@ class JevJudge:
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         for attempt in range(self.max_retries + 1):
             try:
-                with jev_slots:
+                with jev_slots, timing.span(timing.MODEL, "jev", model=self.model,
+                                            questions=len(body.get("questions") or {})):
                     resp = self.session.post(config.JEV_URL, json=body, headers=headers, timeout=30)
             except requests.RequestException as exc:
                 error = JevError(f"connection error: {exc.__class__.__name__}")

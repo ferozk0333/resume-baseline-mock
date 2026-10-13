@@ -8,7 +8,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
-from core import config
+from core import config, timing
 from core.llm import LLMError, StructuredLLM
 from core.text import wrap_tag
 from extraction import schemas
@@ -49,10 +49,11 @@ def extract_all(docs: list[SourceDoc], llm: StructuredLLM) -> dict[str, object]:
     """evidence_id → extraction, or the LLMError that stopped it. Calls run in parallel."""
 
     def run(doc: SourceDoc):
-        try:
-            return doc.evidence_id, extract_document(doc, llm)
-        except LLMError as exc:
-            return doc.evidence_id, exc
+        with timing.span(timing.EXTRACT, doc.type, model=config.EXTRACT_MODEL, chars=len(doc.text)):
+            try:
+                return doc.evidence_id, extract_document(doc, llm)
+            except LLMError as exc:
+                return doc.evidence_id, exc
 
     with ThreadPoolExecutor(max_workers=config.EXTRACT_CONCURRENCY) as pool:
-        return dict(pool.map(run, docs))
+        return dict(pool.map(timing.bind(run), docs))
