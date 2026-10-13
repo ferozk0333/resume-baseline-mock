@@ -265,6 +265,15 @@ def step_review(conn, cid) -> None:
             except ValueError as exc:
                 st.error(str(exc))
 
+    st.subheader("Source text")
+    st.caption("Each document as the model read it, after parsing and clean-up. Quotes are checked against "
+               "exactly this text.")
+    names = {"resume": "Resume", "linkedin_pdf": "LinkedIn PDF", "portfolio": "Portfolio"}
+    for e in store.list_evidence(conn, cid):
+        if e["type"] in names and e["raw_text"]:
+            with st.expander(names[e["type"]] + (" · could not be extracted" if e["status"] == "failed" else "")):
+                st.text(e["raw_text"])
+
     st.divider()
     show_last_run()
     if st.button("Confirm & score", type="primary", disabled=bool(blocker)):

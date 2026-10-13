@@ -46,13 +46,24 @@ MAX_PORTFOLIO_CHARS = 50_000
 GITHUB_MAX_REPOS = 30           # most recently pushed, non-archived
 GITHUB_README_CHARS = 4_000
 GITHUB_README_EXTRACTION = True  # one LLM call per counted repo README (05 §A)
-EXTRACT_MAX_TOKENS = 16_000
+GITHUB_CACHE_HOURS = 24          # GitHub API responses reused for this long (ETag revalidation after)
+GITHUB_CONCURRENCY = 8           # repos whose details are fetched at once
+EXTRACT_MAX_TOKENS = 12_000     # a dense one-page resume needs ~7.3k (phase 9); runaway output is cut earlier
+PLAN_MAX_TOKENS = 16_000
 EXTRACT_CONCURRENCY = 4
 # Concurrency. Subcategories already run in parallel; these caps set how many model calls are in flight.
 # Jev and Claude have separate pools so fast Jev calls never queue the slow reasoning-model calls.
 MAX_PARALLEL_JUDGE_CALLS = int(_env("MAX_PARALLEL_JUDGE_CALLS", "48"))   # judgments in flight, whole graph
 JEV_MAX_CONCURRENCY = int(_env("JEV_MAX_CONCURRENCY", "32"))             # Jev allows 80 requests/s
 CLAUDE_MAX_CONCURRENCY = int(_env("CLAUDE_MAX_CONCURRENCY", "12"))       # lower it if Anthropic returns 429s
+# Estimated USD per million tokens, for the run cost line only (check https://claude.com/pricing).
+# Cache reads cost 0.1× input, 5-minute cache writes 1.25× input.
+MODEL_PRICES = {
+    "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
+    "claude-sonnet": {"input": 3.0, "output": 15.0},     # assumption for Sonnet 5.5; confirm
+    "claude-opus": {"input": 5.0, "output": 25.0},
+}
+PRINT_TIMINGS = _env("PRINT_TIMINGS", "1") == "1"   # timing table on stdout at the end of each run (specs/09 §1)
 
 # --- Scoring constants (specs/04) -----------------------------------------
 LOGIC_VERSION = "v0.1"

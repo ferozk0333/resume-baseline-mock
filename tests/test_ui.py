@@ -162,6 +162,17 @@ def test_review_shows_profile_dropped_items_and_add_back(env):
     assert any(c.name_raw == "Spark" and c.source == "user_edit" for c in claims)
 
 
+def test_review_shows_the_normalized_source_text(env):
+    cid, _ = scored_candidate(env)
+    at = page("2_Onboarding.py", candidate_id=cid, baseline_id=DS)
+    no_errors(at)
+    assert any(s.value == "Source text" for s in at.subheader)
+    resume = next(e for e in at.expander if e.label.startswith("Resume"))
+    stored = db.connect(env).execute("SELECT raw_text FROM evidence_items WHERE candidate_id = ? AND type = 'resume'",
+                                     (cid,)).fetchone()[0]
+    assert [x.value.strip() for x in resume.text] == [stored.strip()]
+
+
 def test_review_edit_role_marks_user_edit(env):
     cid, _ = scored_candidate(env)
     at = page("2_Onboarding.py", candidate_id=cid, baseline_id=DS)
