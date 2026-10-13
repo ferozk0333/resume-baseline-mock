@@ -1,6 +1,8 @@
 """Scripted judge for tests: no model calls."""
 from __future__ import annotations
 
+import threading
+import time
 from typing import Callable
 
 from judges.base import Judgment, JudgeError, question
@@ -18,17 +20,31 @@ class FakeJudge:
 
     MODEL = "fake-judge-1"
 
-    def __init__(self, labels: dict | None = None, default: str | None = None, script: Script | None = None):
+    def __init__(self, labels: dict | None = None, default: str | None = None, script: Script | None = None,
+                 delay: float = 0.0):
         self.labels = labels or {}
         self.default = default
         self.script = script
+        self.delay = delay              # artificial latency per call (concurrency tests)
         self.calls: list[tuple[str, dict]] = []
+        self.spans: list[tuple[str, float, float]] = []    # (question, start, end) when delay > 0
+        self.in_flight = self.max_in_flight = 0
+        self._lock = threading.Lock()
 
     def models_for(self, key: str) -> list[str]:
         return [self.MODEL]
 
     def _label(self, key: str, context: dict) -> Judgment:
         self.calls.append((key, context))
+        if self.delay:
+            with self._lock:
+                self.in_flight += 1
+                self.max_in_flight = max(self.max_in_flight, self.in_flight)
+            start = time.perf_counter()
+            time.sleep(self.delay)
+            with self._lock:
+                self.in_flight -= 1
+                self.spans.append((key, start, time.perf_counter()))
         value = self.script(key, context) if self.script else None
         if value is None:
             value = self.labels.get((key, context.get("_subject_id")), self.labels.get(key, self.default))

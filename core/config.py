@@ -51,9 +51,10 @@ GITHUB_CONCURRENCY = 8           # repos whose details are fetched at once
 EXTRACT_MAX_TOKENS = 12_000     # a dense one-page resume needs ~7.3k (phase 9); runaway output is cut earlier
 PLAN_MAX_TOKENS = 16_000
 EXTRACT_CONCURRENCY = 4
-# Concurrency. Subcategories already run in parallel; these caps set how many model calls are in flight.
-# Jev and Claude have separate pools so fast Jev calls never queue the slow reasoning-model calls.
-MAX_PARALLEL_JUDGE_CALLS = int(_env("MAX_PARALLEL_JUDGE_CALLS", "48"))   # judgments in flight, whole graph
+# Concurrency. All 19 subcategories run at once; these caps set how many model calls are in flight.
+# JUDGE_CONCURRENCY (specs/09 §2.1): judgments in flight across all four dimension subgraphs, Jev and
+# Claude together. Beneath it, per-provider pools keep fast Jev calls from queueing slow Claude calls.
+JUDGE_CONCURRENCY = int(_env("JUDGE_CONCURRENCY", _env("MAX_PARALLEL_JUDGE_CALLS", "8")))
 JEV_MAX_CONCURRENCY = int(_env("JEV_MAX_CONCURRENCY", "32"))             # Jev allows 80 requests/s
 CLAUDE_MAX_CONCURRENCY = int(_env("CLAUDE_MAX_CONCURRENCY", "12"))       # lower it if Anthropic returns 429s
 # Estimated USD per million tokens, for the run cost line only (check https://claude.com/pricing).

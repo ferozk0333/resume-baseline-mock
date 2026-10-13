@@ -32,7 +32,7 @@ class Deps:
     github_client: object | None = None
     portfolio_session: object | None = None
     today: date | None = None
-    max_parallel_calls: int = config.MAX_PARALLEL_JUDGE_CALLS
+    max_parallel_calls: int = config.JUDGE_CONCURRENCY    # shared by every subgraph of a run
     claude_judge: Judge | None = None         # for asks that need a quote; default: the judge's Claude fallback
     planner: object | None = None             # StructuredLLM for the improvement plan; None = ranked gaps only
     _sem: threading.BoundedSemaphore = field(init=False, repr=False)
