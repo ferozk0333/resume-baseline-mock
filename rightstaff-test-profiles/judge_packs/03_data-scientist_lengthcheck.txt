@@ -1,0 +1,306 @@
+You are an experienced hiring manager filling the entry-level role described below. You will see the application materials of five candidates (resume and, where provided, LinkedIn profile, GitHub, portfolio, certifications and references). Names have been removed; candidates are labelled A to E. The order of the candidates means nothing.
+
+Task: rank the candidates by whom you would most want to interview for this role.
+- Judge what each candidate has actually done and can show that is relevant to this role.
+- Do not give credit for length, formatting or wording style on their own.
+- If two candidates are genuinely equal, you may tie them with "=".
+- Use only the information given. Do not search the web.
+
+Answer in exactly this format:
+
+RANKING: X > X > X > X > X
+GAPS: X-X clear|slight, X-X clear|slight, X-X clear|slight, X-X clear|slight
+DECIDING FACTOR: X-X experience|skills|results|proof|other, (one per adjacent pair, same order as GAPS)
+REASONS:
+A: one sentence
+B: one sentence
+C: one sentence
+D: one sentence
+E: one sentence
+
+=== THE ROLE: Data Scientist (entry level, about 1 year of experience expected) ===
+About the role: Early-career Data Scientist who turns data into decisions: exploratory analysis, statistical modeling, experimentation and machine learning, communicated clearly to non-technical stakeholders.
+What you will do: Owns an analysis or model for a defined business question within a team: frames the question, prepares data, builds and evaluates the model, and presents findings to stakeholders.
+Required: Statistical analysis, Machine learning, Data wrangling, Exploratory data analysis, Experimentation / A/B testing, Data visualization and communication, Python, SQL, pandas, scikit-learn
+Nice to have: Forecasting, Causal inference, BI tool, Cloud data warehouse, Git, Data science or analytics certification
+
+=== CANDIDATE A ===
+
+--- Resume ---
+**Candidate A**
+Data Scientist | ML | AI | Big Data · candidate@example.com · Dallas, TX
+
+**Summary**
+Results-driven, passionate data scientist with expertise in machine learning, deep learning, artificial intelligence, NLP, computer vision, big data and cloud. Proven ability to leverage data-driven insights to drive business value and deliver end-to-end solutions in fast-paced environments.
+
+**Experience**
+
+**Data Scientist** — Corvid Logistics, Dallas, TX · Jan 2023 – Present
+- Worked on data analysis and machine learning projects using Python, SQL, R and various ML algorithms.
+- Responsible for building dashboards and reports for stakeholders.
+- Involved in various AI/ML initiatives including predictive modeling, NLP and deep learning.
+- Collaborated with cross-functional teams to drive data-driven decision making.
+- Utilized cloud technologies (AWS, Azure, GCP) and big data tools (Spark, Hadoop) to process data.
+
+**Education**
+B.S. Business Administration, Southfield University · 2022
+
+**Skills**
+Python, R, SQL, Java, Scala, C++, Machine Learning, Deep Learning, NLP, Computer Vision, Generative AI, LLMs, TensorFlow, PyTorch, Keras, scikit-learn, pandas, NumPy, Matplotlib, Seaborn, Tableau, Power BI, Looker, Excel, Spark, Hadoop, Hive, Kafka, Airflow, AWS, Azure, GCP, Snowflake, BigQuery, Docker, Kubernetes, Git, Statistics, A/B Testing, Forecasting, Causal Inference, Data Visualization, Data Wrangling, Agile
+
+**Certifications**
+Machine Learning Certificate (online course), 2022
+
+--- LinkedIn profile ---
+Candidate A
+Data Analyst at Corvid Logistics
+Dallas, Texas
+
+Experience
+- Data Analyst, Corvid Logistics · Jun 2023 – Present · Weekly shipment reports and Excel dashboards for the operations team.
+- Operations Coordinator, Corvid Logistics · Aug 2022 – May 2023
+
+Education
+- Southfield University, B.S. Business Administration, 2018 – 2022
+
+Skills: Excel, SQL, Power BI, Data Analysis
+
+--- Certifications submitted ---
+- Machine Learning Certificate (online course) (issuer not stated, 2022; no credential ID)
+
+=== CANDIDATE B ===
+
+--- Resume ---
+**Candidate B**
+Data-Driven Marketing Analyst | Aspiring Data Scientist | Analytics & Insights Professional · candidate@example.com · Denver, CO · github.com/candidate
+
+**Professional Summary**
+Highly motivated, detail-oriented and results-focused analytics professional with a strong passion for leveraging data to uncover actionable insights and drive meaningful business outcomes. Proven track record of collaborating with diverse cross-functional stakeholders in dynamic, fast-paced environments. Deeply committed to continuous learning, intellectual curiosity and excellence, with a growth mindset and a dedication to transforming complex data into compelling, data-driven stories that empower strategic decision-making across the organization.
+
+**Core Competencies**
+Data Analysis · Statistical Thinking · Experimentation · Data Storytelling · Stakeholder Communication · Business Acumen · Problem Solving · Critical Thinking · Attention to Detail · Collaboration · Time Management · Adaptability
+
+**Professional Experience**
+
+**Marketing Analyst** — Fernhill Media, Denver, CO · Aug 2022 – Dec 2025
+- Ran 14 email and landing-page A/B tests with the growth team; a subject-line test program lifted open rates from 21% to 26%.
+- Wrote SQL (PostgreSQL) queries for weekly channel performance; built the Tableau dashboard the marketing director used in budget reviews.
+- Built an Excel and SQL attribution report that moved $300K of quarterly spend from display to search after showing display's cost per lead was 2.4x higher.
+- Cleaned and merged CRM and ad-platform exports each week (about 2M rows) for reporting.
+- Partnered closely with stakeholders across marketing, sales and leadership to understand business needs and translate them into analytical requirements.
+- Consistently delivered high-quality, accurate and timely analyses that supported strategic initiatives.
+- Proactively identified opportunities for process improvement and championed a culture of data-driven decision-making.
+- Communicated complex analytical findings to non-technical audiences in a clear, concise and compelling manner.
+
+**Marketing Coordinator** — Fernhill Media, Denver, CO · Jun 2021 – Jul 2022
+- Coordinated campaign calendars and pulled monthly campaign reports from Google Analytics.
+- Supported the marketing team with a wide range of day-to-day tasks and ad-hoc requests.
+- Maintained strong working relationships with internal teams and external partners.
+
+**Education & Professional Development**
+Data Science Immersive (bootcamp), Summit Code Academy · Jan 2026 – Jun 2026
+- Completed an intensive, hands-on, full-time program covering the end-to-end data science lifecycle.
+B.A. Communications, Front Range University · 2021
+
+**Projects**
+
+**Customer segmentation for a subscription box** · Apr 2026 – Jun 2026 · (github.com/candidate/customer-segments)
+- K-means and RFM segmentation on a public 400k-order dataset; profiled 5 segments and proposed a retention offer per segment; bootcamp capstone.
+- Applied a rigorous, structured analytical approach from data exploration through to actionable business recommendations.
+
+**Technical Skills**
+SQL, Excel, Tableau, Google Analytics, Python, pandas, scikit-learn, A/B testing, data visualization
+
+**Certifications**
+Tableau Desktop Specialist · 2024 · Credential ID TDS-TEST-77120
+
+**Interests**
+Data for good, continuous learning, hiking, podcasts about analytics and technology
+
+--- LinkedIn profile ---
+Candidate B
+Marketing Analyst | Data Science Immersive graduate
+Denver, Colorado
+
+Experience
+- Marketing Analyst, Fernhill Media · Aug 2022 – Dec 2025 · A/B testing, attribution and dashboards for the growth team.
+- Marketing Coordinator, Fernhill Media · Jun 2021 – Jul 2022
+
+Education
+- Summit Code Academy, Data Science Immersive, 2026
+- Front Range University, B.A. Communications, 2017 – 2021
+
+Skills: SQL, Tableau, A/B Testing, Python, Marketing Analytics
+
+--- GitHub (public repositories) ---
+- customer-segments: RFM and k-means segmentation of a subscription-box customer base (Python, Jupyter Notebook; own repository; commits by candidate: 26; last updated 2026-06)
+  README: Segments 400k orders using RFM features and k-means (k chosen by silhouette and business review). Profiles five segments and proposes a retention offer for each.
+- bootcamp-labs: Weekly bootcamp exercises (Python; own repository; commits by candidate: 54; last updated 2026-05)
+  README: Exercises from the Data Science Immersive: pandas, regression, classification, clustering.
+
+--- Certifications submitted ---
+- Tableau Desktop Specialist (Tableau, 2024-03; credential ID provided)
+
+--- References submitted ---
+- Relationship: manager. Statement: "the candidate reported to me for three years. She ran our A/B testing program and built the attribution analysis that changed how we split our paid budget."
+
+=== CANDIDATE C ===
+
+--- Resume ---
+**Candidate C**
+Data Scientist · candidate@example.com · Columbus, OH · github.com/candidate
+
+**Experience**
+
+**Data Scientist I** — Brightlane Health, Columbus, OH · Jul 2024 – Present
+- Built a member churn model (gradient boosting, scikit-learn) that flags at-risk members 60 days ahead; outreach to the top decile reduced churn from 9.1% to 7.8% over two quarters, about $1.2M in retained annual premiums.
+- Designed and analyzed 6 A/B tests for the member app with product managers, including power analysis and sequential-testing guardrails; one onboarding test raised 30-day activation by 4.5 points.
+- Wrote and maintained SQL pipelines in BigQuery that join claims, app events and CRM data (40M rows); cut the weekly reporting refresh from 5 hours to 40 minutes.
+- Built a weekly call-volume forecast (Prophet, then a gradient boosting model) used by the operations team to plan staffing; MAPE improved from 14% to 8%.
+- Present results monthly to the member-experience leadership group; wrote the team's guide to reading experiment results.
+
+**Data Science Intern** — Northwind Retail, Chicago, IL · Jun 2023 – Aug 2023
+- Cleaned and joined three years of store and promotion data in pandas; built a markdown-effect regression used in the fall pricing review.
+- Built a Tableau dashboard of promotion lift by region for the merchandising team.
+
+**Projects**
+
+**Hospital readmission prediction** (github.com/candidate/readmission-risk)
+- Logistic regression and XGBoost on a public 100k-encounter dataset; handled class imbalance and calibration; documented fairness checks by age group.
+
+**Email campaign causal impact** (github.com/candidate/email-uplift)
+- Difference-in-differences and uplift modeling on a public marketing dataset; write-up compares naive vs causal estimates.
+
+**Education**
+B.S. Statistics, Lakeshore State University · 2023 · GPA 3.7
+
+**Skills**
+Python, SQL, pandas, scikit-learn, statsmodels, XGBoost, BigQuery, Tableau, Git, A/B testing, forecasting, causal inference
+
+**Certifications**
+Google Data Analytics Professional Certificate · 2023 · Credential ID GDA-TEST-48213
+
+--- LinkedIn profile ---
+Candidate C
+Data Scientist at Brightlane Health
+Columbus, Ohio
+
+Experience
+- Data Scientist I, Brightlane Health · Jul 2024 – Present · Churn modeling, experimentation and forecasting for the member experience team.
+- Data Science Intern, Northwind Retail · Jun 2023 – Aug 2023 · Promotion analysis and dashboards.
+
+Education
+- Lakeshore State University, B.S. Statistics, 2019 – 2023
+
+Skills: Python, SQL, Machine Learning, A/B Testing, Forecasting, Tableau
+
+Licenses & certifications
+- Google Data Analytics Professional Certificate · Issued 2023 · Credential ID GDA-TEST-48213
+
+--- GitHub (public repositories) ---
+- readmission-risk: Predicting 30-day hospital readmission with calibrated models (Python, Jupyter Notebook; own repository; commits by candidate: 47; last updated 2026-03)
+  README: Predicts 30-day readmission on a public 100k-encounter dataset. Compares logistic regression and XGBoost, handles class imbalance with class weights, checks calibration (Brier score) and reports recall by age group. Results: AUC 0.71 (LR) vs 0.74 (XGBoost).
+- email-uplift: Causal impact of an email campaign: DiD and uplift models (Python; own repository; commits by candidate: 29; last updated 2025-11)
+  README: Estimates the effect of an email campaign on purchases using difference-in-differences and a two-model uplift approach. Shows that the naive estimate overstates impact by about 2x.
+- sql-practice: Notes and solutions for SQL window functions (SQL; own repository; commits by candidate: 12; last updated 2024-02)
+  README: Personal notes on window functions, CTEs and query tuning.
+
+--- Certifications submitted ---
+- Google Data Analytics Professional Certificate (Google (Coursera), 2023-05; credential ID provided)
+
+--- References submitted ---
+- Relationship: manager. Statement: "I have managed the candidate since she joined Brightlane Health in 2024. She built our churn model and runs most of the team's A/B test analysis; the churn outreach program is based on her work."
+
+=== CANDIDATE D ===
+
+--- Resume ---
+**Candidate D**
+candidate@example.com · Phoenix, AZ
+
+**Objective**
+Recent economics graduate looking for an entry-level data scientist position.
+
+**Experience**
+
+**Sales Associate** — Canyon Outfitters, Phoenix, AZ · Jun 2024 – Present
+- Help customers choose outdoor gear; handle register and returns.
+- Count inventory each week.
+
+**Education**
+B.A. Economics, Desert Plains University · May 2025
+Relevant course project: Analyzed Phoenix housing prices with regression in Excel.
+
+**Skills**
+Excel, Python (basic), statistics, teamwork, communication
+
+(No LinkedIn, GitHub, portfolio, certifications or references provided.)
+
+=== CANDIDATE E ===
+
+--- Resume ---
+**Candidate E**
+M.S. Data Science graduate · candidate@example.com · Boston, MA · github.com/candidate · candidate-portfolio.example.com
+
+**Education**
+M.S. Data Science, Riverside Institute of Technology · May 2026 · GPA 3.8
+Coursework: Statistical Inference, Experimental Design, Machine Learning, Time Series, Causal Inference
+B.S. Mathematics, Riverside Institute of Technology · 2024
+
+**Projects**
+
+**Subscription A/B test re-analysis** · Jan 2026 – Apr 2026 · (github.com/candidate/ab-test-reanalysis)
+- Re-analyzed a public 1.2M-user pricing experiment; found a sample-ratio mismatch the original write-up missed; with CUPED variance reduction the confidence interval narrowed 31%.
+- Wrote a 6-page decision memo recommending which price variant to keep, presented to the program's industry advisory panel.
+
+**Grocery demand forecasting** · Sep 2025 – Dec 2025 · (github.com/candidate/demand-forecast)
+- Forecast daily demand for 500 store–item pairs from a public retail dataset; LightGBM with holiday and promotion features beat a seasonal-naive baseline by 22% WMAPE.
+- Built backtesting across 8 rolling windows; documented failure cases around holidays.
+
+**Customer review sentiment classifier** · Feb 2025 – May 2025 · (github.com/candidate/review-sentiment)
+- Fine-tuned a small transformer on 50k labeled product reviews (F1 0.89); compared with a TF-IDF + logistic regression baseline (F1 0.84) and discussed the cost trade-off.
+
+**City Data Hackathon 2025** — 2nd place of 38 teams · Oct 2025
+- Team of 3; built a model predicting late bus arrivals from open transit data and a map dashboard for the city transit office.
+
+**Publications**
+- "Variance reduction in small-sample pricing experiments" — student poster, Riverside Statistics Symposium, April 2026.
+
+**Skills**
+Python, SQL, pandas, scikit-learn, statsmodels, LightGBM, PyTorch, Git, A/B testing, forecasting, causal inference, Tableau
+
+--- LinkedIn profile ---
+Candidate E
+M.S. Data Science, Riverside Institute of Technology
+Boston, Massachusetts
+
+Education
+- Riverside Institute of Technology, M.S. Data Science, 2024 – 2026
+- Riverside Institute of Technology, B.S. Mathematics, 2020 – 2024
+
+Projects
+- Subscription A/B test re-analysis (2026)
+- Grocery demand forecasting (2025)
+
+Honors & awards
+- 2nd place, City Data Hackathon 2025
+
+Skills: Python, SQL, Machine Learning, Experimentation, Forecasting
+
+--- GitHub (public repositories) ---
+- ab-test-reanalysis: Re-analysis of a public pricing experiment with SRM checks and CUPED (Python, Jupyter Notebook; own repository; commits by candidate: 63; last updated 2026-04)
+  README: Re-analysis of a public 1.2M-user pricing experiment. Checks sample-ratio mismatch, applies CUPED using pre-period spend, and reports intervals before and after. Includes the decision memo (PDF).
+- demand-forecast: Daily demand forecasting for 500 store-item pairs (Python; own repository; commits by candidate: 41; last updated 2025-12)
+  README: LightGBM forecasting with holiday and promotion features. Rolling-origin backtest over 8 windows. WMAPE 0.18 vs 0.23 for seasonal naive.
+- review-sentiment: Transformer vs TF-IDF baseline for review sentiment (Python; own repository; commits by candidate: 22; last updated 2025-05)
+  README: Fine-tunes a small transformer on 50k reviews; compares F1, latency and cost with a TF-IDF + logistic regression baseline.
+- transit-delay-hackathon: City Data Hackathon 2025 entry (team) (Python, JavaScript; own repository; commits by candidate: 18; last updated 2025-10)
+  README: Predicts late bus arrivals from open transit feeds; map dashboard for the transit office. Team of 3.
+- scikit-learn: Fork of scikit-learn (Python; fork of another project; commits by candidate: 0; last updated 2025-01)
+
+--- Portfolio ---
+candidate-portfolio.example.com — three project pages (A/B test re-analysis, demand forecasting, sentiment classifier), each with the problem, data, method, results and a link to the repo. The A/B page includes the decision memo.
+
+--- References submitted ---
+- Relationship: supervisor. Statement: "I supervised the candidate's capstone on pricing experiments. His analysis found a sample-ratio problem that the original authors missed, and his memo was the clearest in the cohort."
+
+Now give your answer in the required format.
