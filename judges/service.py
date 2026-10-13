@@ -129,6 +129,55 @@ class JudgmentService:
         self._save(key, subject_type, subject_id, judgment, context, baseline, used=True)
         return judgment
 
+    def ask_batch(self, key: str, subject_type: str, items: list[tuple[str, dict]], baseline: Baseline | None,
+                  judge: Judge) -> dict[str, Judgment | None]:
+        """Several criteria in one call (specs/09 §2.2), each saved as its own row with its own cache key.
+
+        Same rules as ask(require_quote=True): a label above the none-option needs a quote found in the
+        input. A criterion that fails the check (or that the batch left out) is retried alone once; if it
+        still fails, it is recorded as the none-option by rule. Failed answers are kept as not used.
+        """
+        q = question(key)
+        with self._lock:
+            self.calls += 1
+        try:
+            with timing.span(timing.JUDGE, key, batch=len(items)) as t:
+                answers = judge.batch(key, [{**ctx, "_subject_id": sid} for sid, ctx in items])
+                t.update(method="claude", model=next((a.model_version for a in answers if a), None))
+        except JudgeError as exc:
+            log.warning("batched %s failed, asking each criterion alone: %s", key, exc)
+            answers = [None] * len(items)
+        out: dict[str, Judgment | None] = {}
+        for (sid, ctx), j in zip(items, answers):
+            if j is not None and (j.label == q.none_option or j.quote):
+                self._save(key, subject_type, sid, j, ctx, baseline, used=True)
+                out[sid] = j
+            else:
+                out[sid] = self._solo_retry(key, subject_type, sid, ctx, baseline, judge, [j] if j else [])
+        return out
+
+    def _solo_retry(self, key: str, subject_type: str, subject_id: str, context: dict, baseline: Baseline | None,
+                    judge: Judge, unsupported: list[Judgment]) -> Judgment | None:
+        q = question(key)
+        try:
+            judgment = self._call(judge, key, subject_id, context)
+        except JudgeError as exc:
+            for u in unsupported:
+                self._save(key, subject_type, subject_id, u, context, baseline, used=False)
+            with self._lock:
+                self.errors.append(f"{key} for {subject_type} {subject_id}: {exc}")
+            return None
+        if judgment.label != q.none_option and not judgment.quote:
+            unsupported.append(judgment)
+            judgment = Judgment(label=q.none_option, method="rule", model_version=RULE_MODEL,
+                                reasoning=f"{unsupported[-1].method} labelled it '{unsupported[-1].label}' without a "
+                                          f"quote found in the input, in the batch and alone, so it counts as "
+                                          f"{q.none_option}.")
+        for u in unsupported:
+            self._save(key, subject_type, subject_id, u, context, baseline, used=False)
+        self._save(key, subject_type, subject_id, judgment, context, baseline, used=True)
+        return judgment
+
     def rule(self, key: str, subject_type: str, subject_id: str, label: str, context: dict,
              baseline: Baseline | None = None, reasoning: str | None = None) -> Judgment:
         """A label decided by code (e.g. skill pre-filter found no mention → missing, specs/05).

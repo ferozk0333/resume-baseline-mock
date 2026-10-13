@@ -27,6 +27,7 @@ class FakeJudge:
         self.script = script
         self.delay = delay              # artificial latency per call (concurrency tests)
         self.calls: list[tuple[str, dict]] = []
+        self.batches: list[tuple[str, int]] = []                # (question, criteria) per batch call
         self.spans: list[tuple[str, float, float]] = []    # (question, start, end) when delay > 0
         self.in_flight = self.max_in_flight = 0
         self._lock = threading.Lock()
@@ -59,6 +60,11 @@ class FakeJudge:
 
     def choice(self, question_key: str, options: list[str], context: dict) -> Judgment:
         return self._label(question_key, context)
+
+    def batch(self, key: str, contexts: list[dict]) -> list[Judgment | None]:
+        """Same labels as asking each context alone; one entry per context."""
+        self.batches.append((key, len(contexts)))
+        return [self._label(key, c) for c in contexts]
 
     def yes_no(self, question_key: str, context: dict) -> Judgment:
         return self._label(question_key, context)

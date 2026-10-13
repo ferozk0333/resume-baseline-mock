@@ -205,8 +205,35 @@ def open_ctx(deps: Deps, state: dict, *, with_relevance: bool = True):
         conn.close()
 
 
+# Question families whose unmatched criteria go to Claude in one call per candidate and baseline (specs/09 §2.2).
+BATCH_KEYS = {"skill_evidence", "applied_level", "tool_evidence"}
+
+
+def _batched(ctx: Ctx, asks: list[Ask]) -> dict[tuple[str, str], Judgment | None]:
+    """Judge the not-yet-saved Claude-routed criteria of each batchable question in one call."""
+    groups: dict[str, list[Ask]] = {}
+    for a in asks:
+        if a.key in BATCH_KEYS and a.route == "claude" and a.require_quote and a.rule_label is None:
+            groups.setdefault(a.key, []).append(a)
+    found: dict[tuple[str, str], Judgment | None] = {}
+    judge = ctx.deps.claude_judge
+    if not hasattr(judge, "batch"):
+        return found
+    for key, group in groups.items():
+        baseline = ctx.baseline if QUESTIONS[key].job_dependent else None
+        misses = [a for a in group if ctx.svc.cached(a.key, a.subject_id, a.context, baseline, judge) is None]
+        if len(misses) < 2:
+            continue
+        with ctx.deps._sem:
+            got = ctx.svc.ask_batch(key, misses[0].subject_type, [(a.subject_id, a.context) for a in misses],
+                                    baseline, judge)
+        found.update({(key, sid): j for sid, j in got.items()})
+    return found
+
+
 def resolve(ctx: Ctx, asks: list[Ask], *, call: bool) -> Labels:
     """call=True: judge (cache first, parallel, bounded). call=False: read saved judgments only, never a model."""
+    batched = _batched(ctx, asks) if call else {}
 
     def one(a: Ask) -> tuple[tuple[str, str], Judgment | None]:
         baseline = ctx.baseline if QUESTIONS[a.key].job_dependent else None
@@ -216,6 +243,8 @@ def resolve(ctx: Ctx, asks: list[Ask], *, call: bool) -> Labels:
                                                            a.context, baseline, a.rule_reason)
             return (a.key, a.subject_id), Judgment(label=a.rule_label, reasoning=a.rule_reason, method="rule",
                                                    model_version="rule")
+        if (a.key, a.subject_id) in batched:
+            return (a.key, a.subject_id), batched[(a.key, a.subject_id)]
         judge = ctx.deps.claude_judge if a.route == "claude" else None
         if not call:
             return (a.key, a.subject_id), ctx.svc.cached(a.key, a.subject_id, a.context, baseline, judge)
