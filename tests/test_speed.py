@@ -193,3 +193,33 @@ def test_pipeline_sends_bullet_and_quality_questions_grouped(tmp_path):
     assert set(judge.groups) == {tuple(BULLET_KEYS), tuple(f"quality_check_{i}" for i in range(1, 6))}
     bullet_groups = sum(1 for g in judge.groups if g == tuple(BULLET_KEYS))
     assert sum(1 for k, _ in judge.calls if k in BULLET_KEYS) == 5 * bullet_groups   # never asked one by one
+
+
+# --- 2.5 Sources extracted in parallel ------------------------------------------------------------
+
+def test_all_sources_are_extracted_at_once():
+    import threading
+    from extraction.extract import extract_all
+    from extraction.validate import SourceDoc
+    state = {"now": 0, "max": 0}
+    lock = threading.Lock()
+
+    class SlowLLM:
+        def parse(self, *, model, system, user, output_type):
+            with lock:
+                state["now"] += 1
+                state["max"] = max(state["max"], state["now"])
+            time.sleep(0.05)
+            with lock:
+                state["now"] -= 1
+            return output_type.model_validate({"roles": [], "projects": [], "claims": [], "certifications": []}
+                                              if "roles" in output_type.model_fields else
+                                              {"projects": [], "claims": []})
+
+    docs = [SourceDoc("r", "resume", "x", "Resume"), SourceDoc("l", "linkedin_pdf", "x", "LinkedIn"),
+            SourceDoc("p", "portfolio", "x", "Portfolio")] + \
+        [SourceDoc(f"g{i}", "github_repo", "x", f"repo {i}") for i in range(6)]
+    start = time.perf_counter()
+    out = extract_all(docs, SlowLLM())
+    assert len(out) == 9 and state["max"] == 9
+    assert time.perf_counter() - start < 0.05 * 3

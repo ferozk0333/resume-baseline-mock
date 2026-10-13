@@ -50,7 +50,7 @@ GITHUB_CACHE_HOURS = 24          # GitHub API responses reused for this long (ET
 GITHUB_CONCURRENCY = 8           # repos whose details are fetched at once
 EXTRACT_MAX_TOKENS = 12_000     # a dense one-page resume needs ~7.3k (phase 9); runaway output is cut earlier
 PLAN_MAX_TOKENS = 16_000
-EXTRACT_CONCURRENCY = 4
+EXTRACT_CONCURRENCY = 16        # resume, LinkedIn, portfolio and READMEs at once (specs/09 §2.5); Claude cap applies
 # Concurrency. All 19 subcategories run at once; these caps set how many model calls are in flight.
 # JUDGE_CONCURRENCY (specs/09 §2.1): judgments in flight across all four dimension subgraphs, Jev and
 # Claude together. Beneath it, per-provider pools keep fast Jev calls from queueing slow Claude calls.
