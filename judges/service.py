@@ -129,6 +129,35 @@ class JudgmentService:
         self._save(key, subject_type, subject_id, judgment, context, baseline, used=True)
         return judgment
 
+    def ask_group(self, keys: list[str], subject_type: str, subject_id: str, context: dict,
+                  baseline: Baseline | None) -> dict[str, Judgment | None]:
+        """Several questions about one subject in one judge call (specs/09 §2.3). Each answer is saved as
+        its own row with the same cache key as a single ask; fallbacks and failures are per question."""
+        with self._lock:
+            self.calls += 1
+        with timing.span(timing.JUDGE, "+".join(keys), group=len(keys)) as t:
+            answers = self.judge.group(keys, {**context, "_subject_id": subject_id})
+            t.update(method="group", fallbacks=sum(1 for a in answers.values()
+                                                   if isinstance(a, Judgment) and a.fallback_from is not None))
+        out: dict[str, Judgment | None] = {}
+        for key in keys:
+            j = answers.get(key)
+            if isinstance(j, Judgment):
+                if j.fallback_from is not None:
+                    self._save(key, subject_type, subject_id, j.fallback_from, context, baseline, used=False)
+                self._save(key, subject_type, subject_id, j, context, baseline, used=True)
+                out[key] = j
+                continue
+            exc = j if isinstance(j, JudgeError) else JudgeError("no answer in the grouped call")
+            msg = f"{key} for {subject_type} {subject_id}: {exc}"
+            log.warning("judgment failed: %s", msg)
+            with self._lock:
+                self.errors.append(msg)
+            if exc.discarded is not None:
+                self._save(key, subject_type, subject_id, exc.discarded, context, baseline, used=False)
+            out[key] = None
+        return out
+
     def ask_batch(self, key: str, subject_type: str, items: list[tuple[str, dict]], baseline: Baseline | None,
                   judge: Judge) -> dict[str, Judgment | None]:
         """Several criteria in one call (specs/09 §2.2), each saved as its own row with its own cache key.

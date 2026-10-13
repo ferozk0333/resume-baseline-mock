@@ -124,3 +124,72 @@ def test_claude_batch_prompt_keeps_instructions_and_options():
     assert all(desc in llm.system for desc in Q["skill_evidence"].options.values())
     assert llm.user.count("Built a churn model") == 1 and "C1: SQL: queries" in llm.user
     assert [(j.label, j.quote) for j in out] == [("keyword", None), ("bullet", "built a churn model")]
+
+
+# --- 2.3 Several questions per Jev request --------------------------------------------------------
+
+BULLET_KEYS = ["outcome_metric", "outcome_direction", "impact_type", "ownership", "reach"]
+
+
+def _jev_answers(low: str | None = None) -> dict:
+    """Jev answers for the 5 per-bullet questions; `low` gets a confidence below the threshold."""
+    out = {}
+    for k in BULLET_KEYS:
+        q = QUESTIONS[k]
+        if q.kind == "yes_no":
+            out[k] = {"type": "noul", "noul": 0.55 if k == low else 0.97}
+        elif q.kind == "graded":
+            n = len(q.options)
+            out[k] = {"type": "score", "score": n - 1, "confidence": 0.1 if k == low else 0.9,
+                      "probabilities": {str(i): (0.9 if i == n - 1 else 0.1 / (n - 1)) for i in range(n)}}
+        else:
+            first = next(iter(q.options))
+            out[k] = {"type": "choice", "choice": first, "confidence": 0.1 if k == low else 0.9,
+                      "probabilities": {o: (0.9 if o == first else 0.0) for o in q.options}}
+    return out
+
+
+def test_one_jev_request_carries_all_bullet_questions_and_low_confidence_falls_back_alone(tmp_path):
+    from judges.fake_judge import FakeJudge
+    from judges.jev_judge import JevJudge
+    from judges.service import JudgmentService
+    from tests.test_judges import PostSession
+    session = PostSession((200, {"model": "jev-1.13.0", "answers": _jev_answers(low="ownership")}))
+    fallback = FakeJudge(labels={"ownership": "contributed"})
+    judge = JevJudge(fallback=fallback, session=session, api_key="k", model="jev-1.13.0", threshold=0.6, backoff=0)
+    conn = db.init_app_db(str(tmp_path / "j.db"))
+    svc = JudgmentService(conn, judge, "cand-1")
+    got = svc.ask_group(BULLET_KEYS, "bullet", "b-1", {"bullet": "Led the churn model; cut churn 12%."}, None)
+    assert len(session.bodies) == 1 and list(session.bodies[0]["questions"]) == BULLET_KEYS
+    assert [k for k, _ in fallback.calls] == ["ownership"]                 # only the unsure answer
+    assert got["ownership"].label == "contributed" and got["ownership"].fallback_from.method == "jev"
+    assert {k: got[k].method for k in BULLET_KEYS} == {**{k: "jev" for k in BULLET_KEYS}, "ownership": "claude"}
+    rows = conn.execute("SELECT question, method, used FROM judgments ORDER BY rowid").fetchall()
+    assert sorted((r["question"], r["method"], r["used"]) for r in rows) == sorted(
+        [(k, "jev", 1) for k in BULLET_KEYS if k != "ownership"] + [("ownership", "jev", 0), ("ownership", "claude", 1)])
+    # Each row has the same cache key as a single ask: a later solo ask is a cache hit, no request.
+    for k in BULLET_KEYS:
+        assert svc.ask(k, "bullet", "b-1", {"bullet": "Led the churn model; cut churn 12%."}).label == got[k].label
+    assert len(session.bodies) == 1
+
+
+def test_jev_request_failure_falls_back_per_question(tmp_path):
+    from judges.fake_judge import FakeJudge
+    from judges.jev_judge import JevJudge
+    from tests.test_judges import PostSession
+    session = PostSession((400, {"error": "bad"}))
+    fallback = FakeJudge(default=None, script=lambda q, c: next(iter(QUESTIONS[q].options)))
+    judge = JevJudge(fallback=fallback, session=session, api_key="k", model="jev-1.13.0", threshold=0.6, backoff=0)
+    out = judge.group(BULLET_KEYS, {"bullet": "x"})
+    assert sorted(k for k, _ in fallback.calls) == sorted(BULLET_KEYS)
+    assert all(j.method == "claude" for j in out.values())
+
+
+def test_pipeline_sends_bullet_and_quality_questions_grouped(tmp_path):
+    path = str(tmp_path / "g.db")
+    conn = db.init_app_db(path)
+    cid, judge = ARCHETYPES["strong_ds"](conn)
+    Pipeline(Deps(path, judge, today=TODAY)).score(cid, DS)
+    assert set(judge.groups) == {tuple(BULLET_KEYS), tuple(f"quality_check_{i}" for i in range(1, 6))}
+    bullet_groups = sum(1 for g in judge.groups if g == tuple(BULLET_KEYS))
+    assert sum(1 for k, _ in judge.calls if k in BULLET_KEYS) == 5 * bullet_groups   # never asked one by one

@@ -28,6 +28,7 @@ class FakeJudge:
         self.delay = delay              # artificial latency per call (concurrency tests)
         self.calls: list[tuple[str, dict]] = []
         self.batches: list[tuple[str, int]] = []                # (question, criteria) per batch call
+        self.groups: list[tuple[str, ...]] = []                 # questions per grouped call
         self.spans: list[tuple[str, float, float]] = []    # (question, start, end) when delay > 0
         self.in_flight = self.max_in_flight = 0
         self._lock = threading.Lock()
@@ -60,6 +61,17 @@ class FakeJudge:
 
     def choice(self, question_key: str, options: list[str], context: dict) -> Judgment:
         return self._label(question_key, context)
+
+    def group(self, keys: list[str], context: dict) -> dict[str, Judgment | JudgeError]:
+        """Several questions about one subject in one call (like a multi-question Jev request)."""
+        self.groups.append(tuple(keys))
+        out = {}
+        for k in keys:
+            try:
+                out[k] = self._label(k, context)
+            except JudgeError as exc:
+                out[k] = exc
+        return out
 
     def batch(self, key: str, contexts: list[dict]) -> list[Judgment | None]:
         """Same labels as asking each context alone; one entry per context."""

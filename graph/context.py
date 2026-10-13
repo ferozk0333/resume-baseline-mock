@@ -17,7 +17,7 @@ from core import config, db, timing
 from core.models import Baseline
 from extraction import store
 from extraction.records import Profile, ProjectRec, RoleRec
-from judges.base import Judge, Judgment
+from judges.base import Judge, Judgment, render_context
 from judges.questions import QUESTIONS
 from judges.service import JudgmentService
 from scoring import formulas as f
@@ -231,9 +231,47 @@ def _batched(ctx: Ctx, asks: list[Ask]) -> dict[tuple[str, str], Judgment | None
     return found
 
 
+def _grouped(ctx: Ctx, asks: list[Ask]) -> dict[tuple[str, str], Judgment | None]:
+    """Questions about the same subject with the same context, asked in one judge call (specs/09 §2.3)."""
+    judge = ctx.deps.judge
+    if not hasattr(judge, "group"):
+        return {}
+    only = getattr(judge, "CLAUDE_ONLY", set())
+    groups: dict[tuple[str, str], list[Ask]] = {}
+    for a in asks:
+        if a.rule_label is None and a.route is None and a.key not in only:
+            groups.setdefault((a.subject_id, render_context(a.context)), []).append(a)
+    work = []
+    for group in groups.values():
+        misses = []
+        for a in group:
+            baseline = ctx.baseline if QUESTIONS[a.key].job_dependent else None
+            if ctx.svc.cached(a.key, a.subject_id, a.context, baseline) is None:
+                misses.append(a)
+        if len(misses) >= 2 and len({QUESTIONS[a.key].job_dependent for a in misses}) == 1:
+            work.append(misses)
+
+    def run(misses: list[Ask]) -> dict:
+        a = misses[0]
+        baseline = ctx.baseline if QUESTIONS[a.key].job_dependent else None
+        with ctx.deps._sem:
+            got = ctx.svc.ask_group([m.key for m in misses], a.subject_type, a.subject_id, a.context, baseline)
+        return {(k, a.subject_id): j for k, j in got.items()}
+
+    found: dict[tuple[str, str], Judgment | None] = {}
+    if len(work) > 1:
+        with ThreadPoolExecutor(max_workers=ctx.deps.max_parallel_calls) as pool:
+            for part in pool.map(timing.bind(run), work):
+                found.update(part)
+    else:
+        for misses in work:
+            found.update(run(misses))
+    return found
+
+
 def resolve(ctx: Ctx, asks: list[Ask], *, call: bool) -> Labels:
     """call=True: judge (cache first, parallel, bounded). call=False: read saved judgments only, never a model."""
-    batched = _batched(ctx, asks) if call else {}
+    batched = {**_batched(ctx, asks), **_grouped(ctx, asks)} if call else {}
 
     def one(a: Ask) -> tuple[tuple[str, str], Judgment | None]:
         baseline = ctx.baseline if QUESTIONS[a.key].job_dependent else None

@@ -259,11 +259,32 @@ def subcategory_graph(deps: Deps, sub: Subcategory):
     return g.compile(name=sub.name)
 
 
+# Subcategories that ask several questions about the same subjects: their questions go to the judge
+# together, one call per subject, before the subcategories run (specs/09 §2.3).
+GROUPED = {"authority": ("outcomes", "impact", "ownership", "scope_of_impact")}
+
+
+def group_judge_node(deps: Deps, subs: list[Subcategory]):
+    def group_judge(state: RunState) -> dict:
+        # A question that fails here is not saved, so its subcategory asks again and reports the error.
+        try:
+            with open_ctx(deps, state) as ctx:
+                resolve(ctx, [a for sub in subs for a in sub.plan(ctx)], call=True)
+        except Exception:
+            log.exception("grouped judging failed")
+        return {}
+    return group_judge
+
+
 def dimension_graph(deps: Deps, name: str):
     g = StateGraph(RunState, output_schema=ScoreOut)
+    grouped = [s for s in DIMENSIONS[name] if s.name in GROUPED.get(name, ())]
+    if grouped:
+        g.add_node("group_judge", group_judge_node(deps, grouped))
+        g.add_edge(START, "group_judge")
     for sub in DIMENSIONS[name]:
         g.add_node(sub.name, subcategory_graph(deps, sub))
-        g.add_edge(START, sub.name)
+        g.add_edge("group_judge" if sub in grouped else START, sub.name)
         g.add_edge(sub.name, END)
     return g.compile(name=name)
 
