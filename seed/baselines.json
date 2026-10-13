@@ -1,0 +1,86 @@
+{
+  "_note": "MOCK baselines for testing the scoring logic only. Illustrative early-career profiles drafted from common job-posting patterns; not validated against market data. Edit freely in the Baselines page.",
+  "baselines": [
+    {
+      "id": "baseline-ai-engineer-entry",
+      "title": "AI Engineer",
+      "level": "entry",
+      "required_years": 1,
+      "expected_reach": 2,
+      "scope_expectation": "Owns well-defined features or components end to end (e.g. a retrieval pipeline, an evaluation harness, a model-serving endpoint) within a team; works with a senior engineer on design; ships to staging or production.",
+      "complexity_criteria": "Built or integrated an ML/LLM system beyond a tutorial: e.g. combined retrieval with a model, handled evaluation or failure cases, dealt with latency/cost limits, data quality issues, or deployment constraints.",
+      "description": "Early-career AI Engineer who builds and ships applications on top of machine learning and large language models: prompt and retrieval pipelines, evaluation, APIs and basic deployment. Works in Python with modern ML tooling and collaborates with product and data teams.",
+      "criteria": [
+        {"kind": "skill", "name": "Machine learning fundamentals", "description": "Training, validating and evaluating models; understanding overfitting, metrics and data splits.", "aliases": ["ML", "machine learning", "model training"], "priority": "required"},
+        {"kind": "skill", "name": "LLM application development", "description": "Building applications that call large language models: prompting, structured output, tool use, chaining.", "aliases": ["LLM", "generative AI", "GenAI", "prompt engineering", "LLM apps"], "priority": "required"},
+        {"kind": "skill", "name": "Retrieval-augmented generation", "description": "Embedding documents, vector search and feeding retrieved context to a model.", "aliases": ["RAG", "vector search", "embeddings", "semantic search"], "priority": "required"},
+        {"kind": "skill", "name": "Model evaluation", "description": "Designing test sets and metrics to measure model or LLM output quality.", "aliases": ["evals", "LLM evaluation", "benchmarking"], "priority": "required"},
+        {"kind": "skill", "name": "API development", "description": "Building and consuming REST APIs to serve or integrate models.", "aliases": ["REST API", "backend", "FastAPI", "Flask"], "priority": "required"},
+        {"kind": "skill", "name": "Data preprocessing", "description": "Cleaning, transforming and preparing data for models.", "aliases": ["data cleaning", "feature engineering", "ETL"], "priority": "required"},
+        {"kind": "skill", "name": "Fine-tuning", "description": "Adapting pretrained models to a task with additional training.", "aliases": ["fine tuning", "LoRA", "PEFT"], "priority": "preferred"},
+        {"kind": "skill", "name": "MLOps basics", "description": "Versioning, monitoring and deploying models.", "aliases": ["MLOps", "model deployment", "model monitoring"], "priority": "preferred"},
+        {"kind": "tool", "name": "Python", "description": "Primary programming language.", "aliases": ["python3"], "priority": "required"},
+        {"kind": "tool", "name": "PyTorch", "description": "Deep learning framework.", "aliases": ["torch"], "priority": "required"},
+        {"kind": "tool", "name": "Git", "description": "Version control.", "aliases": ["GitHub", "GitLab"], "priority": "required"},
+        {"kind": "tool", "name": "Hugging Face", "description": "Model hub and transformers library.", "aliases": ["transformers", "HF"], "priority": "preferred"},
+        {"kind": "tool", "name": "LangChain or LangGraph", "description": "LLM orchestration frameworks.", "aliases": ["LangChain", "LangGraph", "LlamaIndex"], "priority": "preferred"},
+        {"kind": "tool", "name": "Docker", "description": "Containerization.", "aliases": ["containers"], "priority": "preferred"},
+        {"kind": "tool", "name": "Cloud platform", "description": "AWS, GCP or Azure.", "aliases": ["AWS", "GCP", "Azure", "Google Cloud"], "priority": "preferred"},
+        {"kind": "certification", "name": "Cloud ML certification", "description": "E.g. AWS Machine Learning or Google Cloud ML Engineer certification.", "aliases": ["AWS ML", "Google Professional ML Engineer"], "priority": "preferred"}
+      ]
+    },
+    {
+      "id": "baseline-data-scientist-entry",
+      "title": "Data Scientist",
+      "level": "entry",
+      "required_years": 1,
+      "expected_reach": 2,
+      "scope_expectation": "Owns an analysis or model for a defined business question within a team: frames the question, prepares data, builds and evaluates the model, and presents findings to stakeholders.",
+      "complexity_criteria": "Worked with messy or multi-source data, chose and justified a method (e.g. experiment design, forecasting, classification), handled evaluation and trade-offs, and connected results to a business decision.",
+      "description": "Early-career Data Scientist who turns data into decisions: exploratory analysis, statistical modeling, experimentation and machine learning, communicated clearly to non-technical stakeholders.",
+      "criteria": [
+        {"kind": "skill", "name": "Statistical analysis", "description": "Hypothesis testing, regression, confidence intervals, distributions.", "aliases": ["statistics", "regression", "hypothesis testing"], "priority": "required"},
+        {"kind": "skill", "name": "Machine learning", "description": "Building supervised/unsupervised models and evaluating them.", "aliases": ["ML", "predictive modeling", "classification", "clustering"], "priority": "required"},
+        {"kind": "skill", "name": "Data wrangling", "description": "Cleaning, joining and reshaping data.", "aliases": ["data cleaning", "data preparation", "ETL"], "priority": "required"},
+        {"kind": "skill", "name": "Exploratory data analysis", "description": "Profiling data and finding patterns before modeling.", "aliases": ["EDA", "data exploration"], "priority": "required"},
+        {"kind": "skill", "name": "Experimentation / A/B testing", "description": "Designing and analyzing controlled experiments.", "aliases": ["A/B testing", "experiment design", "AB test"], "priority": "required"},
+        {"kind": "skill", "name": "Data visualization and communication", "description": "Presenting findings with charts and clear narratives for stakeholders.", "aliases": ["data storytelling", "visualization", "dashboards"], "priority": "required"},
+        {"kind": "skill", "name": "Forecasting", "description": "Time-series modeling and prediction.", "aliases": ["time series", "demand forecasting"], "priority": "preferred"},
+        {"kind": "skill", "name": "Causal inference", "description": "Estimating effects from observational data.", "aliases": ["causal analysis", "uplift modeling"], "priority": "preferred"},
+        {"kind": "tool", "name": "Python", "description": "Primary analysis language.", "aliases": ["python3"], "priority": "required"},
+        {"kind": "tool", "name": "SQL", "description": "Querying relational databases.", "aliases": ["PostgreSQL", "MySQL", "BigQuery SQL"], "priority": "required"},
+        {"kind": "tool", "name": "pandas", "description": "Dataframe library.", "aliases": ["Pandas"], "priority": "required"},
+        {"kind": "tool", "name": "scikit-learn", "description": "ML library.", "aliases": ["sklearn"], "priority": "required"},
+        {"kind": "tool", "name": "BI tool", "description": "Tableau, Power BI or Looker.", "aliases": ["Tableau", "Power BI", "Looker"], "priority": "preferred"},
+        {"kind": "tool", "name": "Cloud data warehouse", "description": "BigQuery, Snowflake or Redshift.", "aliases": ["BigQuery", "Snowflake", "Redshift"], "priority": "preferred"},
+        {"kind": "tool", "name": "Git", "description": "Version control.", "aliases": ["GitHub"], "priority": "preferred"},
+        {"kind": "certification", "name": "Data science or analytics certification", "description": "E.g. a cloud data/ML certification or a recognized analytics certificate.", "aliases": ["Google Data Analytics", "AWS ML", "Azure Data Scientist"], "priority": "preferred"}
+      ]
+    },
+    {
+      "id": "baseline-product-manager-entry",
+      "title": "Product Manager",
+      "level": "entry",
+      "required_years": 1,
+      "expected_reach": 3,
+      "scope_expectation": "Owns a feature or small product area: defines the problem, writes requirements, prioritizes with engineering and design, ships, and measures the result.",
+      "complexity_criteria": "Handled ambiguity and trade-offs across stakeholders: e.g. prioritized competing requests, used user research or data to choose a direction, managed scope against constraints, and measured outcome after launch.",
+      "description": "Early-career Product Manager (APM/PM) who discovers user problems, defines requirements, works with engineering and design to ship, and measures impact with data.",
+      "criteria": [
+        {"kind": "skill", "name": "Product discovery and user research", "description": "Interviews, surveys and usability tests to understand user problems.", "aliases": ["user research", "customer interviews", "discovery"], "priority": "required"},
+        {"kind": "skill", "name": "Requirements writing", "description": "PRDs, user stories and acceptance criteria.", "aliases": ["PRD", "user stories", "product specs"], "priority": "required"},
+        {"kind": "skill", "name": "Prioritization", "description": "Using frameworks or data to decide what to build next.", "aliases": ["roadmapping", "RICE", "backlog prioritization"], "priority": "required"},
+        {"kind": "skill", "name": "Product analytics", "description": "Defining metrics and analyzing usage to make decisions.", "aliases": ["metrics", "KPIs", "funnel analysis"], "priority": "required"},
+        {"kind": "skill", "name": "Cross-functional collaboration", "description": "Working with engineering, design and business stakeholders to ship.", "aliases": ["stakeholder management", "cross-functional"], "priority": "required"},
+        {"kind": "skill", "name": "Experimentation / A/B testing", "description": "Running and interpreting product experiments.", "aliases": ["A/B testing", "experiments"], "priority": "preferred"},
+        {"kind": "skill", "name": "Go-to-market", "description": "Launch planning, positioning and adoption.", "aliases": ["GTM", "product launch"], "priority": "preferred"},
+        {"kind": "skill", "name": "Technical fluency", "description": "Understanding APIs, data and system trade-offs well enough to work with engineers.", "aliases": ["technical background", "APIs"], "priority": "preferred"},
+        {"kind": "tool", "name": "Jira or Linear", "description": "Issue and sprint tracking.", "aliases": ["Jira", "Linear", "Asana"], "priority": "required"},
+        {"kind": "tool", "name": "Product analytics tool", "description": "Amplitude, Mixpanel or Google Analytics.", "aliases": ["Amplitude", "Mixpanel", "Google Analytics", "GA4"], "priority": "required"},
+        {"kind": "tool", "name": "Figma", "description": "Design collaboration.", "aliases": ["wireframes"], "priority": "preferred"},
+        {"kind": "tool", "name": "SQL", "description": "Querying product data.", "aliases": ["BigQuery SQL"], "priority": "preferred"},
+        {"kind": "certification", "name": "Product management certification", "description": "E.g. a recognized product management or agile certificate.", "aliases": ["CSPO", "Pragmatic Institute", "PMI-ACP"], "priority": "preferred"}
+      ]
+    }
+  ]
+}

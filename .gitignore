@@ -1,0 +1,14 @@
+.env
+.venv/
+rightstaff.db
+rightstaff.db-*
+*.db-wal
+*.db-shm
+__pycache__/
+.pytest_cache/
+.hypothesis/
+.DS_Store
+uploads/
+*.pyc
+.env.*
+!.env.example
