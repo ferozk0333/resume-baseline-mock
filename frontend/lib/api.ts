@@ -90,7 +90,7 @@ export type Job = { id: string; baseline_id: string; title: string; company: str
 export type ApplicantRow = { application_id: string; candidate_id: string; name: string | null; current_role: string | null;
   status: "new" | "shortlisted" | "not_moving_forward"; run_id: string | null; scored: boolean; match: number | null;
   confidence: number | null; must_haves_met: number; must_haves_total: number; why: string | null; tags: string[];
-  demo: string | null };
+  demo: string | null; percentile?: number | null };
 export type MustHave = { criterion_id: string; name: string; kind: string;
   status: "met_backed" | "met_on_paper" | "not_met" | "unknown" };
 export type Requirement = { criterion_id: string; name: string; kind: string; priority: string; must_have: boolean;
@@ -111,3 +111,13 @@ export type Panel = ApplicantRow & {
 export type CompareColumn = { application_id: string; name: string | null; match: number | null; confidence: number | null;
   dimensions: Record<string, number | null> | null; must_haves_met: number; must_haves_total: number; scored: boolean;
   demo: string | null; top_evidence: Requirement[] };
+
+// --- Benchmarks (phase 12) -------------------------------------------------------------------------------
+export type Pct = { percentile: number; n: number } | null;
+export type Benchmarks = {
+  baseline_title: string | null;
+  percentiles: { shown: boolean; reason?: string; pool_size: number; min_pool: number; demo_pool: boolean;
+    final?: Pct; dimensions?: Record<string, Pct> };
+  peer_signals: { min_group: number; demo_pool: boolean; dimensions: Record<string, { suppressed: boolean;
+    group_size: number | null; signals: { feature: string; subcategory: string; rate: number; text: string }[] }> };
+};

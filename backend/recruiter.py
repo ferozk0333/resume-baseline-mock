@@ -321,8 +321,13 @@ def applicant_row(conn, app: dict, job: dict) -> dict:
 
 def applicants(conn, job: dict, *, sort: str = "match", status: str | None = None, all_must_haves: bool = False,
                min_score: float | None = None) -> list[dict]:
+    from scoring import benchmarks
     rows = [applicant_row(conn, dict(a), job) for a in
             conn.execute("SELECT * FROM applications WHERE job_id = ?", (job["id"],)).fetchall()]
+    pool = benchmarks.job_pool(conn, job)                 # percentile within this job's applicants (specs/12 §3)
+    for r in rows:
+        p = benchmarks.percentiles(pool, r["candidate_id"]) if r["scored"] else {"shown": False}
+        r["percentile"] = p["final"]["percentile"] if p.get("shown") and p.get("final") else None
     if status:
         rows = [r for r in rows if r["status"] == status]
     if all_must_haves:

@@ -322,9 +322,11 @@ def write_plan(deps: Deps, run_id: str, candidate_id: str, baseline_id: str, sub
     conn = db.connect(deps.db_path)
     try:
         baseline = db.get_baseline(conn, baseline_id)
+        from scoring.benchmarks import plan_lines
         with timing.span(timing.PLAN, "improvement_plan"):
             plan = generate_plan(conn, run_id, subscores, weights, baseline,
-                                 store.load_profile(conn, candidate_id), deps.planner)
+                                 store.load_profile(conn, candidate_id), deps.planner,
+                                 peer_lines=plan_lines(conn, run_id))
         db.set_plan_status(conn, run_id, "failed" if plan.error else "ready")
         return plan
     except Exception:
@@ -603,8 +605,10 @@ def regenerate_plan(conn, run_id: str, planner, weights: dict | None = None):
     """'Regenerate plan' (specs/06): ask the model again for the current weights."""
     from scoring.plan import generate_plan
     run, weights, baseline = _run_inputs(conn, run_id, weights)
+    from scoring.benchmarks import plan_lines
     return generate_plan(conn, run_id, run_scores(conn, run_id), weights, baseline,
-                         store.load_profile(conn, run["candidate_id"]), planner, regenerate=True)
+                         store.load_profile(conn, run["candidate_id"]), planner, regenerate=True,
+                         peer_lines=plan_lines(conn, run_id))
 
 
 def save_run_weights(conn, run_id: str, weights: dict) -> None:

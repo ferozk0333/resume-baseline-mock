@@ -130,6 +130,13 @@ MODEL_PRICES = {
 }
 PRINT_TIMINGS = _env("PRINT_TIMINGS", "1") == "1"   # timing table on stdout at the end of each run (specs/09 §1)
 
+# --- Benchmarks (specs/12) -----------------------------------------------------
+# Percentiles need at least MIN_POOL candidates in the pool; any peer statistic needs at least MIN_GROUP
+# people. Lower them in .env only for a local demo: the UI then shows a "demo pool" badge.
+MIN_POOL = int(_env("MIN_POOL", "20"))
+MIN_GROUP = int(_env("MIN_GROUP", "10"))
+PEER_MIN_RATE = int(_env("PEER_MIN_RATE", "50"))   # a peer signal shows when at least this % of the group has it
+
 # --- Scoring constants (specs/04) -----------------------------------------
 LOGIC_VERSION = "v0.1"
 ENTRY_LEVEL_MAX_YEARS = 2          # baseline.required_years <= 2 → entry level

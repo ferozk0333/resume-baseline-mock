@@ -116,12 +116,14 @@ def candidate_text(profile: Profile) -> str:
 
 
 def build_user_message(baseline: Baseline, subscores: dict, weights: dict, gaps: list[Gap],
-                       profile: Profile) -> str:
+                       profile: Profile, peer_lines: dict[str, list[str]] | None = None) -> str:
     agg = aggregate(subscores, weights)
     scores = {"final": None if agg.final is None else round(agg.final, 1),
               "dimensions": {d: None if v is None else round(v, 2) for d, v in agg.dimensions.items()}}
     gap_data = [{"rank": i, "key": g.subcategory, "name": g.label, "status": g.status, "score": round(g.score, 2),
-                 "guidance": g.guidance, **g.details} for i, g in enumerate(gaps, 1)]
+                 "guidance": g.guidance, **g.details,
+                 **({"what_higher_scorers_have": peer_lines[g.subcategory]} if peer_lines and peer_lines.get(g.subcategory)
+                    else {})} for i, g in enumerate(gaps, 1)]
     fit = {t: sorted(keys) for t, keys in type_fit(baseline).items()}
     return "\n\n".join([
         "Recommend actions for this candidate and target role.",
@@ -254,7 +256,8 @@ def _ask(planner: StructuredLLM, model: str, user: str) -> Plan:
 
 def generate_plan(conn: sqlite3.Connection, run_id: str, subscores: dict, weights: dict, baseline: Baseline,
                   profile: Profile, planner: StructuredLLM | None, *, regenerate: bool = False,
-                  model: str | None = None) -> PlanResult:
+                  model: str | None = None,
+                  peer_lines: dict[str, list[str]] | None = None) -> PlanResult:
     """Stored plan re-priced for these weights, or a new one from the model (first time / regenerate)."""
     model = model or config.REASONING_MODEL
     gaps = rank_gaps(subscores, weights, baseline)[:5]
@@ -268,7 +271,7 @@ def generate_plan(conn: sqlite3.Connection, run_id: str, subscores: dict, weight
         return PlanResult(run_id, weights, gaps, markdown="No gaps: every scored subcategory is at its maximum.")
 
     gap_keys = {g.subcategory for g in gaps}
-    user = build_user_message(baseline, subscores, weights, gaps, profile)
+    user = build_user_message(baseline, subscores, weights, gaps, profile, peer_lines)
     first_attempt: list[dict] = []
     try:
         plan = _ask(planner, model, user)

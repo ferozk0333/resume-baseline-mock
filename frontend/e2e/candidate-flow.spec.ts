@@ -27,6 +27,8 @@ test("upload → review → score → plan", async ({ page }) => {
   await expect(page).toHaveURL(/\/runs\/[^/]+$/, { timeout: 60_000 });
   const final = page.getByTestId("final-score");
   await expect(final).toHaveText(/\d+\.\d/);
+  await expect(page.getByText("demo pool")).toBeVisible();
+  await expect(page.getByText(/Higher than \d+% of \d+ candidates scored for Data Scientist/).first()).toBeVisible();
   await page.getByRole("button", { name: /Ownership/ }).click();
   await expect(page.getByText("How it is scored:").first()).toBeVisible();
   await page.screenshot({ path: "e2e/.tmp/score.png", fullPage: true });
@@ -46,6 +48,19 @@ test("upload → review → score → plan", async ({ page }) => {
   await expect(page.getByText("Build an A/B test project")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Ranked gaps")).toBeVisible();
   await page.screenshot({ path: "e2e/.tmp/plan.png", fullPage: true });
+  // Peer signals ("what higher scorers have") for a candidate below the pool median: Keyword-heavy
+  const api = "http://localhost:8010";
+  const jobs = await (await page.request.get(`${api}/jobs`)).json();
+  const ds = jobs.find((j: { title: string }) => j.title === "Data Scientist");
+  const rows = (await (await page.request.get(`${api}/jobs/${ds.id}/applicants`)).json()).applicants;
+  const weak = rows.find((r: { name: string }) => r.name === "Keyword-heavy");
+  await page.goto(`/runs/${weak.run_id}`);
+  await expect(page.getByText(/Higher than \d+% of \d+ candidates/).first()).toBeVisible();
+  await page.screenshot({ path: "e2e/.tmp/score-percentiles.png", fullPage: false });
+  await page.goto(`/runs/${weak.run_id}/plan`);
+  await expect(page.getByText("What higher scorers have:").first()).toBeVisible();
+  await page.screenshot({ path: "e2e/.tmp/plan-peer-signals.png", fullPage: false });
+
   await page.getByRole("link", { name: "Baselines" }).click();
   await expect(page.getByRole("cell", { name: /Data Scientist/ })).toBeVisible();
   await page.screenshot({ path: "e2e/.tmp/baselines.png", fullPage: true });

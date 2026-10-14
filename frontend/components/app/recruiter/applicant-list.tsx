@@ -56,6 +56,11 @@ export function ApplicantList({ rows, selected, onSelect, picked, onPick }: {
                   <div className="text-[11px] text-muted-foreground">
                     must {r.scored ? `${r.must_haves_met}/${r.must_haves_total}` : "—"}
                   </div>
+                  {r.percentile !== null && r.percentile !== undefined && (
+                    <div className="text-[11px] text-muted-foreground" title="Percentile within this job's applicants">
+                      p{r.percentile}
+                    </div>
+                  )}
                 </div>
               </button>
             </div>

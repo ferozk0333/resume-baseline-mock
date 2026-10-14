@@ -392,6 +392,14 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             run = run_row(c, run_id)
             return run_view(c, run, json.loads(run["weights_json"]))
 
+    @app.get("/runs/{run_id}/benchmarks", tags=["scoring"])
+    def run_benchmarks(run_id: str):
+        """Percentiles and "what higher scorers have" (specs/12). Recomputed from saved runs on every request."""
+        from scoring import benchmarks
+        with conn() as c:
+            run_row(c, run_id)
+            return benchmarks.for_run(c, run_id)
+
     @app.post("/runs/{run_id}/rescore", tags=["scoring"])
     def rescore_run(run_id: str, body: WeightsIn):
         """Re-aggregate saved scores and re-rank gaps with other weights. No model calls."""

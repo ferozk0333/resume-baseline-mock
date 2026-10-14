@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/app/score/subcategory-row";
 import { useTask } from "@/hooks/use-task";
-import { get, post, type Plan, type RunView } from "@/lib/api";
+import { get, post, type Benchmarks, type Plan, type RunView } from "@/lib/api";
 
 
 export default function PlanPage() {
@@ -23,9 +23,14 @@ function PlanPageInner() {
   const [run, setRun] = useState<RunView | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [regenTask, setRegenTask] = useState<string | null>(null);
+  const [bench, setBench] = useState<Benchmarks | null>(null);
 
   const load = useCallback(() => get<Plan>(`/runs/${id}/plan`).then(setPlan).catch((e) => toast.error(e.message)), [id]);
-  useEffect(() => { get<RunView>(`/runs/${id}`).then(setRun).catch((e) => toast.error(e.message)); load(); }, [id, load]);
+  useEffect(() => {
+    get<RunView>(`/runs/${id}`).then(setRun).catch((e) => toast.error(e.message));
+    get<Benchmarks>(`/runs/${id}/benchmarks`).then(setBench).catch(() => setBench(null));
+    load();
+  }, [id, load]);
   useEffect(() => {                                      // the plan is written after the score: poll until ready
     if (plan?.status !== "generating") return;
     const t = setInterval(load, 2000);
@@ -70,7 +75,14 @@ function PlanPageInner() {
             <TableBody>
               {run.gaps.map((g) => (
                 <TableRow key={g.subcategory}>
-                  <TableCell className="font-medium">{g.label}</TableCell>
+                  <TableCell className="font-medium whitespace-normal">
+                    {g.label}
+                    {(bench?.peer_signals.dimensions[g.dimension]?.signals ?? []).filter((s) => s.subcategory === g.subcategory).map((s) => (
+                      <p key={s.feature} className="mt-1 max-w-md text-xs font-normal text-muted-foreground">
+                        <span className="font-medium text-foreground">What higher scorers have: </span>{s.text}
+                      </p>
+                    ))}
+                  </TableCell>
                   <TableCell><StatusBadge status={g.status} /></TableCell>
                   <TableCell className="text-right tabular-nums">{g.score.toFixed(2)}</TableCell>
                   <TableCell className="text-right tabular-nums">{g.gain_text}</TableCell>

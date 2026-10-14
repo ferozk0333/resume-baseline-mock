@@ -12,7 +12,8 @@ import { ProgressPanel } from "@/components/app/progress-panel";
 import { SubcategoryRow } from "@/components/app/score/subcategory-row";
 import { WeightsDrawer } from "@/components/app/score/weights-drawer";
 import { useTask } from "@/hooks/use-task";
-import { DIMENSIONS, get, post, titleCase, type Baseline, type RunView, type Weights } from "@/lib/api";
+import { DIMENSIONS, get, post, titleCase, type Baseline, type Benchmarks, type Pct, type RunView, type Weights } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
 
 export default function ScorePage() {
   return <Suspense fallback={<Skeleton className="h-96" />}><ScorePageInner /></Suspense>;
@@ -25,6 +26,7 @@ function ScorePageInner() {
   const [weights, setWeights] = useState<Weights | null>(null);       // what the sliders show; scores follow
   const [baseline, setBaseline] = useState<Baseline | null>(null);
   const [labels, setLabels] = useState<Record<string, string>>({});
+  const [bench, setBench] = useState<Benchmarks | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [rejudgeTask, setRejudgeTask] = useState<string | null>(null);
@@ -37,7 +39,14 @@ function ScorePageInner() {
       get<Baseline>(`/baselines/${v.run.baseline_id}`).then(setBaseline).catch(() => {});
     }).catch((e) => toast.error(e.message));
     get<{ labels: Record<string, string> }>("/config/weights").then((d) => setLabels(d.labels)).catch(() => {});
+    get<Benchmarks>(`/runs/${id}/benchmarks`).then(setBench).catch(() => setBench(null));
   }, [id]);
+  const pct = bench?.percentiles;
+  const compare = (p: Pct | undefined) => !pct ? null : !pct.shown
+    ? <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{pct.reason}</p>
+    : p ? <p className="mt-1 text-[11px] leading-tight text-muted-foreground">
+        Higher than <span className="font-medium text-foreground">{p.percentile}%</span> of {p.n} candidates scored for {bench?.baseline_title}
+      </p> : null;
 
   const rescore = useCallback((next: Weights) => {
     setWeights(next);
@@ -61,7 +70,10 @@ function ScorePageInner() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Score</h1>
-          <p className="text-sm text-muted-foreground">Against {baseline?.title ?? "…"} ({baseline?.level ?? ""})</p>
+          <p className="text-sm text-muted-foreground">Against {baseline?.title ?? "…"} ({baseline?.level ?? ""})
+            {pct?.demo_pool && <Badge variant="outline" className="ml-2 border-amber-300 bg-amber-50 text-amber-800"
+              title={`Comparisons use a small demo pool (minimum ${pct.min_pool}); real use needs at least 20.`}>demo pool</Badge>}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setDrawer(true)}><SlidersHorizontal /> Weights</Button>
@@ -78,6 +90,7 @@ function ScorePageInner() {
               {view.final === null ? "—" : view.final.toFixed(1)}
             </div>
             <div className="text-xs text-muted-foreground">out of 100</div>
+            {compare(pct?.final)}
           </CardContent>
         </Card>
         {DIMENSIONS.map((d) => (
@@ -88,6 +101,7 @@ function ScorePageInner() {
                 {view.dimensions[d] === null ? "—" : Math.round((view.dimensions[d] ?? 0) * 100)}
               </div>
               <div className="text-xs text-muted-foreground">weight {Math.round(view.weights.dimensions[d])}</div>
+              {pct?.shown && compare(pct.dimensions?.[d])}
             </CardContent>
           </Card>
         ))}
