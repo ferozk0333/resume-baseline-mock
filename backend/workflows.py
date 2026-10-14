@@ -615,22 +615,21 @@ def send_email(conn, email_id: str) -> dict:
 
 # --- Interview loop (specs/13 §3) -----------------------------------------------------------------------------
 
-def start_loop(conn, job: dict, app_ids: list[str], writer) -> dict:
-    """Draft a scheduling email for each shortlisted candidate (one review screen)."""
+def loop_targets(conn, job: dict, app_ids: list[str]) -> tuple[dict, list[dict]]:
+    """The Scheduling stage and the shortlisted applications a loop starts with (raises ValueError otherwise)."""
     if not app_ids:
         raise ValueError("Select at least one shortlisted candidate.")
-    stage = stage_named(conn, job["id"], "Scheduling") if any(s["name"] == "Scheduling" for s in stages(conn, job["id"])) \
-        else next(s for s in stages(conn, job["id"]) if not s["terminal"])
-    batch = new_id()
-    drafts = []
+    all_stages = stages(conn, job["id"])
+    stage = next((s for s in all_stages if s["name"] == "Scheduling"), next(s for s in all_stages if not s["terminal"]))
+    apps = []
     for app_id in app_ids:
         row = conn.execute("SELECT * FROM applications WHERE id = ? AND job_id = ?", (app_id, job["id"])).fetchone()
         if row is None:
             raise ValueError(f"application {app_id} is not in this job")
         if row["status"] != "shortlisted":
             raise ValueError("Only shortlisted candidates can start the interview loop.")
-        drafts.append(draft_scheduling(conn, dict(row), job, stage, writer, batch))
-    return {"batch_id": batch, "stage": stage, "drafts": drafts}
+        apps.append(dict(row))
+    return stage, apps
 
 
 def send_scheduling(conn, email_id: str) -> dict:

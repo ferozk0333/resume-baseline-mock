@@ -347,6 +347,16 @@ class RateLimiter:
         finally:
             conn.close()
 
+    def refund(self, model: str) -> None:
+        """Take back one request Google did not accept (503/5xx overloaded or no answer): it does not count today."""
+        conn = self._conn()
+        try:
+            with conn:
+                conn.execute("UPDATE provider_usage SET requests = MAX(requests - 1, 0) WHERE provider = ? AND model = ? "
+                             "AND day = ?", (self.provider, model, pacific_day().isoformat()))
+        finally:
+            conn.close()
+
     def rpd(self, model: str) -> int:
         return self.limits(model)[2]
 
@@ -417,6 +427,8 @@ class GeminiLLM:
     """
 
     RETRY_STATUSES = {500, 502, 503, 504}
+    OVERLOAD_RETRIES = 2              # 5xx / no answer: at most 2 retries, longer backoff, not counted toward the day
+    OVERLOAD_BACKOFF = 30.0           # seconds; 30 then 60
 
     def __init__(self, session=None, api_key: str | None = None, max_tokens: int | None = None,
                  limiter: RateLimiter | None = None, max_retries: int = 6, sleep=None):
@@ -455,6 +467,7 @@ class GeminiLLM:
         body = {"systemInstruction": {"parts": [{"text": system}]},
                 "contents": [{"role": "user", "parts": [{"text": user}]}], "generationConfig": gen}
         estimate = (len(system) + len(user)) // 3 + self.max_tokens // 4
+        overloads = 0
         for attempt in range(self.max_retries + 1):
             limiter.acquire(name, estimate)
             resp, data = None, {}
@@ -480,11 +493,18 @@ class GeminiLLM:
                         raise DailyLimitReached(daily_limit_message(name))
                 elif resp.status_code not in self.RETRY_STATUSES:
                     raise LLMError(f"{model} call failed: HTTP {resp.status_code}: {resp.text[:300]}")
+            rate_limited = resp is not None and resp.status_code == 429
+            if not rate_limited:                  # overloaded (5xx) or no answer: Google did not accept it
+                limiter.refund(name)
+                timing.count("gemini_overloaded")
+                overloads += 1
+                if overloads > self.OVERLOAD_RETRIES:
+                    raise LLMError(f"{model} is overloaded: {problem} after {overloads} attempts (not counted "
+                                   f"toward today's limit); try again later.")
             if attempt == self.max_retries:
                 raise LLMError(f"{model} call failed after {attempt + 1} attempts: {problem}")
             timing.count("gemini_retries")
-            rate_limited = resp is not None and resp.status_code == 429
-            self.sleep(min(self._retry_delay(data) if rate_limited else 2 ** attempt * 2, 60))
+            self.sleep(self._retry_delay(data) if rate_limited else self.OVERLOAD_BACKOFF * overloads)
         candidate = (data.get("candidates") or [{}])[0]
         if candidate.get("finishReason") not in (None, "STOP"):
             if candidate.get("finishReason") == "MAX_TOKENS":

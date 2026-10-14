@@ -7,14 +7,18 @@
 - draft_email asks EMAIL_MODEL; on LLMError (unavailable, over quota) validate uses the code template.
 - validate runs the code checks; a failing draft is redrafted once with the errors, then the template is used.
 - review pauses the graph. Only the recruiter's Send (resume {"action": "send"}) reaches send; "cancel" ends it.
-- A draft survives a server restart: the email row is saved before the interrupt, and a run started with its
-  email_id goes straight to review.
+- Paused drafts survive a server restart: graphs are checkpointed to SQLite (LangGraph SqliteSaver) next to the app
+  database. If a checkpoint is missing (e.g. the file was deleted), a run started with the saved email_id goes
+  straight to review.
 """
 from __future__ import annotations
 
 from typing import TypedDict
 
-from langgraph.checkpoint.memory import InMemorySaver
+import sqlite3
+from pathlib import Path
+
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
@@ -38,10 +42,16 @@ class State(TypedDict, total=False):
     result: dict
 
 
+def checkpointer(db_path: str) -> SqliteSaver:
+    """Graph checkpoints in "<app db>.graphs.db" (gitignored with the other *.db files)."""
+    path = Path(db_path).with_suffix(".graphs.db")
+    return SqliteSaver(sqlite3.connect(str(path), check_same_thread=False))
+
+
 class RejectionFlow:
-    def __init__(self, db_path: str, writer):
+    def __init__(self, db_path: str, writer, saver: SqliteSaver | None = None):
         self.db_path, self.writer = db_path, writer
-        self.graph = self._build().compile(checkpointer=InMemorySaver())
+        self.graph = self._build().compile(checkpointer=saver or checkpointer(db_path))
 
     # --- nodes -----------------------------------------------------------------------------------
     def _ctx(self, state: State):

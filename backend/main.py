@@ -64,6 +64,7 @@ class State:
         self._pipeline: Pipeline | None = None
         self.review_threads: dict[str, str] = {}          # candidate_id → paused onboarding thread
         self._rejection = None
+        self._loop = None
 
     @property
     def rejection(self):
@@ -72,6 +73,14 @@ class State:
             from backend.rejection_flow import RejectionFlow
             self._rejection = RejectionFlow(self.db_path, self.deps.writer)
         return self._rejection
+
+    @property
+    def loop(self):
+        """The interview-loop graph (paused loops are checkpointed to SQLite)."""
+        if self._loop is None:
+            from backend.loop_flow import LoopFlow
+            self._loop = LoopFlow(self.db_path, self.deps.writer)
+        return self._loop
 
     @property
     def deps(self) -> Deps:
@@ -674,7 +683,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     @app.post("/jobs/{job_id}/interview-loop", tags=["workflows"])
     def start_loop(job_id: str, body: LoopIn):
         with conn() as c:
-            return wf_call(wf.start_loop, c, job_or_404(c, job_id), body.application_ids, state.deps.writer)
+            job = job_or_404(c, job_id)
+        return wf_call(state.loop.start, job, body.application_ids)
 
     @app.get("/jobs/{job_id}/interview-loop/{batch_id}", tags=["workflows"])
     def loop_batch(job_id: str, batch_id: str):
@@ -716,6 +726,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             e = wf.get_email(c, email_id) or not_found("Email")
             if e["kind"] == "not_moving_forward":
                 return wf_call(state.rejection.decide, email_id, "send")
+            if e["batch_id"] and e["status"] == "draft":
+                return wf_call(state.loop.decide, e["batch_id"], "send", [email_id])[0]
             return wf_call(wf.send_scheduling, c, email_id)
 
     @app.post("/emails/{email_id}/cancel", tags=["workflows"])
@@ -724,6 +736,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             e = wf.get_email(c, email_id) or not_found("Email")
             if e["kind"] == "not_moving_forward" and e["status"] == "draft":
                 return wf_call(state.rejection.decide, email_id, "cancel")
+            if e["batch_id"] and e["status"] == "draft":
+                return wf_call(state.loop.decide, e["batch_id"], "remove", [email_id])[0]
             return wf.cancel_email(c, email_id)
 
     @app.get("/jobs/{job_id}/compare", tags=["recruiter"])
@@ -746,6 +760,14 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         return FileResponse(ev["file_path"], media_type=kind,
                             headers={"Content-Disposition": f'inline; filename="resume.{ev["file_path"].rsplit(".", 1)[-1]}"'})
+
+    @app.get("/config/mode", tags=["scoring"])
+    def mode():
+        """"demo": the API runs on fakes (scripted extraction and labels; uploads are not read). "live": real models."""
+        fake = bool(os.getenv("RIGHTSTAFF_DEPS_FACTORY"))
+        return {"mode": "demo" if fake else "live", "judge": config.JUDGE,
+                "models": None if fake else {"extract": config.EXTRACT_MODEL, "judge_fallback": config.JUDGE_FALLBACK_MODEL,
+                                             "complexity": config.COMPLEXITY_MODEL, "plan": config.REASONING_MODEL}}
 
     @app.get("/config/weights", tags=["scoring"])
     def default_weights():

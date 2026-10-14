@@ -107,7 +107,7 @@ def test_server_errors_back_off_and_cut_off_output_is_an_error(limiter):
     slept = []
     llm(Session((503, {"error": {"message": "high demand"}}), ok(EMPTY)), limiter, slept).parse(
         model="gemini/m", system="S", user="U", output_type=schemas.PortfolioExtract)
-    assert slept == [2]
+    assert slept == [30.0]
     with pytest.raises(LLMError, match="cut off"):
         llm(Session(ok('{"projects": [', finish="MAX_TOKENS")), limiter).parse(
             model="gemini/m", system="S", user="U", output_type=schemas.PortfolioExtract)
@@ -184,7 +184,7 @@ def test_timeouts_are_retried_then_reported(limiter):
         return FakeResponse(*ok(EMPTY))
     ok_after.post = post_once
     llm(ok_after, limiter, slept).parse(model="gemini/m", system="S", user="U", output_type=schemas.PortfolioExtract)
-    assert slept == [2]                         # … then it answers
+    assert slept == [30.0]                      # … then it answers
     with pytest.raises(LLMError, match="no answer"):
         GeminiLLM(session=flaky, api_key="k", limiter=limiter, max_retries=2, sleep=lambda s: None).parse(
             model="gemini/m", system="S", user="U", output_type=schemas.PortfolioExtract)
@@ -229,3 +229,16 @@ def test_timing_summary_of_a_run_that_stopped_early():
     rec = timing.Recorder()
     rec.add(timing.STEP, "prepare_match", 0.0, 1.0)
     assert rec.summary()["scoring_and_plan_seconds"] is None
+
+
+def test_overloaded_answers_are_not_counted_and_retried_at_most_twice(limiter):
+    """503s: two retries with a longer backoff (30 s, 60 s), none counted toward the day (only accepted or 429)."""
+    slept = []
+    busy = (503, {"error": {"message": "high demand"}})
+    with pytest.raises(LLMError, match="overloaded"):
+        llm(Session(busy, busy, busy, ok(EMPTY)), limiter, slept).parse(
+            model="gemini/m", system="S", user="U", output_type=schemas.PortfolioExtract)
+    assert slept == [30.0, 60.0] and limiter.used_today("m") == 0
+    llm(Session((429, {"error": {"message": "per minute"}}), ok(EMPTY)), limiter).parse(
+        model="gemini/m", system="S", user="U", output_type=schemas.PortfolioExtract)
+    assert limiter.used_today("m") == 2                 # the 429 counts, and the accepted request counts

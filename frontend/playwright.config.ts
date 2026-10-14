@@ -12,7 +12,7 @@ export default defineConfig({
   use: { baseURL: `http://localhost:${WEB_PORT}`, channel: "chrome", screenshot: "only-on-failure" },
   webServer: [
     {
-      command: `rm -rf /tmp/rightstaff-e2e.db* /tmp/rightstaff-e2e-uploads && cd .. && PRINT_TIMINGS=0 .venv/bin/python scripts/seed_recruiter_demo.py --db /tmp/rightstaff-e2e.db && API_PORT=${API_PORT} make fake-api`,
+      command: `rm -rf /tmp/rightstaff-e2e.db* /tmp/rightstaff-e2e-uploads && cd .. && PRINT_TIMINGS=0 .venv/bin/python scripts/seed_recruiter_demo.py --db /tmp/rightstaff-e2e.db && EMAIL_PROVIDER=outbox API_PORT=${API_PORT} make fake-api`,
       url: `http://localhost:${API_PORT}/baselines`,
       reuseExistingServer: false,
       timeout: 60_000,

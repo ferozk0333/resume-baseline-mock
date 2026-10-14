@@ -172,12 +172,19 @@ BACKING_STATUS = {"artifact": "met_backed", "in a bullet": "met_backed", "certif
 
 
 def _judged(scores: dict) -> dict[str, dict]:
-    """criterion id → its saved skill_evidence / tool_evidence judgment (label and quote): the label the score used."""
+    """criterion id → the skill_evidence / tool_evidence judgment whose label the score used. A criterion found only
+    in the skills list has two (alias route and "<id>#all"): the better label wins, with its quote (specs/13 §0.4)."""
+    from graph.nodes.expertise import ALL_BULLETS, best_label
     out = {}
     for sub in ("role_skills", "tools"):
         for j in (scores.get(sub, {}).get("details") or {}).get("judgments", []):
-            if j["question"] in ("skill_evidence", "tool_evidence"):
-                out[j["subject_id"]] = j
+            if j["question"] not in ("skill_evidence", "tool_evidence"):
+                continue
+            cid = j["subject_id"].removesuffix(ALL_BULLETS)
+            have = out.get(cid)
+            if have is None or (j["label"] is not None and best_label(j["question"], have["label"], j["label"]) == j["label"]
+                                and j["label"] != have["label"]):
+                out[cid] = {**j, "subject_id": cid}
     return out
 
 

@@ -191,8 +191,33 @@ def test_send_after_a_restart_still_works(seeded):
     _, rows = ds_rows(api)
     app = by_name(rows, "Keyword-heavy")
     draft = api.post(f"/applications/{app['application_id']}/not-moving-forward").json()["email"]
-    restarted = client(seeded, Writer(good_rejection))                    # new server: no paused graph in memory
+    from backend.rejection_flow import RejectionFlow
+    flow = RejectionFlow(seeded, None)                                      # a new process: only the SQLite file
+    paused = flow.graph.get_state({"configurable": {"thread_id": f"reject:{app['application_id']}"}})
+    assert flow._paused_email(paused) == draft["id"]                         # the paused thread itself survived
+    restarted = client(seeded, Writer(good_rejection))                    # new server
     assert restarted.post(f"/emails/{draft['id']}/send").json()["status"] == "sent"
+
+
+def test_a_paused_interview_loop_survives_a_restart(seeded):
+    def sched(user):
+        eid = user.split("- id: ", 1)[1].split(" |", 1)[0]
+        return wf.SchedulingDraft(subject="Next step", opening="Thank you for applying.",
+                                  personal_line="Your work on Acme stood out.", evidence_id=eid, closing="Talk soon.")
+    api = client(seeded, Writer(sched))
+    job, rows = ds_rows(api)
+    picked = [r["application_id"] for r in rows[:2]]
+    for a in picked:
+        api.patch(f"/applications/{a}", json={"status": "shortlisted"})
+    out = api.post(f"/jobs/{job['id']}/interview-loop", json={"application_ids": picked}).json()
+    first, second = out["drafts"]
+    restarted = client(seeded)                                              # new server, paused loop on disk
+    from backend.loop_flow import LoopFlow
+    assert LoopFlow(seeded, None).paused(out["batch_id"])
+    assert restarted.post(f"/emails/{first['id']}/send").json()["status"] == "sent"
+    assert restarted.post(f"/emails/{second['id']}/cancel").json()["status"] == "cancelled"
+    assert not LoopFlow(seeded, None).paused(out["batch_id"])               # nothing pending: the loop ended
+    assert restarted.post(f"/emails/{second['id']}/send").status_code == 422
 
 
 # --- 3. Interview plan, pipeline, loop ------------------------------------------------------------------------

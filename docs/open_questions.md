@@ -94,14 +94,21 @@ ask if wanted.
 
 ## From specs/13 (recruiter workflows)
 
-9. **On-paper floor for the all-bullets route** (specs/13 §0.4). A criterion matched only in the skills list now
-   goes to the all-bullets judge. In the re-score, Flash-Lite labelled two tools "missing" although it saw them in
-   the skills list: AI1 Git and DS3 SQL went from listed to missing (Tools 0.847 → 0.736 and 0.528 → 0.444). A code
-   floor ("named in the skills list" ⇒ at least keyword/listed) prevents this, but it changes three FakeJudge
-   archetype scores (up to +0.5), so it is not applied. Apply it and re-record the archetype snapshot?
+9. **On-paper floor for the all-bullets route** (specs/13 §0.4). **Decided and applied.** A criterion found only
+   in the skills list gets two judgments: the alias route (the skills list, as before) and the all-bullets route
+   (subject "<criterion id>#all"). The final label is the better of the two, so the all-bullets route only adds
+   credit. Re-score (27 Flash-Lite calls, 0 Jev): AI1 Git and DS3 SQL back to listed (AI1 87.1 → 87.6, DS3 65.5 →
+   65.9). The FakeJudge archetype snapshot was re-recorded deliberately: **no archetype score changed**; only the
+   judgment-label counts (the extra "#all" judgments). The +0.5 changes estimated earlier came from a code-only
+   floor that is not what was applied: with two real judgments, the scripted judge gives both routes the same label.
 10. **Lenient bullet credit for a keyword-heavy profile.** PM2 gained "bullet" for Prioritization ("align on
     priorities and roadmaps"), Product analytics ("data-driven decision making") and Cross-functional
     collaboration: final 45.0 → 46.8. Accept, or tighten the definition of "bullet" in the judge prompt?
-11. **Failed Gemini attempts count toward the local daily limit.** HTTP 503 (overloaded) retries are counted
-    against the 20 Flash requests a day, so one overloaded document can use the whole day's budget. Stop counting
-    503 attempts locally? (Whether Google counts them is not documented.)
+11. **Failed Gemini attempts and the daily limit.** **Decided and applied:** 503/overloaded answers and requests
+    with no answer are no longer counted locally (only accepted requests and 429s), and 503s are retried at most
+    twice (30 s, then 60 s). Finding: after midnight Pacific Google itself answered 429 "per day" for Flash, so
+    Google did count last night's 503 attempts toward the 20 a day. The local counter may now under-count on an
+    overloaded day; Google's 429 still stops the run cleanly.
+12. **Flash checks dropped.** The extraction comparison (`compare_extraction.py --provider gemini`) and the Flash half
+    of the complexity comparison failed twice (503s on 2026-10-13/14, then Google's daily 429). Dropped as decided.
+    Partial result: 4 of the 6 judged complexity items were labelled by Flash; all 4 match Flash-Lite ("meets").

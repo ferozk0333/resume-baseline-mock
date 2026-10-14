@@ -46,6 +46,10 @@ robustness checks only: it is never an applicant.
 - **Email:** `EMAIL_PROVIDER=outbox` (default) stores emails and shows them on the Outbox page; nothing leaves the
   machine. `smtp` sends with `SMTP_*` and `EMAIL_FROM`. While `DEMO_EMAIL_TO` is set (default), every email goes
   to that address only, with the intended recipient named in the subject and body.
+- `make demo` runs on fakes: candidate uploads are not read and get preset scores (a banner says so). For real
+  processing of an upload (Jev + Gemini, never Claude), stop the demo and run `make live`.
+- Paused "Not moving forward" drafts and interview loops are checkpointed to `<db>.graphs.db` (LangGraph SQLite)
+  and survive a restart.
 - `make demo` drafts emails with templates (no model). For model drafts on the free tier:
   `EMAIL_LIVE=1 EMAIL_MODEL=gemini/gemini-3.5-flash-lite make demo`. "Why" points and phone-screen questions are code templates ("Demo text").
 

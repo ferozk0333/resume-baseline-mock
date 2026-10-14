@@ -50,11 +50,22 @@ def test_skills_list_only_match_goes_to_the_all_bullets_judge(tmp_path):
     ctx = Ctx(conn=conn, deps=None, svc=None, candidate_id=cid, run_id=None, baseline=db.get_baseline(conn, DS),
               profile=store.load_profile(conn, cid), today=TODAY, evidence={})
     ab = next(c for c in ctx.baseline.criteria if c.name == AB)
-    ask = next(a for a in skills_plan(ctx) if a.subject_id == ab.id)
-    assert ask.route == "claude" and ask.require_quote and AB_BULLET in ask.context["bullets"]
+    asks = {a.subject_id: a for a in skills_plan(ctx)}
+    alias, everything = asks[ab.id], asks[ab.id + "#all"]
+    assert alias.route is None and alias.context["bullets"] == [] and "A/B testing" in alias.context["skills_list"]
+    assert everything.route == "claude" and everything.require_quote and AB_BULLET in everything.context["bullets"]
     git = next(c for c in ctx.baseline.criteria if c.name == "Git")
-    tool = next(a for a in tools_plan(ctx) if a.subject_id == git.id)
-    assert tool.route == "claude" and AB_BULLET in tool.context["bullets"]      # tools: same rule
+    tools = {a.subject_id: a for a in tools_plan(ctx)}
+    assert tools[git.id].route is None and tools[git.id + "#all"].route == "claude"      # tools: same rule
+
+
+@pytest.mark.parametrize("alias,everything,final", [("keyword", "missing", "keyword"), ("keyword", "bullet", "bullet"),
+                                                   ("listed", "missing", "listed"), ("listed", "used", "used"),
+                                                   (None, "bullet", "bullet"), ("keyword", None, "keyword")])
+def test_the_all_bullets_route_only_adds_credit(alias, everything, final):
+    from graph.nodes.expertise import best_label
+    key = "tool_evidence" if "listed" in (alias, final) or final == "used" else "skill_evidence"
+    assert best_label(key, alias, everything) == final
 
 
 def test_near_variant_bullet_earns_credit_end_to_end(tmp_path):

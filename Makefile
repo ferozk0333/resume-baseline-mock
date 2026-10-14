@@ -2,7 +2,7 @@
 PY := .venv/bin/python
 UVICORN := .venv/bin/uvicorn
 
-.PHONY: dev api web test e2e fake-api demo
+.PHONY: dev api web test e2e fake-api demo live
 
 dev:
 	@trap 'kill 0' INT TERM; \
@@ -29,6 +29,11 @@ fake-api:
 demo:
 	RIGHTSTAFF_DB=$${RIGHTSTAFF_DEMO_DB:-data/demo.db} RIGHTSTAFF_UPLOADS=data/demo-uploads API_PORT=$${API_PORT:-8000} \
 	$(MAKE) fake-api
+
+# Real processing of uploads on the free tier: Jev judges, Gemini for extraction, fallback, complexity and plan
+# (never Claude). Uses rightstaff.db. Stop `make demo` first: both serve port 8000 to the same web app.
+live:
+	LLM_PROVIDER=gemini $(UVICORN) backend.main:create_app --factory --port 8000
 
 test:
 	$(PY) -m pytest -q
