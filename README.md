@@ -27,10 +27,13 @@ cached in the database for 24 hours either way.
 ```bash
 .venv/bin/python scripts/render_test_profiles.py          # resume files for the viewer
 .venv/bin/python scripts/seed_recruiter_demo.py --reset   # 3 jobs, 16 parsed profiles + 7 archetypes; no model calls
+.venv/bin/python scripts/score_test_profiles.py           # optional, live: real judging of the 16 profiles
+make demo                                                 # API on port 8000; then `make web`
 ```
-The 16 test profiles are parsed from their structured files (exact quotes, no model) and labelled
-"Demo data: parsed from structured profile"; they are not scored until real judging runs. The 7 archetypes are
-scored with their scripted labels. "Why" points and phone-screen questions are code templates ("Demo text").
+The demo lives in `data/demo.db` (gitignored, kept between sessions). The 16 test profiles are parsed from
+their structured files (exact quotes, no model) and labelled "Demo data: parsed from structured profile";
+they are scored by `score_test_profiles.py` (Jev + Gemini). The 7 archetypes are scored with their scripted
+labels, shown with a "Test archetype" badge and left out of benchmarks. "Why" points and phone-screen questions are code templates ("Demo text").
 
 ## Models
 Claude is the default for extraction, fallback judging, complexity and the plan. Any of these can run on

@@ -1,6 +1,6 @@
 """Seed the recruiter demo (specs/11 §2): three jobs and their applicants. No model calls.
 
-    python scripts/seed_recruiter_demo.py [--db rightstaff.db] [--reset]
+    python scripts/seed_recruiter_demo.py [--db data/demo.db] [--reset]
 
 - One job per seed baseline (fictional companies). Must-haves default to the baseline's first four required
   skills and tools.
@@ -74,9 +74,10 @@ def seed(db_path: str, reset: bool = False) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default=os.getenv("RIGHTSTAFF_DB", str(ROOT / "rightstaff.db")))
+    ap.add_argument("--db", default=os.getenv("RIGHTSTAFF_DEMO_DB", str(ROOT / "data" / "demo.db")))
     ap.add_argument("--reset", action="store_true")
     args = ap.parse_args()
+    Path(args.db).parent.mkdir(parents=True, exist_ok=True)
     print(seed(args.db, args.reset))
 
 

@@ -1,6 +1,6 @@
 """Report on the scored test profiles (each against its own role's job). No model calls.
 
-    python scripts/report_test_profiles.py [--db /tmp/rightstaff-demo.db]
+    python scripts/report_test_profiles.py [--db data/demo.db]
 
 Uses DESIGN.md's expectations for the report only (never as pipeline input): expected order
 1 > {3, 4} > 2 > 5, plus its specific checks. Writes timings/test_profiles_report.md.
@@ -8,6 +8,7 @@ Uses DESIGN.md's expectations for the report only (never as pipeline input): exp
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -32,7 +33,7 @@ def profile_id(conn, cid: str) -> str | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default="/tmp/rightstaff-demo.db")
+    ap.add_argument("--db", default=os.getenv("RIGHTSTAFF_DEMO_DB", str(ROOT / "data" / "demo.db")))
     conn = db.connect(ap.parse_args().db)
     out = ["# Test profiles scored with real judging (Jev + Gemini 3.5 Flash-Lite)", "",
            f"Each profile against its own role's job, default weights, no plans. Expected order (DESIGN.md): {EXPECTED}.", ""]

@@ -1,6 +1,6 @@
 """Score the parsed test profiles with real judging, each against its own role's job only. Live: model calls.
 
-    python scripts/score_test_profiles.py [--db rightstaff.db] [--dry-run]
+    python scripts/score_test_profiles.py [--db data/demo.db] [--dry-run]
 
 Jev is the main judge; the Claude roles go to Gemini (LLM_PROVIDER=gemini, models per role from config).
 No improvement plans for these runs. Each run is attached to the applicant in the recruiter view.
@@ -21,9 +21,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default=os.getenv("RIGHTSTAFF_DB", str(ROOT / "rightstaff.db")))
+    ap.add_argument("--db", default=os.getenv("RIGHTSTAFF_DEMO_DB", str(ROOT / "data" / "demo.db")))
     ap.add_argument("--dry-run", action="store_true", help="list what would be scored; no model calls")
     args = ap.parse_args()
+    Path(args.db).parent.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("LLM_PROVIDER", "gemini")
     sys.path.insert(0, str(ROOT))
 

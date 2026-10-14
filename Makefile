@@ -2,7 +2,7 @@
 PY := .venv/bin/python
 UVICORN := .venv/bin/uvicorn
 
-.PHONY: dev api web test e2e fake-api
+.PHONY: dev api web test e2e fake-api demo
 
 dev:
 	@trap 'kill 0' INT TERM; \
@@ -23,6 +23,12 @@ fake-api:
 	RIGHTSTAFF_DEPS_FACTORY=tests.ui_fakes:make_deps PRINT_TIMINGS=0 \
 	MIN_POOL=$${MIN_POOL:-5} MIN_GROUP=$${MIN_GROUP:-2} \
 	$(UVICORN) backend.main:create_app --factory --port $${API_PORT:-8010}
+
+# Recruiter demo on fakes, kept between sessions in data/ (gitignored): the seeded demo plus the test
+# profiles scored with real judging (scripts/score_test_profiles.py writes there by default).
+demo:
+	RIGHTSTAFF_DB=$${RIGHTSTAFF_DEMO_DB:-data/demo.db} RIGHTSTAFF_UPLOADS=data/demo-uploads API_PORT=$${API_PORT:-8000} \
+	$(MAKE) fake-api
 
 test:
 	$(PY) -m pytest -q

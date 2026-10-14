@@ -20,3 +20,6 @@ timings/
 
 # Personal reference extraction (see tests/extraction_reference/README.md)
 tests/extraction_reference/*.json
+
+# Recruiter demo database and its uploads (make demo)
+data/
