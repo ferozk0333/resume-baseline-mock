@@ -556,3 +556,66 @@ def test_effort_reaches_the_sdk_call_and_passes_signature_check():
     ClaudeLLM(client=SimpleNamespace(messages=msgs), effort="medium").parse(
         model="claude-sonnet-5-5", system="S", user="U", output_type=schemas.PortfolioExtract)
     assert msgs.kwargs[0]["output_config"] == {"effort": "medium"}
+
+
+# --- Claim lists and publications (phase 9 review) ----------------------------------------------
+
+@pytest.mark.parametrize("name,expected", [
+    ("Chroma, Qdrant, OpenSearch", ["Chroma", "Qdrant", "OpenSearch"]),
+    ("Vector databases (Chroma, Qdrant, OpenSearch)", ["Chroma", "Qdrant", "OpenSearch"]),
+    ("pandas, NumPy, and scikit-learn", ["pandas", "NumPy", "scikit-learn"]),
+    ("Python and SQL", ["Python", "SQL"]),
+    ("Docker & Kubernetes", ["Docker", "Kubernetes"]),
+    ("CI/CD", ["CI/CD"]),
+    ("A/B testing", ["A/B testing"]),
+    ("Research and Development", ["Research and Development"]),
+    ("Natural Language Processing", ["Natural Language Processing"]),
+    ("Statistical modelling and causal inference methods", ["Statistical modelling and causal inference methods"]),
+    ("Hugging Face (Transformers)", ["Hugging Face (Transformers)"]),
+])
+def test_split_claim_names(name, expected):
+    from extraction.validate import split_claim_names
+    assert split_claim_names(name) == expected
+
+
+def _doc(text):
+    return SourceDoc("ev-1", "resume", text, "Resume")
+
+
+def test_a_listed_group_becomes_one_claim_per_name():
+    from extraction.validate import validate_extraction
+    text = "Skills: Vector Databases (Chroma, Qdrant, OpenSearch), CI/CD, A/B testing"
+    out = schemas.ProfileExtract(roles=[], projects=[], certifications=[], claims=[
+        schemas.Claim(kind="tool", name="Vector Databases (Chroma, Qdrant, OpenSearch)", bullet_ref=None,
+                      source=src("Vector Databases (Chroma, Qdrant, OpenSearch)")),
+        schemas.Claim(kind="tool", name="CI/CD", bullet_ref=None, source=src("CI/CD")),
+        schemas.Claim(kind="skill", name="A/B testing", bullet_ref=None, source=src("A/B testing"))])
+    profile, report = validate_extraction(_doc(text), out)
+    assert [c.name_raw for c in profile.claims] == ["Chroma", "Qdrant", "OpenSearch", "CI/CD", "A/B testing"]
+    assert report.dropped == 0
+
+
+def test_co_authored_journal_paper_is_a_publication_not_a_certification():
+    from extraction.validate import validate_extraction
+    paper = 'Co-Author, "The Lancet Commission on 21st Century Global Threats to Health," The Lancet Exp. Fall 2026'
+    cert = "AWS Certified Solutions Architect – Associate (SAA-C03), Amazon Web Services 2026"
+    text = f"CERTIFICATIONS & PUBLICATIONS\n{cert}\n{paper}"
+    out = schemas.ProfileExtract(roles=[], projects=[], claims=[], certifications=[
+        schemas.Certification(name="AWS Certified Solutions Architect – Associate", issuer="Amazon Web Services",
+                              date="2026", credential_id=None, verify_url=None, source=src(cert)),
+        schemas.Certification(name='Co-Author, "The Lancet Commission on 21st Century Global Threats to Health"',
+                              issuer="The Lancet", date=None, credential_id=None, verify_url=None,
+                              source=src(paper))])
+    profile, _ = validate_extraction(_doc(text), out)
+    assert [c.name for c in profile.certifications] == ["AWS Certified Solutions Architect – Associate"]
+    assert [(p.kind, p.name) for p in profile.projects] == [
+        ("publication", 'Co-Author, "The Lancet Commission on 21st Century Global Threats to Health"')]
+
+
+def test_extraction_prompt_defines_publications_and_one_claim_per_name():
+    from extraction.extract import load_prompt
+    load_prompt.cache_clear()
+    prompt = load_prompt("extract_system")
+    assert "Publication = a paper, article, poster or talk" in prompt
+    assert "Certification = a credential issued by an organisation" in prompt
+    assert '"Chroma, Qdrant, OpenSearch" is three claims' in prompt

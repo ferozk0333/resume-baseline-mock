@@ -34,7 +34,12 @@ class Recorder:
     def __init__(self):
         self.t0 = time.perf_counter()
         self.events: list[dict] = []
+        self.counters: dict[str, int] = defaultdict(int)   # e.g. claude_429, jev_retries
         self._lock = threading.Lock()
+
+    def count(self, name: str, n: int = 1) -> None:
+        with self._lock:
+            self.counters[name] += n
 
     def add(self, kind: str, name: str, start: float, seconds: float, **attrs) -> None:
         with self._lock:
@@ -94,6 +99,7 @@ class Recorder:
             "steps": steps,
             "calls": calls,
             "model_calls": dict(model_calls),
+            "rate_limits": dict(sorted(self.counters.items())),
             "tokens_by_model": {m: {**t, "usd": cost(m, t)} for m, t in sorted(tokens.items())},
             "estimated_usd": round(sum(cost(m, t) or 0 for m, t in tokens.items()), 4),
             "judge_calls": len(self.of(JUDGE)),
@@ -120,6 +126,13 @@ def cost(model: str, t: dict) -> float | None:
 
 def active() -> Recorder | None:
     return _recorder.get()
+
+
+def count(name: str, n: int = 1) -> None:
+    """Add to a run counter (no-op outside a recorded run)."""
+    rec = _recorder.get()
+    if rec is not None:
+        rec.count(name, n)
 
 
 @contextmanager
@@ -209,6 +222,8 @@ def table(summary: dict) -> str:
         lines.append(f"{m}: {t['calls']} calls, in {t['input_tokens']} (cache read {t['cache_read_tokens']}, "
                      f"write {t['cache_write_tokens']}), out {t['output_tokens']}{usd}")
     lines.append(f"estimated Claude cost this run: ${summary.get('estimated_usd', 0):.3f}")
+    rl = summary.get("rate_limits") or {}
+    lines.append("rate limits / overload: " + (", ".join(f"{k} {v}" for k, v in rl.items()) or "none"))
     lines.append("model HTTP calls: " + ", ".join(f"{k} {v}" for k, v in sorted(mc.items())) +
                  f"  ·  judgments asked: {summary.get('judge_calls', 0)}")
     return "\n".join(lines)

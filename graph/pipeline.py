@@ -364,8 +364,8 @@ def _gap_analysis(deps: Deps):
 
 
 # Subcategories whose job-independent judgments start while the candidate reviews (specs/09 §2.6).
-EARLY_SUBCATEGORIES = ("outcomes", "impact", "ownership", "scope_of_impact", "proof_density", "consistency",
-                       "evidence_quality")
+EARLY_SUBCATEGORIES = ("progression", "outcomes", "impact", "ownership", "scope_of_impact", "proof_density",
+                       "consistency", "evidence_quality")
 
 
 def early_judgments(deps: Deps, candidate_id: str, baseline_id: str) -> int:

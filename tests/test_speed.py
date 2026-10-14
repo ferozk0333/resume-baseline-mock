@@ -294,3 +294,31 @@ def test_overlapping_asks_for_the_same_judgment_call_the_judge_once(tmp_path):
     for t in threads:
         t.join()
     assert len(judge.calls) == 1 and len(set(results)) == 1 and len(results) == 4
+
+
+def test_progression_starts_during_review(tmp_path, monkeypatch):
+    from judges.fake_judge import FakeJudge
+    judge = FakeJudge(script=_best)
+    path, p, r = _onboard(tmp_path, monkeypatch, judge)
+    p.wait_for_early(r["thread_id"])
+    assert "progression" in {k for k, _ in judge.calls}
+
+
+def test_rate_limits_and_retries_are_counted(tmp_path):
+    from types import SimpleNamespace
+    from core import timing
+    from core.llm import count_response
+    from judges.fake_judge import FakeJudge
+    from judges.jev_judge import JevJudge
+    from tests.test_judges import PostSession
+    session = PostSession((429, {"error": "slow down"}), (529, {"error": "overloaded"}),
+                          (200, {"model": "jev-1.13.0", "answers": _jev_answers()}))
+    judge = JevJudge(fallback=FakeJudge(), session=session, api_key="k", model="jev-1.13.0", threshold=0.6, backoff=0)
+    rec = timing.Recorder()
+    with timing.recording(rec):
+        judge.group(BULLET_KEYS, {"bullet": "x"})
+        for status in (429, 529, 500, 200):
+            count_response(SimpleNamespace(status_code=status))
+    assert rec.summary()["rate_limits"] == {"claude_429": 1, "claude_529": 1, "claude_retried_responses": 3,
+                                            "jev_429": 1, "jev_529": 1, "jev_retries": 2}
+    assert "jev_retries 2" in timing.table(rec.summary())

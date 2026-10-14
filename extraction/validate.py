@@ -227,6 +227,48 @@ def _bullets(raw: list[schemas.Bullet], index: QuoteIndex, doc: SourceDoc, repor
     return out
 
 
+# --- Claim lists and publications listed as certifications ------------------------------------
+
+# Names that contain "and"/"&" but are one thing. Slashes ("CI/CD", "A/B testing") are never split.
+_ONE_THING = {"research and development", "r&d", "p&l", "profit and loss", "mergers and acquisitions", "m&a",
+              "sales and marketing", "search and rescue", "q&a", "at&t", "h&m", "b&w", "s&p", "johnson & johnson",
+              "procter & gamble", "black and white", "trial and error"}
+_AND = re.compile(r"\s+(?:and|&)\s+", re.I)
+
+
+def split_claim_names(name: str) -> list[str]:
+    """One claim per named skill or tool: "Chroma, Qdrant, OpenSearch" → 3 names;
+    "Vector databases (Chroma, Qdrant)" → the listed names; "Python and SQL" → 2."""
+    name = name.strip()
+    m = re.fullmatch(r"[^(),]+\(([^()]+)\)", name)
+    if m and re.search(r",|\s(?:and|&)\s", m.group(1)):
+        name = m.group(1)                                     # a label with its list in parentheses
+    if name.casefold() in _ONE_THING:
+        return [name]
+    parts = [p.strip() for p in re.split(r"[,;]", name) if p.strip()]
+    if len(parts) > 1:                                         # "A, B and C" / "A, B, and C"
+        parts = [x.strip() for p in parts for x in _AND.split(re.sub(r"^(?:and|&)\s+", "", p, flags=re.I))
+                 if x.strip()]
+    elif _AND.search(name):
+        sides = [p.strip() for p in _AND.split(name) if p.strip()]
+        # "Python and SQL", "Docker & Kubernetes": short names on both sides.
+        if len(sides) > 1 and all(len(s.split()) <= 2 for s in sides):
+            parts = sides
+    return parts if len(parts) > 1 else [name]
+
+
+_AUTHORED = re.compile(r"\b(co-?authors?(?:ed)?|authors?(?:ed)?|et al\.?|journal|proceedings|published|publication|"
+                       r"conference paper|paper|poster|talk|preprint|arxiv|doi|commission)\b", re.I)
+_CREDENTIAL = re.compile(r"\b(certified|certificate|certification|license|licen[cs]ed|credential|associate|"
+                         r"professional|specialty|nanodegree|badge)\b", re.I)
+
+
+def looks_like_publication(c: schemas.Certification) -> bool:
+    """An authored paper, article, poster or talk listed as a certification (e.g. "Co-Author, 'The Lancet …'")."""
+    text = " ".join(x for x in (c.name, c.issuer, c.source.quote) if x)
+    return bool(_AUTHORED.search(text)) and not _CREDENTIAL.search(text) and not c.credential_id
+
+
 def _link_claim(claim: schemas.Claim, bullets: list[BulletRec]) -> str | None:
     if claim.bullet_ref is None:
         return None
@@ -277,11 +319,22 @@ def validate_extraction(
         if not index.contains(c.source.quote):
             drop("claim", c, f"{c.kind}: {c.name}", f"{c.kind} '{c.name}'")
             continue
-        profile.claims.append(claim_rec(c, doc.evidence_id, _link_claim(c, bullets)))
+        names = split_claim_names(c.name)
+        if len(names) > 1 and all(contains_phrase(c.source.quote, n) for n in names):
+            parts = [c.model_copy(update={"name": n}) for n in names]
+        else:
+            parts = [c]
+        for part in parts:
+            profile.claims.append(claim_rec(part, doc.evidence_id, _link_claim(part, bullets)))
 
     for c in getattr(extract, "certifications", []):
         if not index.contains(c.source.quote):
             drop("certification", c, c.name, f"certification '{c.name}'")
+            continue
+        if looks_like_publication(c):              # authored work, not a credential: count it as a publication
+            pub = schemas.Project(kind="publication", name=c.name, description=None, url=c.verify_url, start=c.date,
+                                  end=c.date, role_index=None, bullets=[], source=c.source)
+            profile.projects.append(project_rec(pub, doc.evidence_id, today))
             continue
         profile.certifications.append(certification_rec(c, doc.evidence_id))
 

@@ -117,9 +117,12 @@ class JevJudge:
                 if resp.status_code == 200:
                     return resp.json()
                 error = JevError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+                if resp.status_code in (429, 529):
+                    timing.count(f"jev_{resp.status_code}")
                 if resp.status_code not in RETRY_STATUSES:
                     raise error
             if attempt < self.max_retries:
+                timing.count("jev_retries")
                 time.sleep(self.backoff * 2 ** attempt)
         raise error
 

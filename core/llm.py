@@ -74,6 +74,23 @@ class StructuredLLM(Protocol):
 
 
 
+RETRIED_STATUSES = {408, 409, 429}   # plus every 5xx: the SDK retries these (max_retries)
+
+
+def count_response(response) -> None:
+    """httpx response hook: count 429/529 and the responses the SDK will retry, for the run's timings."""
+    status = response.status_code
+    if status in (429, 529):
+        timing.count(f"claude_{status}")
+    if status in RETRIED_STATUSES or status >= 500:
+        timing.count("claude_retried_responses")
+
+
+def default_client() -> anthropic.Anthropic:
+    return anthropic.Anthropic(max_retries=2,
+                               http_client=anthropic.DefaultHttpxClient(event_hooks={"response": [count_response]}))
+
+
 class ClaudeLLM:
     """Structured call with SDK retries (2 on network/5xx), one retry on validation failure (05 §D)
     and one retry on runaway output.
@@ -85,7 +102,7 @@ class ClaudeLLM:
 
     def __init__(self, client: anthropic.Anthropic | None = None, max_tokens: int | None = None,
                  effort: str | None = None):
-        self.client = client or anthropic.Anthropic(max_retries=2)
+        self.client = client or default_client()
         self.max_tokens = max_tokens or config.EXTRACT_MAX_TOKENS
         self.effort = effort or None
 
