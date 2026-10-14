@@ -45,7 +45,7 @@ function ScorePageInner() {
   const compare = (p: Pct | undefined) => !pct ? null : !pct.shown
     ? <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{pct.reason}</p>
     : p ? <p className="mt-1 text-[11px] leading-tight text-muted-foreground">
-        Higher than <span className="font-medium text-foreground">{p.percentile}%</span> of {p.n} candidates scored for {bench?.baseline_title}
+        Higher than <span className="font-medium text-foreground">{p.percentile}%</span> of {p.n} other candidates scored for {bench?.baseline_title}
       </p> : null;
 
   const rescore = useCallback((next: Weights) => {

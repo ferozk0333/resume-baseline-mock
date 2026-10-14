@@ -67,7 +67,8 @@ def test_ranked_list_tags_and_demo_labels(api):
     assert all(not r["scored"] for r in rows[len(scored):])                      # unscored applicants last
     top = scored[0]
     assert top["tags"] and len(top["tags"]) <= 3 and top["must_haves_met"] == 4 and 0 <= top["confidence"] <= 100
-    assert top["demo"] == "Demo data: archetype (scripted labels)"
+    assert top["demo"] == "Test archetype"
+    assert top["percentile"] is None                    # scripted runs never enter a percentile pool
     assert any(r["demo"] == "Demo data: parsed from structured profile" for r in rows)
 
 

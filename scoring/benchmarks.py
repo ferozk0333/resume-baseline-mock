@@ -14,6 +14,7 @@ from scoring.aggregate import aggregate
 from scoring.peer_features import FEATURES
 
 DIMENSIONS = config.DIMENSIONS
+SCRIPTED_REASON = "This run used scripted test labels, so it is not compared with other candidates."
 
 
 @dataclass
@@ -36,8 +37,26 @@ def _member(conn, run_id: str, candidate_id: str, weights: dict) -> Member:
     return Member(run_id, candidate_id, agg.final, agg.dimensions, feats)
 
 
+def is_real_run(conn, run_id: str) -> bool:
+    """Only runs judged by a real judge enter pools. Runs recorded before judge_kind existed are scripted when
+    any of their judgments came from the test judge, or the candidate is a test archetype."""
+    import json
+    row = conn.execute("SELECT r.models_json, c.data_source FROM runs r LEFT JOIN candidates c ON c.id = r.candidate_id "
+                       "WHERE r.id = ?", (run_id,)).fetchone()
+    if row is None:
+        return False
+    kind = json.loads(row["models_json"] or "{}").get("judge_kind")
+    if kind is not None:
+        return kind == "real"
+    if row["data_source"] == "archetype":
+        return False
+    return conn.execute("SELECT 1 FROM judgments WHERE run_id = ? AND model_version LIKE 'fake-%' LIMIT 1",
+                        (run_id,)).fetchone() is None
+
+
 def baseline_pool(conn, baseline_id: str) -> list[Member]:
-    """Latest finished run of each candidate against this baseline, same logic_version, default weights."""
+    """Latest finished run of each candidate against this baseline, same logic_version, default weights.
+    Runs with scripted labels (test archetypes, FakeJudge) are left out."""
     rows = conn.execute(
         "SELECT r.id, r.candidate_id FROM runs r WHERE r.baseline_id = ? AND r.status = 'done' AND r.logic_version = ? "
         "AND r.started_at = (SELECT MAX(started_at) FROM runs x WHERE x.candidate_id = r.candidate_id "
@@ -45,7 +64,7 @@ def baseline_pool(conn, baseline_id: str) -> list[Member]:
         "ORDER BY r.started_at", (baseline_id, config.LOGIC_VERSION)).fetchall()
     seen, out = set(), []
     for r in rows:
-        if r["candidate_id"] not in seen:
+        if r["candidate_id"] not in seen and is_real_run(conn, r["id"]):
             seen.add(r["candidate_id"])
             out.append(_member(conn, r["id"], r["candidate_id"], config.default_weights()))
     return out
@@ -55,7 +74,7 @@ def job_pool(conn, job: dict) -> list[Member]:
     """The job's scored applicants, with the job's weights (recruiter view)."""
     rows = conn.execute("SELECT run_id, candidate_id FROM applications WHERE job_id = ? AND run_id IS NOT NULL",
                         (job["id"],)).fetchall()
-    return [_member(conn, r["run_id"], r["candidate_id"], job["weights"]) for r in rows]
+    return [_member(conn, r["run_id"], r["candidate_id"], job["weights"]) for r in rows if is_real_run(conn, r["run_id"])]
 
 
 def percentile(value: float, others: list[float]) -> float:
@@ -136,9 +155,12 @@ def for_run(conn, run_id: str) -> dict:
     run = conn.execute("SELECT candidate_id, baseline_id FROM runs WHERE id = ?", (run_id,)).fetchone()
     pool = baseline_pool(conn, run["baseline_id"])
     baseline = db.get_baseline(conn, run["baseline_id"])
-    return {"baseline_title": baseline.title if baseline else None,
-            "percentiles": percentiles(pool, run["candidate_id"]),
-            "peer_signals": peer_signals(pool, run["candidate_id"])}
+    pct = percentiles(pool, run["candidate_id"])
+    if not is_real_run(conn, run_id):
+        pct.update(shown=False, reason=SCRIPTED_REASON)
+    return {"baseline_title": baseline.title if baseline else None, "percentiles": pct,
+            "peer_signals": peer_signals(pool, run["candidate_id"]) if is_real_run(conn, run_id)
+            else {"min_group": config.MIN_GROUP, "demo_pool": demo_pool(), "dimensions": {}}}
 
 
 def plan_lines(conn, run_id: str) -> dict[str, list[str]]:

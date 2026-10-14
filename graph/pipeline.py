@@ -201,12 +201,18 @@ def _prepare(deps: Deps):
             if blocker:
                 return {"blocked": blocker, "weights": weights}
             run_id = db.create_run(ctx.conn, ctx.candidate_id, ctx.baseline.id, weights,
-                                   baseline_hash=ctx.baseline.content_hash(), models=judge_models())
+                                   baseline_hash=ctx.baseline.content_hash(),
+                                   models={**judge_models(), "judge_kind": judge_kind(deps.judge)})
             ctx.svc.run_id = run_id
             resolve(ctx, relevance_asks(ctx), call=True)
             errors = [f"prepare_match: {e}" for e in ctx.svc.errors]
         return {"run_id": run_id, "weights": weights, "blocked": None, "errors": errors}
     return node
+
+
+def judge_kind(judge) -> str:
+    """"scripted" for a test judge (FakeJudge), else "real". Recorded on every run."""
+    return "scripted" if getattr(judge, "scripted", False) else "real"
 
 
 def _fan_out(state: RunState):

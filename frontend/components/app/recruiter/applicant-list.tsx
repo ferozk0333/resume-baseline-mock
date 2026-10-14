@@ -45,7 +45,8 @@ export function ApplicantList({ rows, selected, onSelect, picked, onPick }: {
                   <div className="mt-1 line-clamp-1 text-xs">{r.why ?? (r.scored ? "" : "Not scored yet")}</div>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {r.tags.map((t) => <Badge key={t} variant="secondary" className="text-[11px]">{t}</Badge>)}
-                    {r.demo && <Badge variant="outline" className="text-[11px] text-muted-foreground">demo</Badge>}
+                    {r.demo && <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                      {r.demo === "Test archetype" ? "test archetype" : "demo"}</Badge>}
                   </div>
                 </div>
                 <div className="w-20 shrink-0 text-right">

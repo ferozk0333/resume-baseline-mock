@@ -28,6 +28,7 @@ def pool_db(tmp_path_factory):
     runs = {}
     for name, build in {**ARCHETYPES, "empty": empty_profile}.items():
         cid, judge = build(conn)
+        judge.scripted = False                 # stands in for a real judge so the pool maths can be tested
         runs[name] = (cid, Pipeline(Deps(path, judge, today=TODAY), print_timings=False).score(cid, DS)["run_id"])
     return path, runs
 
@@ -144,9 +145,11 @@ def test_percentiles_and_signals_recompute_when_a_new_run_is_saved(tmp_path, mon
     ids = {}
     for name in ("keyword_heavy", "career_switcher", "resume_only"):
         cid, judge = ARCHETYPES[name](conn)
+        judge.scripted = False
         ids[name] = Pipeline(Deps(path, judge, today=TODAY), print_timings=False).score(cid, DS)["run_id"]
     before = bm.for_run(conn, ids["resume_only"])["percentiles"]
     cid, judge = ARCHETYPES["strong_ds"](conn)
+    judge.scripted = False
     Pipeline(Deps(path, judge, today=TODAY), print_timings=False).score(cid, DS)
     after = bm.for_run(conn, ids["resume_only"])["percentiles"]
     assert before["pool_size"] == 3 and after["pool_size"] == 4
@@ -179,3 +182,23 @@ def test_api_endpoint_and_plan_input(pool_db, demo_limits):
 def test_feature_list_is_complete_and_in_one_place():
     assert {f.dimension for f in FEATURES} == set(config.DIMENSIONS)
     assert len({f.key for f in FEATURES}) == len(FEATURES) == 10
+
+
+def test_scripted_runs_are_recorded_and_never_enter_a_pool(tmp_path, monkeypatch):
+    import json as _json
+    monkeypatch.setattr(config, "MIN_POOL", 1)
+    path = str(tmp_path / "s.db")
+    conn = db.init_app_db(path)
+    real = {}
+    for name in ("strong_ds", "keyword_heavy"):
+        cid, judge = ARCHETYPES[name](conn)
+        judge.scripted = name == "keyword_heavy"         # one scripted run, one "real" run
+        real[name] = Pipeline(Deps(path, judge, today=TODAY), print_timings=False).score(cid, DS)["run_id"]
+    kinds = {n: _json.loads(conn.execute("SELECT models_json FROM runs WHERE id = ?", (r,)).fetchone()[0])["judge_kind"]
+             for n, r in real.items()}
+    assert kinds == {"strong_ds": "real", "keyword_heavy": "scripted"}
+    pool = bm.baseline_pool(conn, DS)
+    assert [m.run_id for m in pool] == [real["strong_ds"]]
+    scripted = bm.for_run(conn, real["keyword_heavy"])
+    assert scripted["percentiles"]["shown"] is False and scripted["percentiles"]["reason"] == bm.SCRIPTED_REASON
+    assert scripted["peer_signals"]["dimensions"] == {}

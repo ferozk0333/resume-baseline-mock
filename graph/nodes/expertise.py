@@ -129,22 +129,26 @@ def tools_compute(ctx: Ctx, labels: Labels) -> f.SubScore:
 
 def _relevant_items(ctx: Ctx):
     for r in ctx.profile.roles:
-        yield "role", r.id, role_text(r)
+        yield "role", r.id, role_text(r), bool(r.bullets)
     for p in ctx.counted_projects():
-        yield "project", p.id, project_text(p)
+        yield "project", p.id, project_text(p), bool(p.bullets or (p.description or "").strip())
 
 
 def complexity_plan(ctx: Ctx) -> list[Ask]:
+    """An item with no bullets and no description has nothing to judge: it gets "no" by rule, no model call.
+    Complexity takes the best item, so this never lowers a score that a judged item sets."""
     rubric = f"Target role: {ctx.baseline.title} ({ctx.baseline.level}). " \
              f"Desired complexity: {ctx.baseline.complexity_criteria or ''}"
-    return [Ask("complexity", kind, item_id, {"baseline": rubric, "item": text})
-            for kind, item_id, text in _relevant_items(ctx)
+    return [Ask("complexity", kind, item_id, {"baseline": rubric, "item": text},
+                rule_label=None if has_content else "no",
+                rule_reason=None if has_content else "Nothing to judge: no bullets or description.")
+            for kind, item_id, text, has_content in _relevant_items(ctx)
             if (f.RELEVANCE.get(ctx.relevance.get(item_id)) or 0) > 0]
 
 
 def complexity_compute(ctx: Ctx, labels: Labels) -> f.SubScore:
     items = [f.GradedItem(item_id, ctx.relevance.get(item_id), labels.get("complexity", item_id))
-             for _, item_id, _ in _relevant_items(ctx)]
+             for _, item_id, _, _ in _relevant_items(ctx)]
     return f.complexity(items)
 
 

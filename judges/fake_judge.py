@@ -19,6 +19,7 @@ class FakeJudge:
     """
 
     MODEL = "fake-judge-1"
+    scripted = True          # runs judged by it never enter benchmark pools (specs/12)
 
     def __init__(self, labels: dict | None = None, default: str | None = None, script: Script | None = None,
                  delay: float = 0.0):

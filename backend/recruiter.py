@@ -27,7 +27,7 @@ MAX_TAGS = 3
 STALE_YEARS = 3                   # proposal (specs/11 §6.2): best evidence older than this → a question
 TEMPLATE_MODEL = "template-v1"
 DEMO_LABELS = {"demo_parsed": "Demo data: parsed from structured profile",
-               "archetype": "Demo data: archetype (scripted labels)"}
+               "archetype": "Test archetype"}
 STATUSES = ("new", "shortlisted", "not_moving_forward")
 # [OPEN] presets: storage and UI exist, but every preset equals the team table until the team sets values.
 PRESETS = ("Startup", "Enterprise", "Proof-first")

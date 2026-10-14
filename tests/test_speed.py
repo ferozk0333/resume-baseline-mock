@@ -322,3 +322,23 @@ def test_rate_limits_and_retries_are_counted(tmp_path):
     assert rec.summary()["rate_limits"] == {"claude_429": 1, "claude_529": 1, "claude_retried_responses": 3,
                                             "jev_429": 1, "jev_529": 1, "jev_retries": 2}
     assert "jev_retries 2" in timing.table(rec.summary())
+
+
+def test_items_with_nothing_to_judge_skip_complexity_and_keep_the_score(tmp_path):
+    from tests.fixtures.archetypes import Builder
+    from judges.fake_judge import FakeJudge
+    path = str(tmp_path / "c.db")
+    conn = db.init_app_db(path)
+    b = Builder(conn, "Empty items")
+    b.role("Analyst", "Acme", start=12, current=True, complexity="meets",
+           bullets=[b.bullet("Built a churn model in Python.")])
+    empty = b.role("Intern", "Beta", start=30, end=20, complexity="meets", bullets=[])
+    cid, judge = b.save()
+    res = Pipeline(Deps(path, judge, today=TODAY)).score(cid, DS)
+    asked = [c.get("_subject_id") for k, c in judge.calls if k == "complexity"]
+    assert empty.id not in asked                                          # no model call for the empty role
+    row = conn.execute("SELECT label, method FROM judgments WHERE subject_id = ? AND question = 'complexity'",
+                       (empty.id,)).fetchone()
+    assert (row["label"], row["method"]) == ("no", "rule")
+    assert res["subcategory_scores"]["complexity"]["score"] == 1.0          # the best item still sets it
+    assert FakeJudge                                                        # noqa
