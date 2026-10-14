@@ -60,7 +60,8 @@ EXTRACT_CONCURRENCY = 16        # resume, LinkedIn, portfolio and READMEs at onc
 # Concurrency. All 19 subcategories run at once; these caps set how many model calls are in flight.
 # JUDGE_CONCURRENCY (specs/09 §2.1): judgments in flight across all four dimension subgraphs, Jev and
 # Claude together. Beneath it, per-provider pools keep fast Jev calls from queueing slow Claude calls.
-JUDGE_CONCURRENCY = int(_env("JUDGE_CONCURRENCY", _env("MAX_PARALLEL_JUDGE_CALLS", "8")))
+# Default 48, not the spec's 8: measured on a real profile, 8 made confirm → score 51.5 s vs 33.4 s (phase 9).
+JUDGE_CONCURRENCY = int(_env("JUDGE_CONCURRENCY", _env("MAX_PARALLEL_JUDGE_CALLS", "48")))
 JEV_MAX_CONCURRENCY = int(_env("JEV_MAX_CONCURRENCY", "32"))             # Jev allows 80 requests/s
 CLAUDE_MAX_CONCURRENCY = int(_env("CLAUDE_MAX_CONCURRENCY", "12"))       # lower it if Anthropic returns 429s
 # Estimated USD per million tokens, for the run cost line only (check https://claude.com/pricing).
