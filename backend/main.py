@@ -291,6 +291,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     async def onboard(candidate_id: str, baseline_id: str = Form(...), resume: UploadFile = File(...),
                       linkedin_pdf: UploadFile | None = File(None), github: str | None = Form(None),
                       portfolio_url: str | None = Form(None),
+                      linkedin_url: str | None = Form(None, description="LinkedIn profile URL (display only)"),
                       demo_videos: str = Form("[]", description='JSON list of YouTube/Loom URLs (max 3)'),
                       certifications: str = Form("[]", description="JSON list of {name, issuer, date, "
                                                                     "credential_id, verify_url}"),
@@ -305,6 +306,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             media.validate_links(videos)
             certs = [CertificationForm(**x) for x in json.loads(certifications or "[]")]
             refs = [ReferenceForm(**x) for x in json.loads(references or "[]")]
+            from backend import linkedin as li
+            profile_url = li.normalize(linkedin_url) if (linkedin_url or "").strip() else None
         except media.MediaError as exc:
             raise HTTPException(422, str(exc)) from exc
         except (ValueError, TypeError) as exc:
@@ -322,6 +325,9 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             res = state.pipeline.start_onboarding(inputs, baseline_id, on_event=progress.on_event)
             with conn() as c:
                 media.save_links(c, candidate_id, videos)
+                if profile_url:
+                    with c:
+                        c.execute("UPDATE candidates SET linkedin_url = ? WHERE id = ?", (profile_url, candidate_id))
             if res.get("awaiting_review"):
                 state.review_threads[candidate_id] = res["thread_id"]
                 return {"_status": "done", "_message": "Ready for review", "candidate_id": candidate_id,

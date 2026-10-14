@@ -442,6 +442,7 @@ def applicants(conn, job: dict, *, sort: str = "match", status: str | None = Non
 
 def panel(conn, app: dict, job: dict) -> dict:
     """Everything the profile panel shows for one applicant."""
+    from backend import linkedin as li
     from backend import media
     baseline, profile, scores, agg, evidence_by_id = _context(conn, app, job)
     cand = store.get_candidate(conn, app["candidate_id"])
@@ -490,6 +491,7 @@ def panel(conn, app: dict, job: dict) -> dict:
             "portfolio": [{"name": p.name, "description": p.description, "url": p.url} for p in portfolio],
             "portfolio_url": cand.get("portfolio_url"),
             "linkedin": json.loads(linkedin["extracted_json"]) if linkedin and linkedin["extracted_json"] else None,
+            "linkedin_link": li.profile_link(cand, evidence),
             "resume_file": bool(resume and resume["file_path"]),
             "resume_file_kind": (resume["file_path"].rsplit(".", 1)[-1] if resume and resume["file_path"] else None),
         },

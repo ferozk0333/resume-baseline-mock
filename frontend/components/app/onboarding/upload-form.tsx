@@ -20,6 +20,8 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
   const [linkedin, setLinkedin] = useState<File | null>(null);
   const [github, setGithub] = useState("");
   const [portfolio, setPortfolio] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
+  const badLinkedin = linkedinUrl.trim() !== "" && !/^(https?:\/\/)?([a-z]{2,3}\.)?linkedin\.com\/in\/[\w\-%]{3,100}\/?$/i.test(linkedinUrl.trim());
   const [videos, setVideos] = useState<string[]>([""]);
   const [certs, setCerts] = useState<Cert[]>([]);
   const [refs, setRefs] = useState<Ref[]>([]);
@@ -36,6 +38,7 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
     if (linkedin) form.append("linkedin_pdf", linkedin);
     if (github.trim()) form.append("github", github.trim());
     if (portfolio.trim()) form.append("portfolio_url", portfolio.trim());
+    if (linkedinUrl.trim()) form.append("linkedin_url", linkedinUrl.trim());
     form.append("demo_videos", JSON.stringify(videos.map((v) => v.trim()).filter(Boolean)));
     form.append("certifications", JSON.stringify(certs.filter((c) => c.name.trim()).map((c) => ({
       name: c.name, issuer: c.issuer || null, credential_id: c.credential_id || null, verify_url: c.verify_url || null }))));
@@ -68,6 +71,14 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
             <Input id="linkedin" type="file" accept=".pdf" onChange={(e) => setLinkedin(e.target.files?.[0] ?? null)} />
             <p className="text-xs text-muted-foreground">
               On your LinkedIn profile, open <span className="font-medium">More → Save to PDF</span> and upload that file.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="linkedin-url">LinkedIn profile URL</Label>
+            <Input id="linkedin-url" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)}
+              placeholder="https://www.linkedin.com/in/your-name" aria-invalid={badLinkedin} />
+            <p className={badLinkedin ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+              {badLinkedin ? "Use your profile link: linkedin.com/in/…" : "Optional. Shown to recruiters as a link; not scored."}
             </p>
           </div>
           <div className="space-y-1.5">

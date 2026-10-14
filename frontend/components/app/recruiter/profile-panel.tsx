@@ -32,7 +32,7 @@ export function ProfilePanel({ p, tab, onTab, stages, onStatus, onStage, onRejec
   const workCount = p.work.videos.length + p.work.repos.length + p.work.portfolio.length;
   const has: Record<Tab, boolean> = {
     overview: true, requirements: p.requirements.length > 0, eeat: !!p.dimensions, resume: p.work.resume_file,
-    work: workCount > 0 || !!p.work.portfolio_url, linkedin: !!p.work.linkedin, activity: true,
+    work: workCount > 0 || !!p.work.portfolio_url, linkedin: !!p.work.linkedin || !!p.work.linkedin_link, activity: true,
   };
   const label: Record<Tab, string> = { overview: "Overview", requirements: "Requirements", eeat: "EEAT",
     resume: "Resume", work: `Work (${workCount})`, linkedin: "LinkedIn", activity: "Activity" };
@@ -299,9 +299,28 @@ function Work({ p }: { p: Panel }) {
 }
 
 function LinkedIn({ p }: { p: Panel }) {
-  const li = p.work.linkedin!;
+  const li = p.work.linkedin;
+  const link = p.work.linkedin_link;
   return (
     <div className="space-y-3 text-sm">
+      {link && (
+        <p className="flex flex-wrap items-center gap-2">
+          <a href={link.url} target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-primary hover:bg-muted">
+            <ExternalLink className="size-3.5" /> {link.url.replace("https://www.", "")}
+          </a>
+          <span className="text-xs text-muted-foreground">Profile link {link.source}</span>
+        </p>
+      )}
+      {!li && <p className="text-xs text-muted-foreground">No LinkedIn PDF uploaded.</p>}
+      {li && <LinkedInPdf li={li} />}
+    </div>
+  );
+}
+
+function LinkedInPdf({ li }: { li: NonNullable<Panel["work"]["linkedin"]> }) {
+  return (
+    <div className="space-y-3">
       <p className="text-xs text-muted-foreground">From the uploaded LinkedIn PDF</p>
       <ul className="space-y-2">
         {li.roles.map((r) => (

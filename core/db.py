@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS candidates (
   portfolio_url TEXT,
   created_at TEXT,
   data_source TEXT,               -- null = uploaded; demo_parsed | archetype | test_variant (demo data, labelled in the UI)
-  email TEXT                      -- contact address for recruiter emails (demo: fictional, example.com)
+  email TEXT,                     -- contact address for recruiter emails (demo: fictional, example.com)
+  linkedin_url TEXT               -- profile link entered on the upload form (display only, never scored)
 );
 
 CREATE TABLE IF NOT EXISTS evidence_items (
@@ -422,6 +423,7 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (15, ["ALTER TABLE candidates ADD COLUMN data_source TEXT", JOBS, APPLICATIONS, GENERATED_SUMMARIES]),
     (16, ["ALTER TABLE candidates ADD COLUMN email TEXT", "ALTER TABLE jobs ADD COLUMN settings_json TEXT",
           "ALTER TABLE applications ADD COLUMN stage_id TEXT", INTERVIEW_STAGES, ACTIVITY, EMAILS]),
+    (17, ["ALTER TABLE candidates ADD COLUMN linkedin_url TEXT"]),
 ]
 
 

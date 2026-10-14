@@ -113,7 +113,7 @@ export type Panel = ApplicantRow & {
     link: string | null; backing: string; evidence_id: string | null }[] };
   work: { videos: MediaLink[]; repos: Repo[]; portfolio: { name: string; description: string | null; url: string | null }[];
     portfolio_url: string | null; linkedin: { roles: Role[]; claims: Claim[]; certifications: Certification[] } | null;
-    resume_file: boolean; resume_file_kind: string | null };
+    resume_file: boolean; resume_file_kind: string | null; linkedin_link: { url: string; source: string } | null };
 };
 export type CompareColumn = { application_id: string; name: string | null; match: number | null; confidence: number | null;
   dimensions: Record<string, number | null> | null; must_haves_met: number; must_haves_total: number; scored: boolean;
