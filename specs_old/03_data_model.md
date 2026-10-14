@@ -8,7 +8,7 @@ Rules:
 - `baseline_id = NULL` in `judgments` means the judgment is job-independent and reusable.
 - `judgments.baseline_hash` is set for job-dependent judgments only (see `02` for what it hashes). A cached judgment is reused only when its `baseline_hash` matches the baseline's current hash.
 - Deleting a baseline deletes its criteria (cascade) but keeps its `runs`, `judgments`, `scores` and `gap_reports` as history. Run lists show such runs with the baseline as **"(deleted)"**.
-- Schema version is tracked with `PRAGMA user_version` (currently 8; v2 added `judgments.baseline_hash`; v3 added `roles.review_reasons`, `projects.review_reasons`, `evidence_items.extracted_json`; v4 added `source` on `bullets`/`claims`/`certifications`, `evidence_items.items_extracted`/`items_dropped`, and the `dropped_items` table; v5 added `judgments.used`; v6 added `judgments.confidence`/`score`; v7 added `judgments.input_hash` and `runs.logic_version`/`baseline_hash`/`models_json`; v8 added `gap_reports.plan_json`).
+- Schema version is tracked with `PRAGMA user_version` (currently 12; v2 added `judgments.baseline_hash`; v3 added `roles.review_reasons`, `projects.review_reasons`, `evidence_items.extracted_json`; v4 added `source` on `bullets`/`claims`/`certifications`, `evidence_items.items_extracted`/`items_dropped`, and the `dropped_items` table; v5 added `judgments.used`; v6 added `judgments.confidence`/`score`; v7 added `judgments.input_hash` and `runs.logic_version`/`baseline_hash`/`models_json`; v8 added `gap_reports.plan_json`; iteration 2: v9 `runs.timings_json`, v10 the `document_texts` and `http_cache` tables, v11 `runs.plan_status`, v12 the `extraction_cache` table).
 - Items dropped by the quote check are kept in `dropped_items` so the review step can offer **Add back**; an added-back item is saved with `source = user_edit`. Re-running extraction replaces the profile and the dropped list.
 
 ```sql
@@ -146,7 +146,9 @@ CREATE TABLE runs (
   started_at TEXT, finished_at TEXT,
   logic_version TEXT,
   baseline_hash TEXT,                  -- baseline content hash at run time
-  models_json TEXT                     -- judge, Jev model + threshold, Claude models used
+  models_json TEXT,                    -- judge, Jev model + threshold, Claude models used
+  timings_json TEXT,                   -- per-step timing, call counts, tokens, estimated cost (specs/09 §1)
+  plan_status TEXT                     -- generating | ready | failed: the plan is written after the score (09 §2.6)
 );
 
 CREATE TABLE judgments (
@@ -196,6 +198,21 @@ CREATE TABLE gap_reports (
   report_markdown TEXT,                -- plan rendered by code at generation weights
   model_version TEXT,
   created_at TEXT
+);
+
+-- Iteration 2 caches (no scoring data)
+CREATE TABLE document_texts (          -- normalized Markdown of each upload; exactly what extraction and quotes use
+  file_sha256 TEXT, normalizer TEXT,   -- normalizer = parser + clean-up version
+  text TEXT, created_at TEXT,
+  PRIMARY KEY (file_sha256, normalizer)
+);
+CREATE TABLE extraction_cache (        -- extraction output reused for an identical document (app only)
+  key TEXT PRIMARY KEY,                -- sha256(model, system prompt, output schema, user message)
+  model TEXT, output_json TEXT, created_at TEXT
+);
+CREATE TABLE http_cache (              -- GitHub API responses, 24 h, revalidated with ETag
+  key TEXT PRIMARY KEY,                -- URL + Accept header (never the token)
+  status INTEGER, headers_json TEXT, body TEXT, fetched_at TEXT
 );
 ```
 

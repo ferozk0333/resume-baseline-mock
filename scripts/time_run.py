@@ -61,8 +61,8 @@ def main() -> None:
         else:
             recording = RecordingSession()
             github_client = GitHubClient(session=recording)
-    pipe = Pipeline(Deps(str(db_path), get_judge(), llm=ClaudeLLM(), github_client=github_client,
-                         planner=ClaudeLLM(max_tokens=config.PLAN_MAX_TOKENS)), print_timings=False)
+    pipe = Pipeline(Deps(str(db_path), get_judge(), llm=ClaudeLLM(effort=config.EXTRACT_EFFORT), github_client=github_client,
+                         planner=ClaudeLLM(max_tokens=config.PLAN_MAX_TOKENS, effort=config.PLAN_EFFORT)), print_timings=False)
 
     t0 = time.perf_counter()
     first = pipe.start_onboarding(inputs, args.baseline)

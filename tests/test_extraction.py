@@ -541,3 +541,18 @@ def test_cross_source_roles_need_overlapping_dates_and_a_shared_title_word():
     other_job = Profile(roles=[_role("Product Manager", "Oracle", date(2022, 7, 1), date(2023, 6, 1), "l")])
     assert len(merge_profiles([resume, later])[0].roles) == 2       # a later stint is a separate role
     assert len(merge_profiles([resume, other_job])[0].roles) == 2   # different job at the same employer
+
+
+def test_effort_is_sent_only_to_models_that_support_it():
+    from core.llm import effort_kwargs
+    assert effort_kwargs("claude-sonnet-5-5", "medium") == {"output_config": {"effort": "medium"}}
+    assert effort_kwargs("claude-haiku-5-5", "low") == {"output_config": {"effort": "low"}}
+    assert effort_kwargs("claude-haiku-4-5-20251001", "low") == {}
+    assert effort_kwargs("claude-sonnet-5-5", "") == {}
+
+
+def test_effort_reaches_the_sdk_call_and_passes_signature_check():
+    msgs = FakeMessages([_ok(schemas.PortfolioExtract(projects=[], claims=[]))])
+    ClaudeLLM(client=SimpleNamespace(messages=msgs), effort="medium").parse(
+        model="claude-sonnet-5-5", system="S", user="U", output_type=schemas.PortfolioExtract)
+    assert msgs.kwargs[0]["output_config"] == {"effort": "medium"}

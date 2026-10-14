@@ -67,7 +67,9 @@ def split_shared(contexts: list[dict]) -> tuple[dict, list[dict]]:
 
 class ClaudeJudge:
     def __init__(self, llm: StructuredLLM | None = None):
-        self.llm = llm or ClaudeLLM(max_tokens=JUDGE_MAX_TOKENS)
+        self.llm = llm or ClaudeLLM(max_tokens=JUDGE_MAX_TOKENS, effort=config.JUDGE_EFFORT)
+        # Complexity reasons first on the reasoning model; its effort is set separately.
+        self.complexity_llm = llm or ClaudeLLM(max_tokens=JUDGE_MAX_TOKENS, effort=config.COMPLEXITY_EFFORT)
 
     @staticmethod
     def model_for(key: str) -> str:
@@ -80,8 +82,9 @@ class ClaudeJudge:
         q = question(key)
         user = render_context(context)
         model = self.model_for(key)
+        llm = self.complexity_llm if key == "complexity" else self.llm
         try:
-            out = self.llm.parse(model=model, system=system_prompt(q), user=user, output_type=output_model(key))
+            out = llm.parse(model=model, system=system_prompt(q), user=user, output_type=output_model(key))
         except LLMError as exc:
             raise JudgeError(str(exc)) from exc
         quote = out.quote.strip() or None

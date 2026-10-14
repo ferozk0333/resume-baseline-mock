@@ -39,6 +39,15 @@ def is_runaway(tail: str, min_chars: int = 160) -> bool:
     return bool(m) and len(m.group(0)) >= min_chars
 
 
+# Models that accept output_config.effort (platform docs, 2026-10). Haiku 4.5 does not.
+_EFFORT_MODELS = ("claude-haiku-5", "claude-sonnet-5", "claude-sonnet-4-6", "claude-opus-5", "claude-opus-4-5",
+                  "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-fable", "claude-mythos")
+
+
+def effort_kwargs(model: str, effort: str | None) -> dict:
+    return {"output_config": {"effort": effort}} if effort and model.startswith(_EFFORT_MODELS) else {}
+
+
 def sampling_kwargs(model: str) -> dict:
     """temperature 0 wherever the API allows it (CLAUDE.md rule 7).
 
@@ -74,14 +83,16 @@ class ClaudeLLM:
     (test fakes) use `messages.parse`.
     """
 
-    def __init__(self, client: anthropic.Anthropic | None = None, max_tokens: int | None = None):
+    def __init__(self, client: anthropic.Anthropic | None = None, max_tokens: int | None = None,
+                 effort: str | None = None):
         self.client = client or anthropic.Anthropic(max_retries=2)
         self.max_tokens = max_tokens or config.EXTRACT_MAX_TOKENS
+        self.effort = effort or None
 
     def _request(self, model: str, system: str, user: str, output_type: type[T]) -> dict:
         return dict(model=model, max_tokens=self.max_tokens, system=system,
                     messages=[{"role": "user", "content": user}], output_format=output_type,
-                    **sampling_kwargs(model))
+                    **sampling_kwargs(model), **effort_kwargs(model, self.effort))
 
     def _streamed(self, request: dict):
         tail = ""

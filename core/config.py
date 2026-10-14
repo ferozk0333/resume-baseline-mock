@@ -36,6 +36,12 @@ REASONING_MODEL = _env("REASONING_MODEL", "claude-sonnet-5-5")
 COMPLEXITY_MODEL = _env("COMPLEXITY_MODEL", REASONING_MODEL)
 JEV_MODEL = _env("JEV_MODEL", "jev-1.13.0")   # pinned; saved judgments are matched on this version
 JEV_URL = "https://api.typesafe.ai/v1/systemone"
+# Effort per purpose (low | medium | high; empty = the model's default: high on Sonnet 5.5, medium on
+# Haiku 5.5). Sent only to models that support effort; Haiku 4.5 does not. Thinking tokens bill as output.
+EXTRACT_EFFORT = _env("EXTRACT_EFFORT", "")
+JUDGE_EFFORT = _env("JUDGE_EFFORT", "")
+COMPLEXITY_EFFORT = _env("COMPLEXITY_EFFORT", "")
+PLAN_EFFORT = _env("PLAN_EFFORT", "")
 # Fallback to Claude when Jev's `confidence` is below this (yes/no: |2p - 1|). Starting value; set in phase 8.
 JEV_CONFIDENCE_THRESHOLD = float(_env("JEV_CONFIDENCE_THRESHOLD", "0.6"))
 
@@ -58,11 +64,12 @@ JUDGE_CONCURRENCY = int(_env("JUDGE_CONCURRENCY", _env("MAX_PARALLEL_JUDGE_CALLS
 JEV_MAX_CONCURRENCY = int(_env("JEV_MAX_CONCURRENCY", "32"))             # Jev allows 80 requests/s
 CLAUDE_MAX_CONCURRENCY = int(_env("CLAUDE_MAX_CONCURRENCY", "12"))       # lower it if Anthropic returns 429s
 # Estimated USD per million tokens, for the run cost line only (check https://claude.com/pricing).
-# Cache reads cost 0.1× input, 5-minute cache writes 1.25× input.
+# Checked 2026-10-13. Cache reads cost 0.1× input, 5-minute cache writes 1.25× input.
 MODEL_PRICES = {
     "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
-    "claude-sonnet": {"input": 3.0, "output": 15.0},     # assumption for Sonnet 5.5; confirm
-    "claude-opus": {"input": 5.0, "output": 25.0},
+    "claude-haiku-5-5": {"input": 0.10, "output": 0.50},  # prompts up to 100k tokens
+    "claude-sonnet-5-5": {"input": 2.0, "output": 10.0},
+    "claude-opus-5-5": {"input": 4.0, "output": 20.0},
 }
 PRINT_TIMINGS = _env("PRINT_TIMINGS", "1") == "1"   # timing table on stdout at the end of each run (specs/09 §1)
 
