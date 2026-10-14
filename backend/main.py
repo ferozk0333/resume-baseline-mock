@@ -411,6 +411,10 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 res = pipe.score(candidate_id, baseline_id, weights, on_event=progress.on_event)
             if not res.get("run_id"):
                 raise ValueError(res.get("blocked") or "Scoring did not start.")
+            if not res.get("paused"):
+                from backend import recruiter
+                with conn() as c:
+                    recruiter.attach_run(c, res["run_id"])     # the candidate now applies to the role's job
             return {"run_id": res["run_id"], "final": res.get("final"), "errors": res.get("errors") or [],
                     "paused": res.get("paused"), "_message": res.get("paused") or "Score ready"}
         tasks.submit(task_id, work)

@@ -192,3 +192,21 @@ def test_shortlist_and_compare(api):
     cols = api.get(f"/jobs/{job['id']}/compare", params={"ids": f"{a},{b}"}).json()
     assert [c["application_id"] for c in cols] == [a, b] and all(len(c["top_evidence"]) <= 3 for c in cols)
     assert api.get(f"/jobs/{job['id']}/compare", params={"ids": a}).status_code == 422
+
+
+def test_a_real_run_applies_the_candidate_to_the_roles_job_and_a_scripted_one_does_not(demo):
+    from graph.pipeline import Pipeline
+    from tests.fixtures.archetypes import ARCHETYPES, TODAY
+    conn = db.connect(demo)
+    jobs = {j["baseline_id"]: j["id"] for j in rc.list_jobs(conn)}
+    cid, judge = ARCHETYPES["resume_only"](conn)
+    scripted = Pipeline(Deps(demo, judge, today=TODAY), print_timings=False).score(cid, DS)["run_id"]
+    assert rc.attach_run(conn, scripted) == []
+    judge.scripted = False
+    run = Pipeline(Deps(demo, judge, today=TODAY), print_timings=False).score(cid, DS)["run_id"]
+    [app_id] = rc.attach_run(conn, run)
+    row = conn.execute("SELECT job_id, run_id, status FROM applications WHERE id = ?", (app_id,)).fetchone()
+    assert (row["job_id"], row["run_id"], row["status"]) == (jobs[DS], run, "new")
+    again = Pipeline(Deps(demo, judge, today=TODAY), print_timings=False).score(cid, DS)["run_id"]
+    assert rc.attach_run(conn, again) == [app_id]                                 # same application, latest run
+    assert conn.execute("SELECT run_id FROM applications WHERE id = ?", (app_id,)).fetchone()[0] == again

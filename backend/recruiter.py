@@ -100,6 +100,27 @@ def add_application(conn, job_id: str, candidate_id: str, run_id: str | None = N
     return app_id
 
 
+def attach_run(conn, run_id: str) -> list[str]:
+    """A finished real-judge run applies its candidate to every job for that role: a new application, or the
+    existing one now points at this latest run. Scripted runs (test judge) never become applicants.
+    Returns the application ids."""
+    from scoring.benchmarks import is_real_run
+    run = conn.execute("SELECT candidate_id, baseline_id, status FROM runs WHERE id = ?", (run_id,)).fetchone()
+    if run is None or run["status"] != "done" or not is_real_run(conn, run_id):
+        return []
+    out = []
+    for (job_id,) in conn.execute("SELECT id FROM jobs WHERE baseline_id = ?", (run["baseline_id"],)).fetchall():
+        app = conn.execute("SELECT id FROM applications WHERE job_id = ? AND candidate_id = ?",
+                           (job_id, run["candidate_id"])).fetchone()
+        if app:
+            with conn:
+                conn.execute("UPDATE applications SET run_id = ? WHERE id = ?", (run_id, app[0]))
+            out.append(app[0])
+        else:
+            out.append(add_application(conn, job_id, run["candidate_id"], run_id))
+    return out
+
+
 def set_status(conn, app_id: str, status: str) -> None:
     if status not in STATUSES:
         raise ValueError(f"status must be one of {STATUSES}")
