@@ -88,13 +88,15 @@ export type Job = { id: string; baseline_id: string; title: string; company: str
   must_haves: string[]; preset: string | null; applicants?: number; baseline?: Baseline; presets?: string[];
   presets_note?: string };
 export type ApplicantRow = { application_id: string; candidate_id: string; name: string | null; current_role: string | null;
-  status: "new" | "shortlisted" | "not_moving_forward"; run_id: string | null; scored: boolean; match: number | null;
-  confidence: number | null; must_haves_met: number; must_haves_total: number; why: string | null; tags: string[];
-  demo: string | null; percentile?: number | null };
+  status: "new" | "shortlisted" | "in_loop" | "not_moving_forward"; run_id: string | null; scored: boolean;
+  match: number | null; confidence: number | null; must_haves_met: number; must_haves_total: number; why: string | null;
+  tags: string[]; demo: string | null; percentile?: number | null; percentile_n?: number | null;
+  stage_id?: string | null; stage?: string | null };
 export type MustHave = { criterion_id: string; name: string; kind: string;
   status: "met_backed" | "met_on_paper" | "not_met" | "unknown" };
 export type Requirement = { criterion_id: string; name: string; kind: string; priority: string; must_have: boolean;
-  label: string | null; quote: string | null; backing: string; source: string | null; link: string | null };
+  label: string | null; status: MustHave["status"]; quote: string | null; backing: string; source: string | null;
+  link: string | null; evidence_id: string | null };
 export type Repo = { id: string; name: string; description: string | null; url: string | null; languages: string;
   own_commits: number | null; fork: boolean; counted: boolean; last_update: string | null; readme_excerpt: string | null };
 export type Panel = ApplicantRow & {
@@ -103,7 +105,10 @@ export type Panel = ApplicantRow & {
   questions: { question: string; topic: string; reason: string }[]; generated_label: string | null;
   requirements: Requirement[]; dimensions: Record<string, number | null> | null;
   subcategories: { key: string; label: string; dimension: string; status: string; score: number | null;
-    effective_weight: number; guidance: string | null }[];
+    effective_weight: number; guidance: string | null;
+    evidence: { question: string; label: string; text: string | null; supported: boolean }[] }[];
+  differentiators: { tags: string[]; evidence: { name: string; quote: string | null; source: string | null;
+    link: string | null; backing: string; evidence_id: string | null }[] };
   work: { videos: MediaLink[]; repos: Repo[]; portfolio: { name: string; description: string | null; url: string | null }[];
     portfolio_url: string | null; linkedin: { roles: Role[]; claims: Claim[]; certifications: Certification[] } | null;
     resume_file: boolean; resume_file_kind: string | null };
@@ -113,7 +118,7 @@ export type CompareColumn = { application_id: string; name: string | null; match
   demo: string | null; top_evidence: Requirement[] };
 
 // --- Benchmarks (phase 12) -------------------------------------------------------------------------------
-export type Pct = { percentile: number; n: number } | null;
+export type Pct = { percentile: number; n: number; median: number; value: number } | null;
 export type Benchmarks = {
   baseline_title: string | null;
   percentiles: { shown: boolean; reason?: string; pool_size: number; min_pool: number; demo_pool: boolean;
@@ -121,3 +126,25 @@ export type Benchmarks = {
   peer_signals: { min_group: number; demo_pool: boolean; dimensions: Record<string, { suppressed: boolean;
     group_size: number | null; signals: { feature: string; subcategory: string; rate: number; text: string }[] }> };
 };
+
+// --- Recruiter workflows (specs/13) -----------------------------------------------------------------------
+export type Stage = { id: string; name: string; position: number; terminal: boolean; focus: string[]; applicants: number };
+export type JobSettings = { recruiter_name: string; duration_minutes: number; availability: string; scheduling_link: string };
+export type Reason = { id: string; source: string; title: string; detail: string; advice: string; action_type: string;
+  selected: boolean };
+export type Email = { id: string; application_id: string; job_id: string; kind: "not_moving_forward" | "scheduling" | "stage";
+  stage_id: string | null; batch_id: string | null; status: "draft" | "sent" | "failed" | "cancelled";
+  intended_to: string | null; actual_to: string | null; subject: string; body: string; model: string; provider: string | null;
+  reasons: { reasons: Reason[]; note: string | null } | null;
+  checks: { errors?: string[]; model_errors?: string[]; warnings?: string[]; words?: number; evidence_id?: string | null;
+    edited?: boolean };
+  error: string | null; created_at: string; sent_at: string | null; candidate_name: string | null; template: boolean;
+  label: string };
+export type Activity = { id: string; kind: "stage" | "email" | "decision" | "note"; summary: string; created_at: string;
+  detail: Record<string, unknown>; email?: Email };
+export type EmailConfig = { provider: string; demo_redirect: string | null; model: string | null };
+export type PipelineBoard = { stages: (Stage & { cards: Pick<ApplicantRow, "application_id" | "name" | "current_role" |
+  "match" | "confidence" | "demo" | "status">[] })[]; unstaged: number };
+
+/** "Top 20%" for percentile 80: the share of candidates at or above, rounded to 5 (at least 5). */
+export const topShare = (p: number) => Math.max(5, 5 * Math.round((100 - p) / 5));

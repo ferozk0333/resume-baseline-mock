@@ -18,4 +18,5 @@ Rules:
 - Never mention scores, numbers about the candidate, percentiles, rankings, other candidates or comparisons.
 - Never mention or hint at personal characteristics (age, gender, race, religion, nationality, disability, family status, health).
 - No promises about future roles, keeping their resume on file, or contacting them later.
+- Do not imply any earlier call, interview or conversation; they only applied.
 - Plain, warm, direct tone. No jargon, no exclamation marks.

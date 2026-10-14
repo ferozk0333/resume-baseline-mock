@@ -42,11 +42,29 @@ function ScorePageInner() {
     get<Benchmarks>(`/runs/${id}/benchmarks`).then(setBench).catch(() => setBench(null));
   }, [id]);
   const pct = bench?.percentiles;
-  const compare = (p: Pct | undefined) => !pct ? null : !pct.shown
-    ? <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{pct.reason}</p>
-    : p ? <p className="mt-1 text-[11px] leading-tight text-muted-foreground">
-        Higher than <span className="font-medium text-foreground">{p.percentile}%</span> of {p.n} other candidates scored for {bench?.baseline_title}
-      </p> : null;
+  // Your score, the median for this role and the percentile, on one 0–100 scale (specs/13 §5). No ratio.
+  const compare = (p: Pct | undefined, scale: number, dim?: string) => {
+    if (!pct) return null;
+    if (!pct.shown) return <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{pct.reason}</p>;
+    if (!p) return null;
+    const you = p.value * scale, median = p.median * scale;
+    const gap = dim ? view?.gaps.find((g) => g.dimension === dim) : undefined;
+    return (
+      <div className="mt-2 space-y-1">
+        <MedianBar you={you} median={median} />
+        <p className="text-[11px] leading-tight text-muted-foreground">
+          Median for {bench?.baseline_title}: <span className="font-medium text-foreground">{Math.round(median)}</span>
+          {" · "}you&apos;re higher than <span className="font-medium text-foreground">{p.percentile}%</span> of {p.n} other candidates
+        </p>
+        {dim && you < median && (
+          <Link href={`/runs/${id}/plan${gap ? `#gap-${gap.subcategory}` : ""}`}
+            className="block text-[11px] leading-tight font-medium text-amber-800 hover:underline">
+            Below the median for this role — see what higher scorers have
+          </Link>
+        )}
+      </div>
+    );
+  };
 
   const rescore = useCallback((next: Weights) => {
     setWeights(next);
@@ -90,7 +108,7 @@ function ScorePageInner() {
               {view.final === null ? "—" : view.final.toFixed(1)}
             </div>
             <div className="text-xs text-muted-foreground">out of 100</div>
-            {compare(pct?.final)}
+            {compare(pct?.final, 1)}
           </CardContent>
         </Card>
         {DIMENSIONS.map((d) => (
@@ -101,7 +119,7 @@ function ScorePageInner() {
                 {view.dimensions[d] === null ? "—" : Math.round((view.dimensions[d] ?? 0) * 100)}
               </div>
               <div className="text-xs text-muted-foreground">weight {Math.round(view.weights.dimensions[d])}</div>
-              {pct?.shown && compare(pct.dimensions?.[d])}
+              {compare(pct?.shown ? pct.dimensions?.[d] : undefined, 100, d)}
             </CardContent>
           </Card>
         ))}
@@ -138,6 +156,19 @@ function ScorePageInner() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function MedianBar({ you, median }: { you: number; median: number }) {
+  const clamp = (x: number) => Math.min(100, Math.max(0, x));
+  return (
+    <div className="relative h-2 rounded-full bg-muted" role="img"
+      aria-label={`Your score ${Math.round(you)}, median ${Math.round(median)}, on a 0 to 100 scale`}>
+      <div className="absolute inset-y-0 left-0 rounded-full bg-primary/25" style={{ width: `${clamp(you)}%` }} />
+      <div className="absolute -top-0.5 h-3 w-px bg-foreground/70" style={{ left: `${clamp(median)}%` }} title={`Median ${Math.round(median)}`} />
+      <div className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary shadow"
+        style={{ left: `${clamp(you)}%` }} title={`You ${Math.round(you)}`} />
     </div>
   );
 }

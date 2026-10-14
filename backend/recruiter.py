@@ -396,6 +396,7 @@ def applicants(conn, job: dict, *, sort: str = "match", status: str | None = Non
     for r in rows:
         p = benchmarks.percentiles(pool, r["candidate_id"]) if r["scored"] else {"shown": False}
         r["percentile"] = p["final"]["percentile"] if p.get("shown") and p.get("final") else None
+        r["percentile_n"] = p["final"]["n"] if p.get("shown") and p.get("final") else None
     if status:
         rows = [r for r in rows if r["status"] == status]
     if all_must_haves:
@@ -437,17 +438,24 @@ def panel(conn, app: dict, job: dict) -> dict:
     portfolio = [p for p in profile.projects if any(e["id"] == p.evidence_id and e["type"] == "portfolio" for e in evidence)]
     resume = next((e for e in evidence if e["type"] == "resume"), None)
     row = applicant_row(conn, app, job)
+    from scoring import benchmarks
+    pct = benchmarks.percentiles(benchmarks.job_pool(conn, job), app["candidate_id"]) if scores else {"shown": False}
+    row["percentile"] = pct["final"]["percentile"] if pct.get("shown") and pct.get("final") else None
+    row["percentile_n"] = pct["final"]["n"] if pct.get("shown") and pct.get("final") else None
+    reqs = requirements(baseline, job, scores, profile, evidence_by_id)
     return {
         **row,
         "job": {"id": job["id"], "title": job["title"], "company": job["company"]},
         "must_haves": must_haves(conn, job, baseline, scores, profile, evidence_by_id),
         "why_points": gen.get("why", []), "questions": gen.get("questions", []),
         "generated_label": "Demo text" if scores else None,
-        "requirements": requirements(baseline, job, scores, profile, evidence_by_id),
+        "requirements": reqs,
         "dimensions": agg.dimensions if agg else None,
         "subcategories": [{"key": s, "label": config.SUBCATEGORY_LABELS[s], "dimension": config.SUBCATEGORY_DIMENSION[s],
                            **{k: v for k, v in scores[s].items() if k != "details"},
-                           "effective_weight": agg.effective_weights.get(s, 0.0)} for s in scores] if scores else [],
+                           "effective_weight": agg.effective_weights.get(s, 0.0),
+                           "evidence": subcategory_evidence(scores[s])} for s in scores] if scores else [],
+        "differentiators": differentiators(scores, agg, reqs) if scores else {"tags": [], "evidence": []},
         "work": {
             "videos": media.list_links(conn, app["candidate_id"]),
             "repos": repos,
@@ -458,6 +466,32 @@ def panel(conn, app: dict, job: dict) -> dict:
             "resume_file_kind": (resume["file_path"].rsplit(".", 1)[-1] if resume and resume["file_path"] else None),
         },
     }
+
+
+NONE_LABELS = {"missing", "no", "none", "not_stated", "claimed_only", "unrelated", "below", "mention_or_missing",
+               "does_not", "not_aligned", "keyword", "listed"}
+
+
+def subcategory_evidence(score: dict, limit: int = 4) -> list[dict]:
+    """The judgments behind a subcategory, strongest first: label plus the quote (or what was judged)."""
+    trail = (score.get("details") or {}).get("judgments") or []
+    rows = [{"question": t["question"], "label": t["label"], "text": t.get("quote") or t.get("subject"),
+             "supported": t["label"] not in NONE_LABELS} for t in trail if t.get("label")]
+    rows.sort(key=lambda r: not r["supported"])
+    return rows[:limit]
+
+
+def differentiators(scores: dict, agg, reqs: list[dict]) -> dict:
+    """Strength tags plus the 3 strongest evidence items with their source (must-haves and artifacts first)."""
+    backed = [r for r in reqs if r["status"] == "met_backed" and r["quote"]]
+    backed.sort(key=lambda r: (not r["must_have"], r["backing"] != "artifact", r["priority"] != "required"))
+    seen, items = set(), []
+    for r in backed:
+        if r["evidence_id"] in seen:
+            continue
+        seen.add(r["evidence_id"])
+        items.append({k: r[k] for k in ("name", "quote", "source", "link", "backing", "evidence_id")})
+    return {"tags": tags(scores, agg.effective_weights), "evidence": items[:3]}
 
 
 def compare(conn, job: dict, app_ids: list[str]) -> list[dict]:

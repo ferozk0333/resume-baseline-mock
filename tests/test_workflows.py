@@ -251,7 +251,7 @@ def test_interview_loop_drafts_reviewed_then_sent_move_to_scheduling(seeded, mon
     assert len(out["drafts"]) == 2 and sent_count(seeded) == 0
     for d in out["drafts"]:
         assert not d["template"] and d["checks"]["errors"] == [] and d["checks"]["words"] <= 120
-        assert "45-minute" in d["body"] and "Mon–Wed 10:00–14:00 ET" in d["body"] and job["title"] in d["body"]
+        assert "45-minute phone screen" in d["body"] and "Mon–Wed 10:00–14:00 ET" in d["body"] and job["title"] in d["body"]
     batch = api.get(f"/jobs/{job['id']}/interview-loop/{out['batch_id']}").json()["drafts"]
     assert {d["id"] for d in batch} == {d["id"] for d in out["drafts"]}
     api.post(f"/emails/{out['drafts'][0]['id']}/send")

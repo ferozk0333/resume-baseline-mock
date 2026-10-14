@@ -33,7 +33,21 @@ make demo                                                 # API on port 8000; th
 The demo lives in `data/demo.db` (gitignored, kept between sessions). The 16 test profiles are parsed from
 their structured files (exact quotes, no model) and labelled "Demo data: parsed from structured profile";
 they are scored by `score_test_profiles.py` (Jev + Gemini). The 7 archetypes are scored with their scripted
-labels, shown with a "Test archetype" badge and left out of benchmarks. "Why" points and phone-screen questions are code templates ("Demo text").
+labels, shown with a "Test archetype" badge and left out of benchmarks. The test variant DS4_padded is scored for
+robustness checks only: it is never an applicant.
+
+### Recruiter workflows (specs/13)
+- **Workspace:** ranked list on the left, the candidate on the right with tabs (Overview, Requirements, EEAT,
+  Resume, Work, LinkedIn, Activity); ↑/↓ move through the list; the tab and selection are in the URL.
+- **Not moving forward:** a drawer with code-chosen reasons and an email draft (EMAIL_MODEL, checked in code; a
+  "Template draft" when the model is unavailable). Nothing is sent until the recruiter clicks Send.
+- **Interview loop:** shortlist, select, "Start interview loop": one review screen of scheduling drafts. The
+  interview plan, duration and availability live in Job settings; the Pipeline board moves cards between stages.
+- **Email:** `EMAIL_PROVIDER=outbox` (default) stores emails and shows them on the Outbox page; nothing leaves the
+  machine. `smtp` sends with `SMTP_*` and `EMAIL_FROM`. While `DEMO_EMAIL_TO` is set (default), every email goes
+  to that address only, with the intended recipient named in the subject and body.
+- `make demo` drafts emails with templates (no model). For model drafts on the free tier:
+  `EMAIL_LIVE=1 EMAIL_MODEL=gemini/gemini-3.5-flash-lite make demo`. "Why" points and phone-screen questions are code templates ("Demo text").
 
 ## Models
 Claude is the default for extraction, fallback judging, complexity and the plan. Any of these can run on

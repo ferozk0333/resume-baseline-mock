@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { AppMain } from "@/components/app/app-main";
 import { SiteHeader } from "@/components/app/site-header";
 import "./globals.css";
 
@@ -17,7 +18,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <Suspense fallback={<div className="h-14 border-b bg-white" />}><SiteHeader /></Suspense>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">{children}</main>
+        <Suspense fallback={<main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">{children}</main>}>
+          <AppMain>{children}</AppMain>
+        </Suspense>
         <Toaster position="bottom-right" theme="light" />
       </body>
     </html>

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
+import { InterviewPlan } from "@/components/app/recruiter/interview-plan";
 import { DIMENSIONS, get, put, titleCase, type Job, type Weights } from "@/lib/api";
 
 export default function SettingsPage() {
@@ -85,6 +86,8 @@ function Settings() {
           </details>
         </CardContent>
       </Card>
+
+      <InterviewPlan jobId={id} />
 
       <Card>
         <CardHeader>

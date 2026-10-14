@@ -693,9 +693,10 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             return wf.draft_scheduling(c, a, job, stage, state.deps.writer)
 
     @app.get("/emails", tags=["workflows"])
-    def emails(status: str | None = None, job_id: str | None = None):
+    def emails(status: str | None = None, job_id: str | None = None, application_id: str | None = None,
+               kind: str | None = None):
         with conn() as c:
-            return wf.list_emails(c, status=status, job_id=job_id)
+            return wf.list_emails(c, status=status, job_id=job_id, application_id=application_id, kind=kind)
 
     @app.get("/emails/{email_id}", tags=["workflows"])
     def email(email_id: str):

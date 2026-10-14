@@ -91,3 +91,17 @@ ask if wanted.
    - Strength tags: subcategory score ≥ 0.8 (`TAG_MIN_SCORE`), up to 3.
    - "Older evidence" phone-screen question: best relevant evidence older than 3 years (`STALE_YEARS`).
    - Both are kept as config and need confirming.
+
+## From specs/13 (recruiter workflows)
+
+9. **On-paper floor for the all-bullets route** (specs/13 §0.4). A criterion matched only in the skills list now
+   goes to the all-bullets judge. In the re-score, Flash-Lite labelled two tools "missing" although it saw them in
+   the skills list: AI1 Git and DS3 SQL went from listed to missing (Tools 0.847 → 0.736 and 0.528 → 0.444). A code
+   floor ("named in the skills list" ⇒ at least keyword/listed) prevents this, but it changes three FakeJudge
+   archetype scores (up to +0.5), so it is not applied. Apply it and re-record the archetype snapshot?
+10. **Lenient bullet credit for a keyword-heavy profile.** PM2 gained "bullet" for Prioritization ("align on
+    priorities and roadmaps"), Product analytics ("data-driven decision making") and Cross-functional
+    collaboration: final 45.0 → 46.8. Accept, or tighten the definition of "bullet" in the judge prompt?
+11. **Failed Gemini attempts count toward the local daily limit.** HTTP 503 (overloaded) retries are counted
+    against the 20 Flash requests a day, so one overloaded document can use the whole day's budget. Stop counting
+    503 attempts locally? (Whether Google counts them is not documented.)

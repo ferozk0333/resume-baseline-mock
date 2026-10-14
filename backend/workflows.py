@@ -479,8 +479,18 @@ def scheduling_template(job: dict, stage: str, choices: list[dict]) -> Schedulin
                            closing="We look forward to speaking with you.")
 
 
+def interview_stage(conn, job_id: str, stage: dict) -> str:
+    """The interview an email schedules: for the Scheduling stage, the stage after it; otherwise the stage itself."""
+    if stage["name"] != "Scheduling":
+        return stage["name"]
+    order = [s for s in stages(conn, job_id) if not s["terminal"]]
+    later = [s for s in order if s["position"] > stage["position"]]
+    return later[0]["name"] if later else "interview"
+
+
 def draft_scheduling(conn, app: dict, job: dict, stage: dict, writer, batch_id: str | None = None) -> dict:
     s = settings(conn, job["id"])
+    meeting = interview_stage(conn, job["id"], stage)
     cand = store.get_candidate(conn, app["candidate_id"])
     others = _other_names(conn, app)
     choices = evidence_choices(conn, app, job)
@@ -488,13 +498,13 @@ def draft_scheduling(conn, app: dict, job: dict, stage: dict, writer, batch_id: 
     if writer is not None and choices:
         ev = "\n".join(f"- id: {c['id']} | {c['source']} | shows {c['shows']}: {c['text']}" for c in choices)
         user = "\n\n".join([wrap_tag("job", f"{job['title']} at {job['company']}"),
-                            wrap_tag("next_stage", f"{stage['name']} ({s['duration_minutes']} minutes)"),
+                            wrap_tag("next_stage", f"{meeting} ({s['duration_minutes']} minutes)"),
                             wrap_tag("evidence", ev)])
         try:
             for _ in range(2):
                 d = writer.parse(model=config.EMAIL_MODEL, system=load_prompt("email_scheduling_system"), user=user,
                                  output_type=SchedulingDraft)
-                errors = check_scheduling(d, scheduling_body(cand["name"], job, s, stage["name"], d), choices, others)
+                errors = check_scheduling(d, scheduling_body(cand["name"], job, s, meeting, d), choices, others)
                 if not errors:
                     model = config.EMAIL_MODEL
                     break
@@ -505,8 +515,8 @@ def draft_scheduling(conn, app: dict, job: dict, stage: dict, writer, batch_id: 
             log.warning("email draft failed, using the template: %s", exc)
             errors = [f"model unavailable: {exc}"]
     if model == TEMPLATE_MODEL:
-        d = scheduling_template(job, stage["name"], choices)
-    body = scheduling_body(cand["name"], job, s, stage["name"], d)
+        d = scheduling_template(job, meeting, choices)
+    body = scheduling_body(cand["name"], job, s, meeting, d)
     checks = {"errors": check_scheduling(d, body, choices, others) if choices else [],
               "model_errors": first_errors or errors if model == TEMPLATE_MODEL else first_errors,
               "words": word_count(body), "evidence_id": d.evidence_id or None}
@@ -544,9 +554,11 @@ def get_email(conn, email_id: str) -> dict | None:
     return out
 
 
-def list_emails(conn, *, status: str | None = None, job_id: str | None = None, batch_id: str | None = None) -> list[dict]:
+def list_emails(conn, *, status: str | None = None, job_id: str | None = None, batch_id: str | None = None,
+                application_id: str | None = None, kind: str | None = None) -> list[dict]:
     q, args = "SELECT id FROM emails WHERE 1 = 1", []
-    for col, val in (("status", status), ("job_id", job_id), ("batch_id", batch_id)):
+    for col, val in (("status", status), ("job_id", job_id), ("batch_id", batch_id),
+                     ("application_id", application_id), ("kind", kind)):
         if val:
             q += f" AND {col} = ?"
             args.append(val)

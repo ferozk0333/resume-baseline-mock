@@ -31,6 +31,10 @@ function PlanPageInner() {
     get<Benchmarks>(`/runs/${id}/benchmarks`).then(setBench).catch(() => setBench(null));
     load();
   }, [id, load]);
+  useEffect(() => {                                      // "#gap-…" from the Score page: scroll once the rows exist
+    if (run && window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "center" });
+  }, [run]);
+
   useEffect(() => {                                      // the plan is written after the score: poll until ready
     if (plan?.status !== "generating") return;
     const t = setInterval(load, 2000);
@@ -74,7 +78,7 @@ function PlanPageInner() {
             </TableHeader>
             <TableBody>
               {run.gaps.map((g) => (
-                <TableRow key={g.subcategory}>
+                <TableRow key={g.subcategory} id={`gap-${g.subcategory}`} className="scroll-mt-20 target:bg-amber-50">
                   <TableCell className="font-medium whitespace-normal">
                     {g.label}
                     {(bench?.peer_signals.dimensions[g.dimension]?.signals ?? []).filter((s) => s.subcategory === g.subcategory).map((s) => (
