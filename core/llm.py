@@ -9,6 +9,7 @@ import re
 from typing import Protocol, TypeVar
 
 import anthropic
+import requests
 from pydantic import BaseModel, ValidationError
 
 from core import config, timing
@@ -448,27 +449,34 @@ class GeminiLLM:
         estimate = (len(system) + len(user)) // 3 + self.max_tokens // 4
         for attempt in range(self.max_retries + 1):
             limiter.acquire(name, estimate)
+            resp, data = None, {}
             with gemini_slots, timing.span(timing.MODEL, "gemini", model=model):
-                resp = self.session.post(config.GEMINI_URL.format(model=name), json=body,
-                                         headers={"x-goog-api-key": self.api_key}, timeout=(10, 300))
-                data = resp.json() if resp.text else {}
-                if resp.status_code == 200:
+                try:
+                    resp = self.session.post(config.GEMINI_URL.format(model=name), json=body,
+                                             headers={"x-goog-api-key": self.api_key}, timeout=(10, 300))
+                    data = resp.json() if resp.text else {}
+                except requests.RequestException as exc:      # timeouts on a busy free tier: retry
+                    problem = f"no answer ({exc.__class__.__name__})"
+                if resp is not None and resp.status_code == 200:
                     usage = data.get("usageMetadata") or {}
                     timing.note(input_tokens=int(usage.get("promptTokenCount") or 0),
                                 output_tokens=int(usage.get("candidatesTokenCount") or 0)
                                 + int(usage.get("thoughtsTokenCount") or 0))
                     break
-            if resp.status_code == 429:
-                timing.count("gemini_429")
-                if self._is_daily(data):
-                    limiter.exhaust_today(name)
-                    raise DailyLimitReached(daily_limit_message(name))
-            elif resp.status_code not in self.RETRY_STATUSES:
-                raise LLMError(f"{model} call failed: HTTP {resp.status_code}: {resp.text[:300]}")
+            if resp is not None:
+                problem = f"HTTP {resp.status_code}"
+                if resp.status_code == 429:
+                    timing.count("gemini_429")
+                    if self._is_daily(data):
+                        limiter.exhaust_today(name)
+                        raise DailyLimitReached(daily_limit_message(name))
+                elif resp.status_code not in self.RETRY_STATUSES:
+                    raise LLMError(f"{model} call failed: HTTP {resp.status_code}: {resp.text[:300]}")
             if attempt == self.max_retries:
-                raise LLMError(f"{model} call failed after {attempt + 1} attempts: HTTP {resp.status_code}")
+                raise LLMError(f"{model} call failed after {attempt + 1} attempts: {problem}")
             timing.count("gemini_retries")
-            self.sleep(min(self._retry_delay(data) if resp.status_code == 429 else 2 ** attempt * 2, 60))
+            rate_limited = resp is not None and resp.status_code == 429
+            self.sleep(min(self._retry_delay(data) if rate_limited else 2 ** attempt * 2, 60))
         candidate = (data.get("candidates") or [{}])[0]
         if candidate.get("finishReason") not in (None, "STOP"):
             if candidate.get("finishReason") == "MAX_TOKENS":

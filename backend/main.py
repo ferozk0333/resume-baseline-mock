@@ -30,6 +30,7 @@ from graph.pipeline import (Pipeline, current_plan, regenerate_plan, rescore, ru
                             save_run_weights)
 from judges.service import clear_judgments
 from scoring.explain import FORMULAS
+from scoring.plan import TYPE_LABELS
 
 log = logging.getLogger("rightstaff.api")
 
@@ -136,8 +137,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     state = State(deps)
     app = FastAPI(title="RightStaff API", version="0.2",
                   description="Scores a candidate against a baseline role profile (EEAT). Local mock.")
-    app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-                       allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(CORSMiddleware, allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+                       allow_methods=["*"], allow_headers=["*"])     # local mock: any local web port
     app.state.rs = state
     tasks = TaskStore(state.db_path)
     app.state.tasks = tasks
@@ -190,6 +191,12 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         with conn() as c:
             if not db.delete_baseline(c, baseline_id):
                 not_found("Baseline")
+
+    @app.get("/baselines-check", tags=["baselines"])
+    def check_level(level: str, required_years: float):
+        """Level/years warning (specs/06): shown as the user types."""
+        from core.models import level_years_warning
+        return {"warning": level_years_warning(level, required_years)}
 
     @app.post("/baselines/reset-seed", response_model=list[str], tags=["baselines"])
     def reset_seed():
@@ -258,9 +265,13 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             profile = store.load_profile(c, candidate_id)
             evidence = store.list_evidence(c, candidate_id)
             from dataclasses import asdict
+            from extraction.records import REVIEW_MESSAGES
+            data = json.loads(json.dumps(asdict(profile), default=str))
+            for item in [*data["roles"], *data["projects"]]:          # readable review flags
+                item["review_reasons"] = [REVIEW_MESSAGES.get(r, r) for r in item["review_reasons"]]
             return {
                 "candidate": cand,
-                "profile": json.loads(json.dumps(asdict(profile), default=str)),
+                "profile": data,
                 "dropped": store.list_dropped(c, candidate_id),
                 "warnings": [e["error"] for e in evidence if e["status"] == "failed" and e["error"]],
                 "sources": [{"id": e["id"], "type": e["type"], "status": e["status"], "text": e["raw_text"]}
@@ -392,7 +403,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         return {"status": "failed" if plan.error else "ready", "error": plan.error, "markdown": plan.markdown,
                 "model": plan.model_version, "quick_wins": plan.quick_wins, "not_actionable": plan.not_actionable,
                 "gaps": [g.as_dict() for g in plan.gaps], "dropped": plan.dropped,
-                "actions": [{**p.action.model_dump(), "points": round(p.points, 1), "points_text": p.points_text}
+                "actions": [{**p.action.model_dump(), "type_label": TYPE_LABELS.get(p.action.type, p.action.type),
+                             "points": round(p.points, 1), "points_text": p.points_text}
                             for p in plan.actions]}
 
     @app.get("/runs/{run_id}/plan", tags=["plan"])

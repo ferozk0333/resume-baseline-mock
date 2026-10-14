@@ -160,3 +160,31 @@ def test_daily_limit_in_a_run_is_reported_as_paused(tmp_path, monkeypatch):
     judge.script = lambda q, c: JudgeError(daily_limit_message("gemini-3.8-flash")) if q == "complexity" else base(q, c)
     res = Pipeline(Deps(path, judge, today=TODAY)).score(cid, "baseline-data-scientist-entry")
     assert res["paused"].startswith("Daily free-tier limit for gemini-3.8-flash reached")
+
+
+def test_timeouts_are_retried_then_reported(limiter):
+    import requests
+
+    class Flaky(Session):
+        def post(self, url, json=None, headers=None, timeout=None):
+            if not self.responses:
+                raise requests.ReadTimeout("slow")
+            return super().post(url, json=json, headers=headers, timeout=timeout)
+
+    slept = []
+    flaky = Flaky()
+    flaky.responses = []
+    ok_after = Flaky(ok(EMPTY))
+    ok_after.responses = []                     # first call times out …
+
+    def post_once(url, json=None, headers=None, timeout=None, _state={"n": 0}):
+        _state["n"] += 1
+        if _state["n"] == 1:
+            raise requests.ReadTimeout("slow")
+        return FakeResponse(*ok(EMPTY))
+    ok_after.post = post_once
+    llm(ok_after, limiter, slept).parse(model="gemini/m", system="S", user="U", output_type=schemas.PortfolioExtract)
+    assert slept == [2]                         # … then it answers
+    with pytest.raises(LLMError, match="no answer"):
+        GeminiLLM(session=flaky, api_key="k", limiter=limiter, max_retries=2, sleep=lambda s: None).parse(
+            model="gemini/m", system="S", user="U", output_type=schemas.PortfolioExtract)

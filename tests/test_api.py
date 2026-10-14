@@ -183,3 +183,8 @@ def test_errors_are_clean_messages(api, monkeypatch):
     monkeypatch.setattr(gp.Pipeline, "start_onboarding", lambda *a, **k: 1 / 0)
     cid, task = onboard(api)
     assert task["status"] == "error" and "ZeroDivisionError" in task["error"] and "Traceback" not in task["error"]
+
+
+def test_level_years_warning(api):
+    assert api.get("/baselines-check", params={"level": "entry", "required_years": 4}).json()["warning"]
+    assert api.get("/baselines-check", params={"level": "entry", "required_years": 1}).json()["warning"] is None
