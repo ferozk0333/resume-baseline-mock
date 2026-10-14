@@ -7,11 +7,12 @@ const WEB_PORT = 3010;
 export default defineConfig({
   testDir: "./e2e",
   timeout: 90_000,
+  workers: 1,                       // both tests share one demo database
   globalSetup: "./e2e/global-setup.ts",
   use: { baseURL: `http://localhost:${WEB_PORT}`, channel: "chrome", screenshot: "only-on-failure" },
   webServer: [
     {
-      command: `rm -rf /tmp/rightstaff-e2e.db* /tmp/rightstaff-e2e-uploads; API_PORT=${API_PORT} make -C .. fake-api`,
+      command: `rm -rf /tmp/rightstaff-e2e.db* /tmp/rightstaff-e2e-uploads && cd .. && PRINT_TIMINGS=0 .venv/bin/python scripts/seed_recruiter_demo.py --db /tmp/rightstaff-e2e.db && API_PORT=${API_PORT} make fake-api`,
       url: `http://localhost:${API_PORT}/baselines`,
       reuseExistingServer: false,
       timeout: 60_000,

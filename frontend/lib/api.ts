@@ -82,3 +82,32 @@ export type Plan = { status: "ready" | "generating" | "failed" | "none"; error?:
 
 export const DIMENSIONS = ["experience", "expertise", "authority", "trust"] as const;
 export const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// --- Recruiter (phase 11) ------------------------------------------------------------------------------
+export type Job = { id: string; baseline_id: string; title: string; company: string; weights: Weights;
+  must_haves: string[]; preset: string | null; applicants?: number; baseline?: Baseline; presets?: string[];
+  presets_note?: string };
+export type ApplicantRow = { application_id: string; candidate_id: string; name: string | null; current_role: string | null;
+  status: "new" | "shortlisted" | "not_moving_forward"; run_id: string | null; scored: boolean; match: number | null;
+  confidence: number | null; must_haves_met: number; must_haves_total: number; why: string | null; tags: string[];
+  demo: string | null };
+export type MustHave = { criterion_id: string; name: string; kind: string;
+  status: "met_backed" | "met_on_paper" | "not_met" | "unknown" };
+export type Requirement = { criterion_id: string; name: string; kind: string; priority: string; must_have: boolean;
+  label: string | null; quote: string | null; backing: string; source: string | null; link: string | null };
+export type Repo = { id: string; name: string; description: string | null; url: string | null; languages: string;
+  own_commits: number | null; fork: boolean; counted: boolean; last_update: string | null; readme_excerpt: string | null };
+export type Panel = ApplicantRow & {
+  job: { id: string; title: string; company: string };
+  must_haves: MustHave[]; why_points: { text: string; evidence_ids: string[] }[];
+  questions: { question: string; topic: string; reason: string }[]; generated_label: string | null;
+  requirements: Requirement[]; dimensions: Record<string, number | null> | null;
+  subcategories: { key: string; label: string; dimension: string; status: string; score: number | null;
+    effective_weight: number; guidance: string | null }[];
+  work: { videos: MediaLink[]; repos: Repo[]; portfolio: { name: string; description: string | null; url: string | null }[];
+    portfolio_url: string | null; linkedin: { roles: Role[]; claims: Claim[]; certifications: Certification[] } | null;
+    resume_file: boolean; resume_file_kind: string | null };
+};
+export type CompareColumn = { application_id: string; name: string | null; match: number | null; confidence: number | null;
+  dimensions: Record<string, number | null> | null; must_haves_met: number; must_haves_total: number; scored: boolean;
+  demo: string | null; top_evidence: Requirement[] };

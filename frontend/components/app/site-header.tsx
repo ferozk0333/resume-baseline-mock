@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 export function SiteHeader() {
   const path = usePathname();
   const recruiter = path.startsWith("/recruiter");
-  const nav = [
+  const nav = recruiter ? [{ href: "/recruiter", label: "Jobs" }] : [
     { href: "/", label: "Candidates" },
     { href: "/baselines", label: "Baselines" },
   ];
@@ -16,7 +16,7 @@ export function SiteHeader() {
         <Link href="/" className="text-base font-semibold tracking-tight">
           Right<span className="text-primary">Staff</span>
         </Link>
-        {!recruiter && (
+        {(
           <nav aria-label="Main" className="flex items-center gap-1 text-sm">
             {nav.map((n) => (
               <Link
