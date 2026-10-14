@@ -264,3 +264,22 @@ def test_runaway_twice_marks_the_source_failed_with_a_warning(tmp_path):
     row = conn.execute("SELECT status, error FROM evidence_items WHERE type = 'resume'").fetchone()
     assert row["status"] == "failed" and RUNAWAY_MESSAGE in row["error"]
     assert any(RUNAWAY_MESSAGE in w for w in result.warnings)
+
+
+def test_identical_document_is_extracted_once_but_a_rerun_asks_again(tmp_path, monkeypatch):
+    from core import config
+    from graph.context import Deps
+    from graph.pipeline import Pipeline
+    from tests.helpers import SAMPLE_RESUME_LINES, make_pdf, sample_resume_extract
+    monkeypatch.setattr(config, "UPLOAD_DIR", tmp_path / "uploads")
+    path = str(tmp_path / "x.db")
+    db.init_app_db(path).close()
+    llm = FakeLLM({"resume": sample_resume_extract()})
+    pipe = Pipeline(Deps(path, judge=None, llm=llm, extraction_cache=True))
+    upload = Upload("cv.pdf", make_pdf(SAMPLE_RESUME_LINES))
+    first = pipe.start_onboarding(OnboardingInputs(resume=upload), "baseline-data-scientist-entry", early=False)
+    pipe.start_onboarding(OnboardingInputs(resume=upload), "baseline-data-scientist-entry", early=False)
+    assert len(llm.calls) == 1                                    # second upload: from the cache
+    pipe.start_onboarding(OnboardingInputs(resume=upload, candidate_id=first["candidate_id"]),
+                          "baseline-data-scientist-entry", early=False)
+    assert len(llm.calls) == 2                                    # "Re-run extraction": fresh call

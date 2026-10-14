@@ -25,7 +25,7 @@ from langgraph.types import Command, interrupt
 from core import config, db, timing
 from core.db import new_id, now_iso
 from extraction import schemas, store
-from extraction.extract import extract_all, output_type
+from extraction.extract import ExtractionCache, extract_all, output_type
 from extraction.onboard import (
     NO_RESUME_MESSAGE, CertificationForm, OnboardingInputs, ReferenceForm, Upload, docs_to_extract,
     finish_onboarding, form_profile, ingest, validate_results,
@@ -137,7 +137,14 @@ def _ingest(deps: Deps):
 def _extract(deps: Deps):
     def node(state: RunState) -> dict:
         docs = docs_to_extract([doc_from_state(d) for d in state["docs"]])
-        results = extract_all(docs, deps.llm) if docs else {}
+        # A re-run for an existing candidate ("Re-run extraction") always asks the model again.
+        rerun = bool((state.get("inputs") or {}).get("candidate_id"))
+        conn = db.connect(deps.db_path) if deps.extraction_cache and not rerun else None
+        try:
+            results = extract_all(docs, deps.llm, ExtractionCache(conn) if conn else None) if docs else {}
+        finally:
+            if conn is not None:
+                conn.close()
         return {"extractions": {eid: ({"error": str(r)} if isinstance(r, Exception) else {"ok": r.model_dump()})
                                 for eid, r in results.items()}}
     return node

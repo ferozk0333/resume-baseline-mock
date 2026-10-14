@@ -64,7 +64,7 @@ def default_deps() -> Deps:
     from judges.service import get_judge
     if not config.ANTHROPIC_API_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY is not set in .env.")
-    return Deps(str(config.DB_PATH), get_judge(), llm=ClaudeLLM(),
+    return Deps(str(config.DB_PATH), get_judge(), llm=ClaudeLLM(), extraction_cache=True,
                 planner=ClaudeLLM(max_tokens=config.PLAN_MAX_TOKENS))
 
 

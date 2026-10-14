@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -156,6 +156,13 @@ CREATE TABLE IF NOT EXISTS document_texts (
   PRIMARY KEY (file_sha256, normalizer)
 );
 
+CREATE TABLE IF NOT EXISTS extraction_cache (
+  key TEXT PRIMARY KEY,           -- sha256 of model + system prompt + schema + user message
+  model TEXT,
+  output_json TEXT,
+  created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS http_cache (
   key TEXT PRIMARY KEY,           -- URL + Accept header; never the token
   status INTEGER,
@@ -256,6 +263,8 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 DOCUMENT_TEXTS = """CREATE TABLE IF NOT EXISTS document_texts (
   file_sha256 TEXT, normalizer TEXT, text TEXT, created_at TEXT, PRIMARY KEY (file_sha256, normalizer))"""
+EXTRACTION_CACHE = """CREATE TABLE IF NOT EXISTS extraction_cache (
+  key TEXT PRIMARY KEY, model TEXT, output_json TEXT, created_at TEXT)"""
 HTTP_CACHE = """CREATE TABLE IF NOT EXISTS http_cache (
   key TEXT PRIMARY KEY, status INTEGER, headers_json TEXT, body TEXT, fetched_at TEXT)"""
 
@@ -294,6 +303,7 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (9, ["ALTER TABLE runs ADD COLUMN timings_json TEXT"]),
     (10, [DOCUMENT_TEXTS, HTTP_CACHE]),
     (11, ["ALTER TABLE runs ADD COLUMN plan_status TEXT"]),
+    (12, [EXTRACTION_CACHE]),
 ]
 
 
