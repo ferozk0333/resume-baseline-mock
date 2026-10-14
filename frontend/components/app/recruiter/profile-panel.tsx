@@ -251,11 +251,15 @@ function Work({ p }: { p: Panel }) {
   return (
     <div className="space-y-5">
       {p.work.videos.length > 0 && (
-        <div className="grid gap-3 lg:grid-cols-2">
-          {p.work.videos.map((v) => (
-            <iframe key={v.id} src={v.embed_url} title={v.title ?? `${v.kind} demo video`} loading="lazy"
-              allow="encrypted-media; picture-in-picture" allowFullScreen className="aspect-video w-full rounded-lg border" />
-          ))}
+        <div>
+          <h4 className="text-sm font-medium">Project demo videos</h4>
+          <p className="mb-2 text-xs text-muted-foreground">Walkthroughs of the demo, architecture and design choices, from the candidate.</p>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {p.work.videos.map((v) => (
+              <iframe key={v.id} src={v.embed_url} title={v.title ?? `${v.kind} demo video`} loading="lazy"
+                allow="encrypted-media; picture-in-picture" allowFullScreen className="aspect-video w-full rounded-lg border" />
+            ))}
+          </div>
         </div>
       )}
       {p.work.repos.length > 0 && (

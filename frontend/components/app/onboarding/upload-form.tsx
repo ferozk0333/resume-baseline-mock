@@ -95,8 +95,11 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Demo videos</CardTitle>
-          <CardDescription>Up to 3 YouTube or Loom links. Shown on your profile; not scored.</CardDescription>
+          <CardTitle className="text-base">Project demo videos</CardTitle>
+          <CardDescription>
+            Short walkthroughs of your projects: show the demo, explain the architecture and the design choices you
+            made. 1–2 minutes each is ideal. Up to 3 YouTube or Loom links; shown to recruiters, not scored.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {videos.map((v, i) => (
