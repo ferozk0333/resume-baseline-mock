@@ -47,7 +47,7 @@ robustness checks only: it is never an applicant.
   machine. `smtp` sends with `SMTP_*` and `EMAIL_FROM`. While `DEMO_EMAIL_TO` is set (default), every email goes
   to that address only, with the intended recipient named in the subject and body.
 - `make demo` runs on fakes: candidate uploads are not read and get preset scores (a banner says so). For real
-  processing of an upload (Jev + Gemini, never Claude), stop the demo and run `make live`.
+  processing of an upload (Jev + Gemini, never Claude), stop the demo and run `make live` (same database, so the recruiter jobs stay).
 - Paused "Not moving forward" drafts and interview loops are checkpointed to `<db>.graphs.db` (LangGraph SQLite)
   and survive a restart.
 - `make demo` drafts emails with templates (no model). For model drafts on the free tier:

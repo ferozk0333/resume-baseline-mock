@@ -31,9 +31,11 @@ demo:
 	$(MAKE) fake-api
 
 # Real processing of uploads on the free tier: Jev judges, Gemini for extraction, fallback, complexity and plan
-# (never Claude). Uses rightstaff.db. Stop `make demo` first: both serve port 8000 to the same web app.
+# (never Claude). Same database as the demo (data/demo.db), so the recruiter jobs stay and real runs join the
+# comparison pools (demo pool: 5 candidates, groups of 2). Stop `make demo` first: both serve port 8000.
 live:
-	LLM_PROVIDER=gemini $(UVICORN) backend.main:create_app --factory --port 8000
+	LLM_PROVIDER=gemini RIGHTSTAFF_DB=$${RIGHTSTAFF_DEMO_DB:-data/demo.db} MIN_POOL=$${MIN_POOL:-5} MIN_GROUP=$${MIN_GROUP:-2} \
+	$(UVICORN) backend.main:create_app --factory --port 8000
 
 test:
 	$(PY) -m pytest -q
