@@ -252,13 +252,16 @@ class GroqLLM:
 
 
 class RoutedLLM:
-    """Sends each call to Claude or Groq by its model name ("groq/…" → Groq)."""
+    """Sends each call to Claude, Gemini ("gemini/…") or Groq ("groq/…") by its model name."""
 
     def __init__(self, max_tokens: int | None = None, effort: str | None = None):
         self.max_tokens, self.effort = max_tokens, effort
         self._claude = self._groq = None
 
     def _for(self, model: str):
+        if is_gemini(model):
+            self._gemini = getattr(self, "_gemini", None) or GeminiLLM(max_tokens=self.max_tokens)
+            return self._gemini
         if is_groq(model):
             self._groq = self._groq or GroqLLM(max_tokens=self.max_tokens)
             return self._groq
@@ -267,3 +270,214 @@ class RoutedLLM:
 
     def parse(self, *, model: str, system: str, user: str, output_type: type[T]) -> T:
         return self._for(model).parse(model=model, system=system, user=user, output_type=output_type)
+
+
+# --- Gemini (Google AI Studio) -------------------------------------------------------------------------
+
+GEMINI_PREFIX = "gemini/"
+
+
+def is_gemini(model: str) -> bool:
+    return model.startswith(GEMINI_PREFIX)
+
+
+class DailyLimitReached(LLMError):
+    """A free-tier daily quota is used up. Saved extractions and judgments are kept: run again after the reset."""
+
+
+def pacific_day():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("America/Los_Angeles")).date()
+
+
+def daily_limit_message(model: str) -> str:
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("America/Los_Angeles"))
+    reset = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    hours = (reset - now).total_seconds() / 3600
+    return (f"Daily free-tier limit for {model} reached. Everything extracted and judged so far is saved; "
+            f"run again after midnight Pacific (in about {hours:.0f} h) and it continues where it stopped.")
+
+
+class RateLimiter:
+    """Requests and tokens per minute (in memory) and requests per day (SQLite, survives restarts), per model.
+
+    acquire() blocks until the request fits the per-minute limits, or raises DailyLimitReached.
+    """
+
+    def __init__(self, provider: str, rpm: int, tpm: int, rpd: int, db_path: str | None = None, clock=None,
+                 sleep=None):
+        import threading
+        import time as _time
+        self.provider, self.rpm, self.tpm, self.rpd = provider, rpm, tpm, rpd
+        self.db_path = db_path
+        self.clock = clock or _time.monotonic
+        self.sleep = sleep or _time.sleep
+        self._lock = threading.Lock()
+        self._recent: dict[str, list[tuple[float, int]]] = {}       # model → [(time, tokens)]
+
+    def _conn(self):
+        from core import db
+        return db.connect(self.db_path or config.DB_PATH)
+
+    def used_today(self, model: str) -> int:
+        conn = self._conn()
+        try:
+            row = conn.execute("SELECT requests FROM provider_usage WHERE provider = ? AND model = ? AND day = ?",
+                               (self.provider, model, pacific_day().isoformat())).fetchone()
+            return row[0] if row else 0
+        finally:
+            conn.close()
+
+    def _record(self, model: str, tokens: int) -> None:
+        conn = self._conn()
+        try:
+            with conn:
+                conn.execute("INSERT INTO provider_usage (provider, model, day, requests, tokens) VALUES (?, ?, ?, 1, ?) "
+                             "ON CONFLICT(provider, model, day) DO UPDATE SET requests = requests + 1, "
+                             "tokens = tokens + excluded.tokens",
+                             (self.provider, model, pacific_day().isoformat(), tokens))
+        finally:
+            conn.close()
+
+    def exhaust_today(self, model: str) -> None:
+        """The API said the daily quota is gone: remember it so later calls stop at once."""
+        conn = self._conn()
+        try:
+            with conn:
+                conn.execute("INSERT INTO provider_usage (provider, model, day, requests, tokens) VALUES (?, ?, ?, ?, 0) "
+                             "ON CONFLICT(provider, model, day) DO UPDATE SET requests = MAX(requests, excluded.requests)",
+                             (self.provider, model, pacific_day().isoformat(), self.rpd))
+        finally:
+            conn.close()
+
+    def acquire(self, model: str, tokens: int) -> None:
+        if self.used_today(model) >= self.rpd:
+            raise DailyLimitReached(daily_limit_message(model))
+        while True:
+            with self._lock:
+                now = self.clock()
+                window = [(t, n) for t, n in self._recent.get(model, []) if now - t < 60]
+                self._recent[model] = window
+                fits = len(window) < self.rpm and sum(n for _, n in window) + tokens <= self.tpm
+                if fits or not window:
+                    window.append((now, tokens))
+                    break
+                wait = 60 - (now - window[0][0]) + 0.05
+            timing.count(f"{self.provider}_throttled")
+            self.sleep(max(wait, 0.05))
+        self._record(model, tokens)
+
+
+_GEMINI_LIMITER: RateLimiter | None = None
+
+
+def gemini_limiter() -> RateLimiter:
+    global _GEMINI_LIMITER
+    if _GEMINI_LIMITER is None:
+        _GEMINI_LIMITER = RateLimiter("gemini", config.GEMINI_RPM, config.GEMINI_TPM, config.GEMINI_RPD)
+    return _GEMINI_LIMITER
+
+
+def gemini_schema(schema: dict) -> dict:
+    """Pydantic JSON schema → the subset Gemini accepts: $defs inlined, no defaults."""
+    defs = schema.get("$defs", {})
+
+    def fix(node):
+        if isinstance(node, dict):
+            if "$ref" in node:
+                return fix(json.loads(json.dumps(defs[node["$ref"].split("/")[-1]])))
+            out = {}
+            for k, v in node.items():
+                if k in ("$defs", "default", "title"):          # schema annotations, not field names
+                    continue
+                out[k] = {name: fix(sub) for name, sub in v.items()} if k == "properties" else fix(v)
+            return out
+        if isinstance(node, list):
+            return [fix(v) for v in node]
+        return node
+    return fix(schema)
+
+
+class GeminiLLM:
+    """Structured call to Gemini (generateContent with a JSON schema); same contract as ClaudeLLM.parse.
+
+    The system prompt goes in systemInstruction and the document only in the user turn (CLAUDE.md rule 9).
+    """
+
+    RETRY_STATUSES = {500, 502, 503, 504}
+
+    def __init__(self, session=None, api_key: str | None = None, max_tokens: int | None = None,
+                 limiter: RateLimiter | None = None, max_retries: int = 6, sleep=None):
+        import requests
+        import time as _time
+        self.session = session or requests.Session()
+        self.api_key = api_key if api_key is not None else config.GEMINI_API_KEY
+        self.max_tokens = max_tokens or config.EXTRACT_MAX_TOKENS
+        self.limiter = limiter
+        self.max_retries = max_retries
+        self.sleep = sleep or _time.sleep
+
+    @staticmethod
+    def _retry_delay(data: dict) -> float:
+        for d in (data.get("error") or {}).get("details", []):
+            if "retryDelay" in d:
+                return float(str(d["retryDelay"]).rstrip("s") or 5)
+        return 5.0
+
+    @staticmethod
+    def _is_daily(data: dict) -> bool:
+        text = json.dumps(data.get("error") or {})
+        return "PerDay" in text or "per day" in text.lower()
+
+    def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
+        from core.limits import gemini_slots
+        if not self.api_key:
+            raise LLMError("GEMINI_API_KEY is not set in .env.")
+        name = model.removeprefix(GEMINI_PREFIX)
+        limiter = self.limiter or gemini_limiter()
+        gen = {"responseMimeType": "application/json",
+               "responseJsonSchema": gemini_schema(output_type.model_json_schema()),
+               "temperature": 0, "maxOutputTokens": self.max_tokens}
+        if config.GEMINI_THINKING_LEVEL:
+            gen["thinkingConfig"] = {"thinkingLevel": config.GEMINI_THINKING_LEVEL}
+        body = {"systemInstruction": {"parts": [{"text": system}]},
+                "contents": [{"role": "user", "parts": [{"text": user}]}], "generationConfig": gen}
+        estimate = (len(system) + len(user)) // 3 + self.max_tokens // 4
+        for attempt in range(self.max_retries + 1):
+            limiter.acquire(name, estimate)
+            with gemini_slots, timing.span(timing.MODEL, "gemini", model=model):
+                resp = self.session.post(config.GEMINI_URL.format(model=name), json=body,
+                                         headers={"x-goog-api-key": self.api_key}, timeout=(10, 300))
+                data = resp.json() if resp.text else {}
+                if resp.status_code == 200:
+                    usage = data.get("usageMetadata") or {}
+                    timing.note(input_tokens=int(usage.get("promptTokenCount") or 0),
+                                output_tokens=int(usage.get("candidatesTokenCount") or 0)
+                                + int(usage.get("thoughtsTokenCount") or 0))
+                    break
+            if resp.status_code == 429:
+                timing.count("gemini_429")
+                if self._is_daily(data):
+                    limiter.exhaust_today(name)
+                    raise DailyLimitReached(daily_limit_message(name))
+            elif resp.status_code not in self.RETRY_STATUSES:
+                raise LLMError(f"{model} call failed: HTTP {resp.status_code}: {resp.text[:300]}")
+            if attempt == self.max_retries:
+                raise LLMError(f"{model} call failed after {attempt + 1} attempts: HTTP {resp.status_code}")
+            timing.count("gemini_retries")
+            self.sleep(min(self._retry_delay(data) if resp.status_code == 429 else 2 ** attempt * 2, 60))
+        candidate = (data.get("candidates") or [{}])[0]
+        if candidate.get("finishReason") not in (None, "STOP"):
+            if candidate.get("finishReason") == "MAX_TOKENS":
+                raise LLMError(f"{model} output was cut off at max_tokens")
+            raise LLMError(f"{model} stopped: {candidate.get('finishReason')}")
+        parts = (candidate.get("content") or {}).get("parts") or []
+        content = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+        if is_runaway(content[-400:]):
+            raise RunawayOutput(f"{model} output started repeating {content[-40:]!r}")
+        return output_type.model_validate_json(content)
+
+    parse = ClaudeLLM.parse      # same retry rules (validation once, runaway once)

@@ -697,3 +697,12 @@ def test_router_sends_groq_models_to_groq_and_judgments_record_the_provider(monk
     assert isinstance(r._for("groq/openai/gpt-oss-120b"), GroqLLM)
     assert isinstance(r._for("claude-haiku-4-5-20251001"), ClaudeLLM)
     assert method_of("groq/qwen/qwen3.8-27b") == "groq" and method_of("claude-sonnet-5-5") == "claude"
+
+
+def test_extraction_prompt_has_short_quotes_and_the_skill_tool_rule():
+    from extraction.extract import load_prompt
+    load_prompt.cache_clear()
+    prompt = load_prompt("extract_system")
+    assert "`quote` is the skill or tool name exactly as written" in prompt
+    assert "tool = a programming language, library, framework, platform" in prompt
+    assert "skill = a method, technique or ability" in prompt

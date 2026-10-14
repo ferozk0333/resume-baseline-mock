@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, create_model
 
 from core import config
-from core.llm import LLMError, RoutedLLM, StructuredLLM, is_groq
+from core.llm import LLMError, RoutedLLM, StructuredLLM, is_gemini, is_groq
 from extraction.extract import load_prompt
 from extraction.validate import QuoteIndex
 from core.text import wrap_tag
@@ -67,11 +67,11 @@ def split_shared(contexts: list[dict]) -> tuple[dict, list[dict]]:
 
 def method_of(model: str) -> str:
     """Stored judgment method: the provider that answered."""
-    return "groq" if is_groq(model) else "claude"
+    return "groq" if is_groq(model) else "gemini" if is_gemini(model) else "claude"
 
 
 class ClaudeJudge:
-    """Claude (or Groq, when the configured model is "groq/…") as judge."""
+    """Claude as judge, or Gemini / Groq when the configured model is "gemini/…" / "groq/…"."""
 
     def __init__(self, llm: StructuredLLM | None = None):
         self.llm = llm or RoutedLLM(max_tokens=JUDGE_MAX_TOKENS, effort=config.JUDGE_EFFORT)

@@ -29,17 +29,47 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 JEV_API_KEY = os.getenv("JEV_API_KEY", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 # Groq (OpenAI-compatible, hosted open models). Use a model as "groq/<model id>", e.g. EXTRACT_MODEL=groq/openai/gpt-oss-120b.
-GROQ_API_KEY = _env("GROQ_API_KEY", _env("GROK_API_KEY", ""))
+GROQ_API_KEY = _env("GROQ_API_KEY", "")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_CONCURRENCY = int(_env("GROQ_CONCURRENCY", "2"))
 GROQ_TPM = int(_env("GROQ_TPM", "8000"))           # tokens per minute of your Groq tier (free: 8000); caps each request
 GROQ_REASONING_EFFORT = _env("GROQ_REASONING_EFFORT", "low")   # gpt-oss reasoning tokens count toward the limit
 JUDGE = _env("JUDGE", "jev")  # jev | claude
-EXTRACT_MODEL = _env("EXTRACT_MODEL", "claude-haiku-4-5-20251001")
-JUDGE_FALLBACK_MODEL = _env("JUDGE_FALLBACK_MODEL", "claude-haiku-4-5-20251001")
-REASONING_MODEL = _env("REASONING_MODEL", "claude-sonnet-5-5")
+# Provider for the roles Claude had (extraction, fallback judging, complexity, plan): claude | gemini.
+# Jev stays the main judge. Groq stays available per model ("groq/<id>").
+LLM_PROVIDER = _env("LLM_PROVIDER", "claude")
+GEMINI_API_KEY = _env("GEMINI_API_KEY", "")
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+# Free-tier models (pricing page, 2026-10-13). Set LLM_PROVIDER=gemini to use them.
+GEMINI_MODELS = {
+    "extract": _env("GEMINI_EXTRACT_MODEL", "gemini-3.8-flash"),
+    "judge": _env("GEMINI_JUDGE_MODEL", "gemini-3.5-flash-lite"),
+    "complexity": _env("GEMINI_COMPLEXITY_MODEL", "gemini-3.8-flash"),
+    "plan": _env("GEMINI_PLAN_MODEL", "gemini-3.8-flash"),
+}
+# Free-tier limits are shown per project in AI Studio (aistudio.google.com/rate-limit), not in the docs:
+# copy yours here. Applied per model. RPD resets at midnight Pacific.
+GEMINI_RPM = int(_env("GEMINI_RPM", "10"))
+GEMINI_TPM = int(_env("GEMINI_TPM", "250000"))
+GEMINI_RPD = int(_env("GEMINI_RPD", "250"))
+GEMINI_CONCURRENCY = int(_env("GEMINI_CONCURRENCY", "4"))
+GEMINI_THINKING_LEVEL = _env("GEMINI_THINKING_LEVEL", "low")
+
+
+def _role_model(env: str, claude_default: str, role: str) -> str:
+    """The model for one role. With LLM_PROVIDER=gemini, Claude IDs in .env are replaced by the Gemini model
+    for the role; an explicit "gemini/…" or "groq/…" setting always wins."""
+    explicit = os.getenv(env, "").split("#", 1)[0].strip()
+    if LLM_PROVIDER == "gemini":
+        return explicit if explicit.startswith(("gemini/", "groq/")) else f"gemini/{GEMINI_MODELS[role]}"
+    return explicit or claude_default
+
+
+EXTRACT_MODEL = _role_model("EXTRACT_MODEL", "claude-haiku-4-5-20251001", "extract")
+JUDGE_FALLBACK_MODEL = _role_model("JUDGE_FALLBACK_MODEL", "claude-haiku-4-5-20251001", "judge")
+REASONING_MODEL = _role_model("REASONING_MODEL", "claude-sonnet-5-5", "plan")
 # Complexity judgments; can be switched to Haiku if labels flip between fresh runs (07 §5).
-COMPLEXITY_MODEL = _env("COMPLEXITY_MODEL", REASONING_MODEL)
+COMPLEXITY_MODEL = _role_model("COMPLEXITY_MODEL", REASONING_MODEL, "complexity")
 JEV_MODEL = _env("JEV_MODEL", "jev-1.13.0")   # pinned; saved judgments are matched on this version
 JEV_URL = "https://api.typesafe.ai/v1/systemone"
 # Effort per purpose (low | medium | high; empty = the model's default: high on Sonnet 5.5, medium on

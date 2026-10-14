@@ -5,6 +5,7 @@ Rules:
 - Keep quotes short. For a claim, `quote` is the skill or tool name exactly as written (or the shortest exact span that contains it), never the whole skills line or the whole bullet.
 - Dates as YYYY-MM. Year-only "2022" stays "2022" (code will normalize). "Present"/"Current" → is_current = true.
 - Keep skill and tool names exactly as written; do not normalize or merge them.
+- Claim kind: tool = a programming language, library, framework, platform, cloud service or product (e.g. Python, pandas, PyTorch, scikit-learn, XGBoost, AWS SageMaker, Tableau); skill = a method, technique or ability (e.g. random forest, hyperparameter tuning, experiment tracking, A/B testing, stakeholder communication).
 - One claim per named skill or tool. A list such as "Chroma, Qdrant, OpenSearch" is three claims; a label followed by a list, such as "Vector databases (Chroma, Qdrant)", gives one claim per listed name. Names that contain a slash stay whole ("CI/CD", "A/B testing").
 - Certification = a credential issued by an organisation after an exam or a course (e.g. "AWS Certified Solutions Architect – Associate"). Publication = a paper, article, poster or talk the candidate authored or co-authored; extract it as a project with kind "publication", never as a certification.
 - A skill listed in a skills section with no surrounding sentence → claim with bullet_ref = null.

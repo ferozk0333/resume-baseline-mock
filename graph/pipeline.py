@@ -493,7 +493,12 @@ class Pipeline:
         values = snapshot.values
         if values.get("run_id") and values.get("final") is not None and not pending:
             self._save_timings(values["run_id"], rec)
-        return {**values, "thread_id": thread_id, "awaiting_review": pending[0].value if pending else None}
+        # A free-tier daily quota stopped some calls: say so plainly (saved work is reused on the next run).
+        stopped = next((m for m in [*(values.get("errors") or []), *(values.get("warnings") or [])]
+                        if "Daily free-tier limit" in m), None)
+        paused = stopped[stopped.index("Daily free-tier limit"):] if stopped else None
+        return {**values, "thread_id": thread_id, "awaiting_review": pending[0].value if pending else None,
+                "paused": paused}
 
     @staticmethod
     def _time(rec: timing.Recorder, started: dict, event: TaskEvent, chunk: dict) -> None:

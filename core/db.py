@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -156,6 +156,13 @@ CREATE TABLE IF NOT EXISTS document_texts (
   PRIMARY KEY (file_sha256, normalizer)
 );
 
+CREATE TABLE IF NOT EXISTS provider_usage (  -- free-tier daily quota, counted across restarts
+  provider TEXT, model TEXT,
+  day TEXT,                       -- Pacific date (quotas reset at midnight Pacific)
+  requests INTEGER, tokens INTEGER,
+  PRIMARY KEY (provider, model, day)
+);
+
 CREATE TABLE IF NOT EXISTS extraction_cache (
   key TEXT PRIMARY KEY,           -- sha256 of model + system prompt + schema + user message
   model TEXT,
@@ -265,6 +272,8 @@ DOCUMENT_TEXTS = """CREATE TABLE IF NOT EXISTS document_texts (
   file_sha256 TEXT, normalizer TEXT, text TEXT, created_at TEXT, PRIMARY KEY (file_sha256, normalizer))"""
 EXTRACTION_CACHE = """CREATE TABLE IF NOT EXISTS extraction_cache (
   key TEXT PRIMARY KEY, model TEXT, output_json TEXT, created_at TEXT)"""
+PROVIDER_USAGE = """CREATE TABLE IF NOT EXISTS provider_usage (
+  provider TEXT, model TEXT, day TEXT, requests INTEGER, tokens INTEGER, PRIMARY KEY (provider, model, day))"""
 HTTP_CACHE = """CREATE TABLE IF NOT EXISTS http_cache (
   key TEXT PRIMARY KEY, status INTEGER, headers_json TEXT, body TEXT, fetched_at TEXT)"""
 
@@ -304,6 +313,7 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (10, [DOCUMENT_TEXTS, HTTP_CACHE]),
     (11, ["ALTER TABLE runs ADD COLUMN plan_status TEXT"]),
     (12, [EXTRACTION_CACHE]),
+    (13, [PROVIDER_USAGE]),
 ]
 
 

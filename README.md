@@ -23,6 +23,12 @@ Groq instead by naming a Groq model with a `groq/` prefix, e.g. `EXTRACT_MODEL=g
 (strict JSON schema; `GROQ_API_KEY` in `.env`). Groq's free tier allows 8,000 tokens per minute, which is
 too small for a full resume extraction or a full scoring run; it works for single small documents.
 
+`LLM_PROVIDER=gemini` moves all four roles to Gemini models (`GEMINI_*_MODEL`, free-tier ones by default).
+The free tier's limits are per project and shown in AI Studio, so set `GEMINI_RPM`, `GEMINI_TPM` and
+`GEMINI_RPD`; when the daily quota runs out the run stops with a message, and the next run (after midnight
+Pacific) reuses everything already extracted and judged. Free-tier prompts may be used by Google and read by
+human reviewers: don't send real personal data on the free tier.
+
 ## Tests
 ```bash
 .venv/bin/python -m pytest -q                       # offline: FakeJudge and fixtures, no API calls
