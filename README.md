@@ -14,8 +14,11 @@ cp .env.example .env        # then fill in ANTHROPIC_API_KEY, JEV_API_KEY and (r
 cd frontend && npm install && cd ..
 make dev                    # API on :8000 (docs at /docs) + web app on :3000
 ```
-`make api` and `make web` start them separately. The previous Streamlit UI still runs with
-`.venv/bin/streamlit run app/Home.py` until everything it shows is carried over.
+`make api` and `make web` start them separately.
+
+The previous Streamlit UI is retired to `legacy/app/` unchanged and no longer maintained. It still runs with
+`PYTHONPATH=. .venv/bin/streamlit run legacy/app/Home.py`. What it showed that the new app doesn't yet is
+listed in `docs/backlog.md`.
 `GITHUB_TOKEN` can be a fine-grained, read-only token for public repositories. Without it GitHub
 allows 60 requests an hour, which one profile with ~20 repos nearly uses up. GitHub responses are
 cached in the database for 24 hours either way.

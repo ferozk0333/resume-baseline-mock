@@ -1,4 +1,5 @@
 """Phase 7: Streamlit pages run headless (AppTest) with fake deps. No network."""
+import sys
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -11,7 +12,9 @@ from extraction import schemas
 from tests.helpers import SAMPLE_RESUME_LINES, FakeLLM, make_pdf, sample_resume_extract, src
 
 DS = "baseline-data-scientist-entry"
-APP_DIR = config.ROOT / "app"
+APP_DIR = config.ROOT / "legacy" / "app"     # the retired Streamlit UI (phase 10)
+if str(APP_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(APP_DIR.parent))
 
 
 @pytest.fixture
