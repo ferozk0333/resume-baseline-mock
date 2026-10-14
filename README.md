@@ -17,6 +17,12 @@ cp .env.example .env        # then fill in ANTHROPIC_API_KEY, JEV_API_KEY and (r
 allows 60 requests an hour, which one profile with ~20 repos nearly uses up. GitHub responses are
 cached in the database for 24 hours either way.
 
+## Models
+Claude is the default for extraction, fallback judging, complexity and the plan. Any of these can run on
+Groq instead by naming a Groq model with a `groq/` prefix, e.g. `EXTRACT_MODEL=groq/openai/gpt-oss-120b`
+(strict JSON schema; `GROQ_API_KEY` in `.env`). Groq's free tier allows 8,000 tokens per minute, which is
+too small for a full resume extraction or a full scoring run; it works for single small documents.
+
 ## Tests
 ```bash
 .venv/bin/python -m pytest -q                       # offline: FakeJudge and fixtures, no API calls

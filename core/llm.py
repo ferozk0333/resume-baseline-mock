@@ -4,6 +4,7 @@ Shared by extraction and, later, the Claude judge and the gap report.
 """
 from __future__ import annotations
 
+import json
 import re
 from typing import Protocol, TypeVar
 
@@ -159,3 +160,110 @@ class ClaudeLLM:
                 return self._call(model, system, retry_user, output_type)
             except ValidationError as exc2:
                 raise LLMError(f"{model} output failed validation twice: {exc2}") from exc2
+
+
+# --- Groq (OpenAI-compatible) ---------------------------------------------------------------------
+
+GROQ_PREFIX = "groq/"
+
+
+def is_groq(model: str) -> bool:
+    return model.startswith(GROQ_PREFIX)
+
+
+def strict_schema(schema: dict) -> dict:
+    """Pydantic JSON schema → Groq strict mode: every object closed, every property required, no defaults."""
+    def fix(node):
+        if isinstance(node, dict):
+            node.pop("default", None)
+            for key in ("minLength", "maxLength", "minItems", "maxItems", "pattern", "format"):
+                node.pop(key, None)
+            if node.get("type") == "object" or "properties" in node:
+                node["additionalProperties"] = False
+                node["required"] = list(node.get("properties", {}))
+            for v in node.values():
+                fix(v)
+        elif isinstance(node, list):
+            for v in node:
+                fix(v)
+        return node
+    return fix(json.loads(json.dumps(schema)))
+
+
+class GroqLLM:
+    """Structured call to Groq with strict JSON schema; same contract as ClaudeLLM.parse.
+
+    Each request is capped to fit the tier's tokens-per-minute (prompt + completion), 429s wait for
+    `retry-after`, and the same validation and runaway retries apply as for Claude.
+    """
+
+    def __init__(self, session=None, api_key: str | None = None, max_tokens: int | None = None,
+                 effort: str | None = None, max_429_retries: int = 6):
+        import requests
+        self.session = session or requests.Session()
+        self.api_key = api_key if api_key is not None else config.GROQ_API_KEY
+        self.max_tokens = max_tokens or config.EXTRACT_MAX_TOKENS
+        self.effort = effort or config.GROQ_REASONING_EFFORT
+        self.max_429_retries = max_429_retries
+
+    def _budget(self, system: str, user: str) -> int:
+        est_input = (len(system) + len(user)) // 3 + 200            # conservative chars → tokens
+        return min(self.max_tokens, config.GROQ_TPM - est_input)
+
+    def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
+        import time as _time
+        from core.limits import groq_slots
+        if not self.api_key:
+            raise LLMError("GROQ_API_KEY is not set in .env.")
+        budget = self._budget(system, user)
+        if budget < 500:
+            raise LLMError(f"input too long for one {model} request within GROQ_TPM={config.GROQ_TPM}")
+        body = {"model": model.removeprefix(GROQ_PREFIX), "max_completion_tokens": budget, "temperature": 0,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                "response_format": {"type": "json_schema", "json_schema": {
+                    "name": output_type.__name__, "strict": True,
+                    "schema": strict_schema(output_type.model_json_schema())}}}
+        if "gpt-oss" in model and self.effort:
+            body["reasoning_effort"] = self.effort
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        for attempt in range(self.max_429_retries + 1):
+            with groq_slots, timing.span(timing.MODEL, "groq", model=model):
+                resp = self.session.post(config.GROQ_URL, json=body, headers=headers, timeout=120)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    usage = data.get("usage") or {}
+                    timing.note(input_tokens=int(usage.get("prompt_tokens") or 0),
+                                output_tokens=int(usage.get("completion_tokens") or 0))
+                    break
+            if resp.status_code == 429 and attempt < self.max_429_retries:
+                timing.count("groq_429")
+                _time.sleep(min(float(resp.headers.get("retry-after") or 5), 60))
+                continue
+            raise LLMError(f"{model} call failed: HTTP {resp.status_code}: {resp.text[:300]}")
+        choice = data["choices"][0]
+        content = choice["message"].get("content") or ""
+        if is_runaway(content[-400:]):
+            raise RunawayOutput(f"{model} output started repeating {content[-40:]!r}")
+        if choice.get("finish_reason") == "length":
+            raise LLMError(f"{model} output was cut off at {budget} tokens (GROQ_TPM={config.GROQ_TPM})")
+        return output_type.model_validate_json(content)
+
+    parse = ClaudeLLM.parse      # same retry rules (validation once, runaway once)
+
+
+class RoutedLLM:
+    """Sends each call to Claude or Groq by its model name ("groq/…" → Groq)."""
+
+    def __init__(self, max_tokens: int | None = None, effort: str | None = None):
+        self.max_tokens, self.effort = max_tokens, effort
+        self._claude = self._groq = None
+
+    def _for(self, model: str):
+        if is_groq(model):
+            self._groq = self._groq or GroqLLM(max_tokens=self.max_tokens)
+            return self._groq
+        self._claude = self._claude or ClaudeLLM(max_tokens=self.max_tokens, effort=self.effort)
+        return self._claude
+
+    def parse(self, *, model: str, system: str, user: str, output_type: type[T]) -> T:
+        return self._for(model).parse(model=model, system=system, user=user, output_type=output_type)

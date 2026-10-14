@@ -2,6 +2,7 @@ You extract structured facts from a candidate's document. Return JSON matching t
 Rules:
 - Extract only what the text states. Use null for absent fields. Never guess dates, numbers, employers or titles.
 - Every role, project, bullet, claim, certification and reference includes `quote`: the exact text it came from.
+- Keep quotes short. For a claim, `quote` is the skill or tool name exactly as written (or the shortest exact span that contains it), never the whole skills line or the whole bullet.
 - Dates as YYYY-MM. Year-only "2022" stays "2022" (code will normalize). "Present"/"Current" → is_current = true.
 - Keep skill and tool names exactly as written; do not normalize or merge them.
 - One claim per named skill or tool. A list such as "Chroma, Qdrant, OpenSearch" is three claims; a label followed by a list, such as "Vector databases (Chroma, Qdrant)", gives one claim per listed name. Names that contain a slash stay whole ("CI/CD", "A/B testing").

@@ -619,3 +619,81 @@ def test_extraction_prompt_defines_publications_and_one_claim_per_name():
     assert "Publication = a paper, article, poster or talk" in prompt
     assert "Certification = a credential issued by an organisation" in prompt
     assert '"Chroma, Qdrant, OpenSearch" is three claims' in prompt
+
+
+# --- Groq provider (phase 9 review) ------------------------------------------------------------------
+
+class GroqSession:
+    def __init__(self, *responses):
+        self.responses, self.bodies = list(responses), []
+
+    def post(self, url, json=None, headers=None, timeout=None):
+        from tests.helpers import FakeResponse
+        self.bodies.append(json)
+        status, payload, hdrs = self.responses.pop(0)
+        return FakeResponse(status, payload, headers=hdrs)
+
+
+def _groq_ok(content, finish="stop"):
+    import json as _json
+    return (200, {"choices": [{"message": {"content": _json.dumps(content) if not isinstance(content, str)
+                                            else content}, "finish_reason": finish}],
+                  "usage": {"prompt_tokens": 100, "completion_tokens": 50}}, {})
+
+
+def test_groq_request_uses_strict_schema_and_fits_the_token_limit(monkeypatch):
+    from core.llm import GroqLLM
+    monkeypatch.setattr(config, "GROQ_TPM", 8000)
+    session = GroqSession(_groq_ok({"projects": [], "claims": []}))
+    out = GroqLLM(session=session, api_key="k", max_tokens=12000).parse(
+        model="groq/openai/gpt-oss-120b", system="S" * 300, user="U" * 3000, output_type=schemas.PortfolioExtract)
+    assert out.projects == []
+    body = session.bodies[0]
+    assert body["model"] == "openai/gpt-oss-120b" and body["reasoning_effort"] == "low"
+    assert body["max_completion_tokens"] == 8000 - (3300 // 3 + 200)              # prompt + completion ≤ TPM
+    schema = body["response_format"]["json_schema"]
+    assert schema["strict"] is True
+
+    def closed(node):
+        if isinstance(node, dict):
+            if "properties" in node:
+                assert node["additionalProperties"] is False and set(node["required"]) == set(node["properties"])
+            assert "default" not in node
+            for v in node.values():
+                closed(v)
+        elif isinstance(node, list):
+            for v in node:
+                closed(v)
+    closed(schema["schema"])
+
+
+def test_groq_waits_on_429_then_succeeds(monkeypatch):
+    import time as _time
+    from core.llm import GroqLLM
+    slept = []
+    monkeypatch.setattr(_time, "sleep", slept.append)
+    session = GroqSession((429, {"error": "rate"}, {"retry-after": "2"}), _groq_ok({"projects": [], "claims": []}))
+    GroqLLM(session=session, api_key="k").parse(model="groq/openai/gpt-oss-20b", system="S", user="U",
+                                                output_type=schemas.PortfolioExtract)
+    assert slept == [2.0] and len(session.bodies) == 2
+
+
+def test_groq_cut_off_and_invalid_output_are_errors():
+    from core.llm import GroqLLM
+    cut = GroqSession(_groq_ok("{\"projects\": [", finish="length"))
+    with pytest.raises(LLMError, match="cut off"):
+        GroqLLM(session=cut, api_key="k").parse(model="groq/openai/gpt-oss-20b", system="S", user="U",
+                                                output_type=schemas.PortfolioExtract)
+    bad = GroqSession(_groq_ok({"nope": 1}), _groq_ok({"nope": 1}))
+    with pytest.raises(LLMError, match="validation twice"):
+        GroqLLM(session=bad, api_key="k").parse(model="groq/openai/gpt-oss-20b", system="S", user="U",
+                                                output_type=schemas.PortfolioExtract)
+
+
+def test_router_sends_groq_models_to_groq_and_judgments_record_the_provider(monkeypatch):
+    from core.llm import ClaudeLLM, GroqLLM, RoutedLLM
+    from judges.claude_judge import method_of
+    r = RoutedLLM()
+    assert isinstance(r._for("groq/openai/gpt-oss-120b"), GroqLLM)
+    assert isinstance(r._for("claude-haiku-4-5-20251001"), ClaudeLLM)
+    assert method_of("groq/qwen/qwen3.8-27b") == "groq" and method_of("claude-sonnet-5-5") == "claude"

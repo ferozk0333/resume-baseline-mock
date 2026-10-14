@@ -60,12 +60,13 @@ def connection():
 
 
 def default_deps() -> Deps:
-    from core.llm import ClaudeLLM
+    from core.llm import RoutedLLM
     from judges.service import get_judge
-    if not config.ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set in .env.")
-    return Deps(str(config.DB_PATH), get_judge(), llm=ClaudeLLM(effort=config.EXTRACT_EFFORT), extraction_cache=True,
-                planner=ClaudeLLM(max_tokens=config.PLAN_MAX_TOKENS, effort=config.PLAN_EFFORT))
+    models = [config.EXTRACT_MODEL, config.JUDGE_FALLBACK_MODEL, config.COMPLEXITY_MODEL, config.REASONING_MODEL]
+    if not config.ANTHROPIC_API_KEY and not all(m.startswith("groq/") for m in models):
+        raise RuntimeError("ANTHROPIC_API_KEY is not set in .env (or set every model to a groq/… model).")
+    return Deps(str(config.DB_PATH), get_judge(), llm=RoutedLLM(effort=config.EXTRACT_EFFORT), extraction_cache=True,
+                planner=RoutedLLM(max_tokens=config.PLAN_MAX_TOKENS, effort=config.PLAN_EFFORT))
 
 
 def build_deps() -> Deps:

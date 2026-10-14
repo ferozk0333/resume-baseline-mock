@@ -239,7 +239,7 @@ class JudgmentService:
         try:
             with timing.span(timing.JUDGE, key, batch=len(items)) as t:
                 answers = judge.batch(key, [{**ctx, "_subject_id": sid} for sid, ctx in items])
-                t.update(method="claude", model=next((a.model_version for a in answers if a), None))
+                t.update(method="batch", model=next((a.model_version for a in answers if a), None))
         except JudgeError as exc:
             log.warning("batched %s failed, asking each criterion alone: %s", key, exc)
             answers = [None] * len(items)

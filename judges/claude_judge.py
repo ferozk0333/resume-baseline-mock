@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, create_model
 
 from core import config
-from core.llm import ClaudeLLM, LLMError, StructuredLLM
+from core.llm import LLMError, RoutedLLM, StructuredLLM, is_groq
 from extraction.extract import load_prompt
 from extraction.validate import QuoteIndex
 from core.text import wrap_tag
@@ -65,11 +65,18 @@ def split_shared(contexts: list[dict]) -> tuple[dict, list[dict]]:
     return shared, [{k: v for k, v in c.items() if k not in shared and not k.startswith("_")} for c in contexts]
 
 
+def method_of(model: str) -> str:
+    """Stored judgment method: the provider that answered."""
+    return "groq" if is_groq(model) else "claude"
+
+
 class ClaudeJudge:
+    """Claude (or Groq, when the configured model is "groq/…") as judge."""
+
     def __init__(self, llm: StructuredLLM | None = None):
-        self.llm = llm or ClaudeLLM(max_tokens=JUDGE_MAX_TOKENS, effort=config.JUDGE_EFFORT)
+        self.llm = llm or RoutedLLM(max_tokens=JUDGE_MAX_TOKENS, effort=config.JUDGE_EFFORT)
         # Complexity reasons first on the reasoning model; its effort is set separately.
-        self.complexity_llm = llm or ClaudeLLM(max_tokens=JUDGE_MAX_TOKENS, effort=config.COMPLEXITY_EFFORT)
+        self.complexity_llm = llm or RoutedLLM(max_tokens=JUDGE_MAX_TOKENS, effort=config.COMPLEXITY_EFFORT)
 
     @staticmethod
     def model_for(key: str) -> str:
@@ -91,7 +98,7 @@ class ClaudeJudge:
         if quote and (out.label == q.none_option or not QuoteIndex(user).contains(quote)):
             quote = None  # never store a quote that is not in the input
         return Judgment(label=out.label, quote=quote, reasoning=out.reasoning.strip() or None,
-                        method="claude", model_version=model)
+                        method=method_of(model), model_version=model)
 
     def batch(self, key: str, contexts: list[dict]) -> list[Judgment | None]:
         """One call for several criteria that share the same candidate text (specs/09 §2.2).
@@ -122,7 +129,7 @@ class ClaudeJudge:
             if quote and (a.label == q.none_option or not QuoteIndex(render_context(ctx)).contains(quote)):
                 quote = None
             results.append(Judgment(label=a.label, quote=quote, reasoning=a.reasoning.strip() or None,
-                                    method="claude", model_version=model))
+                                    method=method_of(model), model_version=model))
         return results
 
     def choice(self, question_key: str, options: list[str], context: dict) -> Judgment:
