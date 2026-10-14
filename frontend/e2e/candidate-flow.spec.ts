@@ -8,11 +8,13 @@ test("upload → review → score → plan", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /Data Scientist/ }).click();
   await page.getByLabel("Name").fill("Jane Doe");
+  await page.screenshot({ path: "e2e/.tmp/home.png", fullPage: true });
   await page.getByRole("button", { name: "Start" }).click();
 
   // 1 · Upload
   await expect(page).toHaveURL(/\/candidates\/.+\/onboard/);
   await page.getByLabel("Resume *").setInputFiles(path.join(__dirname, ".tmp/cv.pdf"));
+  await page.screenshot({ path: "e2e/.tmp/upload.png", fullPage: true });
   await page.getByRole("button", { name: "Read my documents" }).click();
 
   // 2 · Review
@@ -44,5 +46,8 @@ test("upload → review → score → plan", async ({ page }) => {
   await expect(page.getByText("Build an A/B test project")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Ranked gaps")).toBeVisible();
   await page.screenshot({ path: "e2e/.tmp/plan.png", fullPage: true });
+  await page.getByRole("link", { name: "Baselines" }).click();
+  await expect(page.getByRole("cell", { name: /Data Scientist/ })).toBeVisible();
+  await page.screenshot({ path: "e2e/.tmp/baselines.png", fullPage: true });
   expect(problems).toEqual([]);
 });
