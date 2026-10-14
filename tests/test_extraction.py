@@ -562,7 +562,8 @@ def test_effort_reaches_the_sdk_call_and_passes_signature_check():
 
 @pytest.mark.parametrize("name,expected", [
     ("Chroma, Qdrant, OpenSearch", ["Chroma", "Qdrant", "OpenSearch"]),
-    ("Vector databases (Chroma, Qdrant, OpenSearch)", ["Chroma", "Qdrant", "OpenSearch"]),
+    ("Vector databases (Chroma, Qdrant, OpenSearch)", ["Vector databases (Chroma, Qdrant, OpenSearch)"]),
+    ("Hyperparameter tuning (Bayesian, Hyperband, Random)", ["Hyperparameter tuning (Bayesian, Hyperband, Random)"]),
     ("pandas, NumPy, and scikit-learn", ["pandas", "NumPy", "scikit-learn"]),
     ("Python and SQL", ["Python", "SQL"]),
     ("Docker & Kubernetes", ["Docker", "Kubernetes"]),
@@ -582,17 +583,32 @@ def _doc(text):
     return SourceDoc("ev-1", "resume", text, "Resume")
 
 
-def test_a_listed_group_becomes_one_claim_per_name():
+def test_flat_lists_split_but_parenthetical_names_and_slashes_stay_whole():
     from extraction.validate import validate_extraction
-    text = "Skills: Vector Databases (Chroma, Qdrant, OpenSearch), CI/CD, A/B testing"
+    text = ("Skills: Chroma, Qdrant, OpenSearch; Python and SQL; Docker & Kubernetes; CI/CD; A/B testing; "
+            "Hyperparameter tuning (Bayesian, Hyperband, Random)")
+    claim = lambda kind, name: schemas.Claim(kind=kind, name=name, bullet_ref=None, source=src(name))  # noqa: E731
     out = schemas.ProfileExtract(roles=[], projects=[], certifications=[], claims=[
-        schemas.Claim(kind="tool", name="Vector Databases (Chroma, Qdrant, OpenSearch)", bullet_ref=None,
-                      source=src("Vector Databases (Chroma, Qdrant, OpenSearch)")),
-        schemas.Claim(kind="tool", name="CI/CD", bullet_ref=None, source=src("CI/CD")),
-        schemas.Claim(kind="skill", name="A/B testing", bullet_ref=None, source=src("A/B testing"))])
+        claim("tool", "Chroma, Qdrant, OpenSearch"), claim("tool", "Python and SQL"),
+        claim("tool", "Docker & Kubernetes"), claim("tool", "CI/CD"), claim("skill", "A/B testing"),
+        claim("skill", "Hyperparameter tuning (Bayesian, Hyperband, Random)")])
     profile, report = validate_extraction(_doc(text), out)
-    assert [c.name_raw for c in profile.claims] == ["Chroma", "Qdrant", "OpenSearch", "CI/CD", "A/B testing"]
+    assert [c.name_raw for c in profile.claims] == [
+        "Chroma", "Qdrant", "OpenSearch", "Python", "SQL", "Docker", "Kubernetes", "CI/CD", "A/B testing",
+        "Hyperparameter tuning (Bayesian, Hyperband, Random)"]
     assert report.dropped == 0
+
+
+def test_award_claims_keep_their_context_from_the_quote():
+    from extraction.validate import award_name, validate_extraction
+    line = "Top 10 finalist out of 600+ teams, CSI National Hackathon"
+    out = schemas.ProfileExtract(roles=[], projects=[], certifications=[], claims=[
+        schemas.Claim(kind="award", name="Top 10 finalist", bullet_ref=None, source=src(line)),
+        schemas.Claim(kind="award", name="Dean's List", bullet_ref=None, source=src("Dean's List"))])
+    profile, _ = validate_extraction(_doc(f"Awards\n- {line}\n- Dean's List"), out)
+    assert [c.name_raw for c in profile.claims] == [line, "Dean's List"]
+    assert award_name("Fellowship", "Graduate fellowship, 2025") == "Graduate fellowship, 2025"
+    assert award_name("Best Paper Award", "Best Paper Award") == "Best Paper Award"
 
 
 def test_co_authored_journal_paper_is_a_publication_not_a_certification():
@@ -618,7 +634,9 @@ def test_extraction_prompt_defines_publications_and_one_claim_per_name():
     prompt = load_prompt("extract_system")
     assert "Publication = a paper, article, poster or talk" in prompt
     assert "Certification = a credential issued by an organisation" in prompt
-    assert '"Chroma, Qdrant, OpenSearch" is three claims' in prompt
+    assert '"Hyperparameter tuning (Bayesian, Hyperband, Random)" → one skill claim' in prompt
+    assert "An award claim keeps its event or context" in prompt
+    assert "not every method" in prompt or "Do not make a claim of every method" in prompt
 
 
 # --- Groq provider (phase 9 review) ------------------------------------------------------------------
@@ -703,6 +721,38 @@ def test_extraction_prompt_has_short_quotes_and_the_skill_tool_rule():
     from extraction.extract import load_prompt
     load_prompt.cache_clear()
     prompt = load_prompt("extract_system")
-    assert "`quote` is the skill or tool name exactly as written" in prompt
+    assert "For a skill or tool claim, `quote` is the name exactly as written" in prompt
     assert "tool = a programming language, library, framework, platform" in prompt
     assert "skill = a method, technique or ability" in prompt
+
+
+def test_prompts_have_no_provider_specific_wording():
+    from core import config
+    for path in config.PROMPTS_DIR.glob("*.txt"):
+        text = path.read_text().lower()
+        assert not any(name in text for name in ("claude", "gemini", "groq", "haiku", "sonnet")), path.name
+
+
+def test_compare_helpers_report_kinds_and_structural_proof_density():
+    import importlib.util
+    from core import config
+    spec = importlib.util.spec_from_file_location("compare_extraction", config.ROOT / "scripts" / "compare_extraction.py")
+    cmp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cmp)
+    profile = {"roles": [{"title": "Analyst", "employer": "Acme", "bullets": [{"text": "Built churn model in Python"}]}],
+               "projects": [{"kind": "publication", "name": "Paper on SQL tuning", "description": None, "bullets": []}],
+               "claims": [{"kind": "tool", "name_raw": "Python", "name_norm": "python"},
+                          {"kind": "tool", "name_raw": "SQL", "name_norm": "sql"},
+                          {"kind": "skill", "name_raw": "Tableau", "name_norm": "tableau"}],
+               "certifications": []}
+    score, counts = cmp.structural_proof_density(profile)
+    assert counts == {"artifact": 1, "bullet": 1, "claimed_only": 1} and score == pytest.approx(0.5)
+    other = {**profile, "claims": [{"kind": "skill", "name_raw": "Python", "name_norm": "python"}]}
+    assert cmp.kinds(profile)["python"] == "tool" and cmp.kinds(other)["python"] == "skill"
+    assert set(cmp.items(profile)) == {"role", "bullet", "project", "claim", "certification"}
+
+
+def test_runs_record_provider_and_models():
+    from judges.service import judge_models
+    m = judge_models()
+    assert {"llm_provider", "extract_model", "judge_fallback_model", "complexity_model", "plan_model"} <= set(m)

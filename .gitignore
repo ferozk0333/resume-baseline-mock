@@ -17,3 +17,6 @@ rightstaff-test-profiles/rendered/
 *.sqlite
 *.db
 timings/
+
+# Personal reference extraction (see tests/extraction_reference/README.md)
+tests/extraction_reference/*.json

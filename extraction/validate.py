@@ -237,12 +237,12 @@ _AND = re.compile(r"\s+(?:and|&)\s+", re.I)
 
 
 def split_claim_names(name: str) -> list[str]:
-    """One claim per named skill or tool: "Chroma, Qdrant, OpenSearch" → 3 names;
-    "Vector databases (Chroma, Qdrant)" → the listed names; "Python and SQL" → 2."""
+    """One claim per named skill or tool, for flat lists only: "Chroma, Qdrant, OpenSearch" → 3 names,
+    "Python and SQL" → 2. A name with parentheses is never split here: whether "X (a, b)" is a list of
+    tools or one method with variants is for the extraction prompt to decide, not code."""
     name = name.strip()
-    m = re.fullmatch(r"[^(),]+\(([^()]+)\)", name)
-    if m and re.search(r",|\s(?:and|&)\s", m.group(1)):
-        name = m.group(1)                                     # a label with its list in parentheses
+    if "(" in name or ")" in name:
+        return [name]
     if name.casefold() in _ONE_THING:
         return [name]
     parts = [p.strip() for p in re.split(r"[,;]", name) if p.strip()]
@@ -261,6 +261,16 @@ _AUTHORED = re.compile(r"\b(co-?authors?(?:ed)?|authors?(?:ed)?|et al\.?|journal
                        r"conference paper|paper|poster|talk|preprint|arxiv|doi|commission)\b", re.I)
 _CREDENTIAL = re.compile(r"\b(certified|certificate|certification|license|licen[cs]ed|credential|associate|"
                          r"professional|specialty|nanodegree|badge)\b", re.I)
+
+
+def award_name(name: str, quote: str | None) -> str:
+    """Award claims keep their event or context: when the name is a shorter piece of its quote
+    ("Top 10 finalist" in "Top 10 finalist out of 600+ teams, CSI National Hackathon"), use the quote."""
+    q = re.sub(r"\s+", " ", (quote or "")).strip().strip("-•·,;. ")
+    n = name.strip()
+    if q and len(q) > len(n) and normalize_name(n) in normalize_name(q):
+        return q
+    return n
 
 
 def looks_like_publication(c: schemas.Certification) -> bool:
@@ -325,6 +335,8 @@ def validate_extraction(
         else:
             parts = [c]
         for part in parts:
+            if part.kind == "award":
+                part = part.model_copy(update={"name": award_name(part.name, part.source.quote)})
             profile.claims.append(claim_rec(part, doc.evidence_id, _link_claim(part, bullets)))
 
     for c in getattr(extract, "certifications", []):

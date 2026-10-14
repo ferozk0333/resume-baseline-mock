@@ -321,12 +321,14 @@ def clear_judgments(conn: sqlite3.Connection, candidate_id: str, baseline_id: st
 def judge_models() -> dict:
     """Model settings recorded on every run."""
     return {
+        "llm_provider": config.LLM_PROVIDER,          # provider for the roles below that are not Jev
         "judge": config.JUDGE,
         "jev_model": config.JEV_MODEL if config.JUDGE == "jev" else None,
         "jev_confidence_threshold": config.JEV_CONFIDENCE_THRESHOLD if config.JUDGE == "jev" else None,
         "judge_fallback_model": config.JUDGE_FALLBACK_MODEL,
         "complexity_model": config.COMPLEXITY_MODEL,
         "extract_model": config.EXTRACT_MODEL,
+        "plan_model": config.REASONING_MODEL,
     }
 
 
