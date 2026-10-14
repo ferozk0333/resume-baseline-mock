@@ -10,6 +10,7 @@ const STATUS: Record<string, { label: string; className: string }> = {
   missing: { label: "missing", className: "bg-amber-50 text-amber-800 border-amber-200" },
   na: { label: "N/A", className: "bg-slate-100 text-slate-600 border-slate-200" },
   error: { label: "error", className: "bg-red-50 text-red-700 border-red-200" },
+  pending: { label: "judging…", className: "bg-sky-50 text-sky-700 border-sky-200" },
 };
 
 export function StatusBadge({ status }: { status: string }) {

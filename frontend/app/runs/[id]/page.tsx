@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Loader2, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +41,18 @@ function ScorePageInner() {
     get<{ labels: Record<string, string> }>("/config/weights").then((d) => setLabels(d.labels)).catch(() => {});
     get<Benchmarks>(`/runs/${id}/benchmarks`).then(setBench).catch(() => setBench(null));
   }, [id]);
+  // A run still being judged: poll until it is done (subcategories fill in; nothing is an error yet).
+  const running = view?.run.status === "running";
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => {
+      get<RunView>(`/runs/${id}`).then((v) => {
+        setView(v);
+        if (v.run.status !== "running") get<Benchmarks>(`/runs/${id}/benchmarks`).then(setBench).catch(() => {});
+      }).catch(() => {});
+    }, 5000);
+    return () => clearInterval(t);
+  }, [running, id]);
   const pct = bench?.percentiles;
   // Your score, the median for this role and the percentile, on one 0–100 scale (specs/13 §5). No ratio.
   const compare = (p: Pct | undefined, scale: number, dim?: string) => {
@@ -99,6 +111,14 @@ function ScorePageInner() {
           <Link href={`/runs/${id}/plan`} className={buttonVariants()}>Gaps and plan</Link>
         </div>
       </div>
+
+      {running && (
+        <div role="status" className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <Loader2 className="size-4 animate-spin" />
+          Still scoring: {view.progress?.done ?? 0} of {view.progress?.total ?? 19} subcategories done. Scores below are
+          partial and this page updates by itself.
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="lg:col-span-1">

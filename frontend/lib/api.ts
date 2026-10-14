@@ -66,13 +66,15 @@ export type ProfileResponse = {
 export type Judgment = { question: string; subject_type: string; subject: string; label: string | null;
   method: string | null; model_version: string | null; quote: string | null; confidence: number | null;
   reasoning: string | null };
-export type Subcategory = { key: string; label: string; dimension: string; status: "scored" | "missing" | "na" | "error";
+export type Subcategory = { key: string; label: string; dimension: string;
+  status: "scored" | "missing" | "na" | "error" | "pending";
   score: number | null; guidance: string | null; formula: string | null; weight: number; effective_weight: number;
   details: Record<string, unknown> & { judgments?: Judgment[] } };
 export type Gap = { subcategory: string; label: string; dimension: string; status: string; score: number;
   gain: number; gain_text: string; guidance: string | null };
 export type Weights = { dimensions: Record<string, number>; subcategories: Record<string, Record<string, number>> };
-export type RunView = { run: { id: string; candidate_id: string; baseline_id: string; plan_status: string | null };
+export type RunView = { run: { id: string; candidate_id: string; baseline_id: string; plan_status: string | null;
+    status?: string }; progress?: { done: number; total: number };
   weights: Weights; final: number | null; dimensions: Record<string, number | null>; subcategories: Subcategory[];
   gaps: Gap[] };
 export type PlanAction = { type: string; type_label: string; title: string; what_to_do: string; must_show: string[]; addresses: string[];

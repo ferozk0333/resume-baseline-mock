@@ -437,7 +437,9 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         subs = []
         for dim, names in config.SUBCATEGORIES.items():
             for s in names:
-                v = scores.get(s, {"status": "error", "score": None, "details": {}, "guidance": None})
+                # Not saved yet: still being judged while the run is running; an error once it has stopped.
+                absent = "pending" if run["status"] == "running" else "error"
+                v = scores.get(s, {"status": absent, "score": None, "details": {}, "guidance": None})
                 subs.append({"key": s, "label": config.SUBCATEGORY_LABELS[s], "dimension": dim,
                              "status": v["status"], "score": v["score"], "guidance": v["guidance"],
                              "details": v["details"], "formula": FORMULAS.get(s),
@@ -445,6 +447,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                              "effective_weight": agg.effective_weights.get(s, 0.0)})
         return {"run": {k: run[k] for k in ("id", "candidate_id", "baseline_id", "status", "started_at",
                                             "finished_at", "logic_version", "plan_status")},
+                "progress": {"done": sum(1 for x in subs if x["status"] != "pending"), "total": len(subs)},
                 "weights": weights, "final": agg.final, "dimensions": agg.dimensions, "subcategories": subs,
                 "gaps": [g.as_dict() for g in run_gaps(c, run["id"], weights)]}
 
