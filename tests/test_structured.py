@@ -5,7 +5,7 @@ import pytest
 
 from core import config, db
 from extraction import store
-from extraction.structured import DEMO_SOURCE, load_all, load_profile_file, read_profile_file
+from extraction.structured import DEMO_SOURCE, VARIANT_SOURCE, load_all, load_profile_file, read_profile_file
 from extraction.validate import QuoteIndex
 
 PROFILES = config.ROOT / "rightstaff-test-profiles" / "profiles"
@@ -26,7 +26,7 @@ def test_all_sixteen_profiles_load_with_every_quote_in_its_source(loaded):
         for item in [*profile.roles, *profile.projects, *profile.claims]:
             if item.quote and item.evidence_id in evidence:
                 assert QuoteIndex(evidence[item.evidence_id]).contains(item.quote), (pid, item.quote)
-        assert store.get_candidate(conn, cid)["data_source"] == DEMO_SOURCE
+        assert store.get_candidate(conn, cid)["data_source"] == (VARIANT_SOURCE if "_" in pid else DEMO_SOURCE)
 
 
 def test_lena_park_profile_is_read_exactly(loaded):

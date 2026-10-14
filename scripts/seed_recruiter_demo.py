@@ -4,8 +4,9 @@
 
 - One job per seed baseline (fictional companies). Must-haves default to the baseline's first four required
   skills and tools.
-- The 16 structured test profiles are parsed (no model, exact quotes) and apply to their role's job. They
-  are not scored until real judging runs (later, with approval).
+- The 15 structured test profiles are parsed (no model, exact quotes) and apply to their role's job. They
+  are scored with real judging by scripts/score_test_profiles.py. The test variant DS4_padded is parsed too,
+  for robustness checks only: it is never an applicant and never enters a benchmark pool.
 - The 7 archetypes (6 + the empty profile) apply to the Data Scientist job and are scored with their scripted FakeJudge labels.
 Both kinds are labelled as demo data in the UI.
 """
@@ -27,14 +28,15 @@ def seed(db_path: str, reset: bool = False) -> dict:
     sys.path.insert(0, str(ROOT))
     from backend import recruiter as rc
     from core import db
-    from extraction.structured import DEMO_SOURCE, load_all, read_profile_file
+    from extraction.structured import DEMO_SOURCE, VARIANT_SOURCE, is_variant, load_all, read_profile_file
     from graph.context import Deps
     from graph.pipeline import Pipeline
     from tests.fixtures.archetypes import ARCHETYPES, TODAY, empty_profile
 
     conn = db.init_app_db(db_path)
     if reset:
-        demo = [r[0] for r in conn.execute("SELECT id FROM candidates WHERE data_source IN (?, 'archetype')", (DEMO_SOURCE,))]
+        demo = [r[0] for r in conn.execute("SELECT id FROM candidates WHERE data_source IN (?, ?, 'archetype')",
+                                     (DEMO_SOURCE, VARIANT_SOURCE))]
         with conn:
             conn.execute("DELETE FROM applications")
             conn.execute("DELETE FROM jobs")
@@ -57,6 +59,8 @@ def seed(db_path: str, reset: bool = False) -> dict:
     profiles_dir = ROOT / "rightstaff-test-profiles" / "profiles"
     ids = load_all(conn, profiles_dir, ROOT / "tests" / "fixtures" / "profiles" / "rendered")
     for pid, cid in ids.items():
+        if is_variant(pid):                       # robustness tests only, never an applicant
+            continue
         role = read_profile_file(next(profiles_dir.glob(f"*/{pid}.md"))).role
         rc.add_application(conn, jobs[by_role[role]], cid)
 
@@ -69,7 +73,8 @@ def seed(db_path: str, reset: bool = False) -> dict:
         res = Pipeline(Deps(db_path, judge, today=TODAY), print_timings=False).score(cid, ds)
         rc.add_application(conn, jobs[ds], cid, res["run_id"])
     conn.close()
-    return {"jobs": len(jobs), "parsed_profiles": len(ids), "archetypes": len(archetypes)}
+    return {"jobs": len(jobs), "parsed_profiles": sum(1 for p in ids if not is_variant(p)),
+            "test_variants": sum(1 for p in ids if is_variant(p)), "archetypes": len(archetypes)}
 
 
 def main() -> None:

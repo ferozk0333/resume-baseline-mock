@@ -110,13 +110,8 @@ def set_status(conn, app_id: str, status: str) -> None:
 # --- Scores, must-haves, tags ------------------------------------------------------------------------------
 
 def criterion_labels(scores: dict) -> dict[str, str | None]:
-    """criterion id → its skill_evidence / tool_evidence label from the run."""
-    out = {}
-    for sub in ("role_skills", "tools"):
-        for j in (scores.get(sub, {}).get("details") or {}).get("judgments", []):
-            if j["question"] in ("skill_evidence", "tool_evidence"):
-                out[j["subject_id"]] = j["label"]
-    return out
+    """criterion id → the skill_evidence / tool_evidence label the score used (one source for chips and table)."""
+    return {cid: j["label"] for cid, j in _judged(scores).items()}
 
 
 def must_have_status(label: str | None, kind: str, cert_match: bool = False) -> str:
@@ -132,16 +127,11 @@ def must_have_status(label: str | None, kind: str, cert_match: bool = False) -> 
     return "not_met"
 
 
-def must_haves(conn, job: dict, baseline: Baseline, scores: dict | None, profile: Profile) -> list[dict]:
-    labels = criterion_labels(scores or {})
-    out = []
-    for c in baseline.criteria:
-        if c.id not in job["must_haves"]:
-            continue
-        cert = c.kind == "certification" and any(match_certification(x.name, [c]) for x in profile.certifications)
-        status = must_have_status(labels.get(c.id), c.kind, cert) if scores else "unknown"
-        out.append({"criterion_id": c.id, "name": c.name, "kind": c.kind, "status": status})
-    return out
+def must_haves(conn, job: dict, baseline: Baseline, scores: dict | None, profile: Profile,
+               evidence: dict | None = None) -> list[dict]:
+    """Must-have chips: the job's must-have rows of the requirements table (one source, specs/13 §0.3)."""
+    return [{"criterion_id": r["criterion_id"], "name": r["name"], "kind": r["kind"], "status": r["status"]}
+            for r in requirements(baseline, job, scores, profile, evidence) if r["must_have"]]
 
 
 def tags(scores: dict, effective_weights: dict[str, float]) -> list[str]:
@@ -177,34 +167,104 @@ def _labels_by(scores: dict, sub: str, question: str) -> dict[str, str]:
             if j["question"] == question}
 
 
-def requirements(baseline: Baseline, job: dict, scores: dict | None, profile: Profile) -> list[dict]:
-    """Requirements vs evidence (specs/11 §5.3): each criterion, its best quote, backing and source."""
-    labels = criterion_labels(scores or {})
-    proof = _labels_by(scores or {}, "proof_density", "proof_support")
+BACKING_STATUS = {"artifact": "met_backed", "in a bullet": "met_backed", "certification": "met_backed",
+                  "listed only": "met_on_paper", "not shown": "not_met", "not judged": "unknown", "not scored yet": "unknown"}
+
+
+def _judged(scores: dict) -> dict[str, dict]:
+    """criterion id → its saved skill_evidence / tool_evidence judgment (label and quote): the label the score used."""
+    out = {}
+    for sub in ("role_skills", "tools"):
+        for j in (scores.get(sub, {}).get("details") or {}).get("judgments", []):
+            if j["question"] in ("skill_evidence", "tool_evidence"):
+                out[j["subject_id"]] = j
+    return out
+
+
+def _evidence_items(profile: Profile, evidence: dict) -> list[dict]:
+    """Every line a skill/tool judge can see, with the evidence item it comes from (same text as the judge input)."""
+    from graph.nodes.expertise import repo_lines
     owners = _bullet_owner(profile)
+    items = []
+    ctx = _plan_ctx(None, profile, evidence)
+    for p, line in zip([p for p in ctx.counted_projects() if p.is_github], repo_lines(ctx)):
+        items.append({"text": line, "kind": "repo", "id": p.id, "source": f"repo: {p.name}", "link": p.url,
+                      "quote": p.description or p.name})
+    for b in profile.all_bullets():
+        kind, name = owners.get(b.id, ("project", ""))
+        items.append({"text": b.text, "kind": "bullet", "id": b.id, "source": f"{kind}: {name}", "link": None,
+                      "quote": b.text})
+    for p in ctx.counted_projects():
+        if p.description and not p.is_github:
+            items.append({"text": f"{p.name}: {p.description}", "kind": "bullet", "id": p.id,
+                          "source": f"project: {p.name}", "link": p.url, "quote": p.description})
+    for c in profile.certifications:
+        items.append({"text": c.name, "kind": "certification", "id": c.id, "source": "certification", "link": None,
+                      "quote": c.name})
+    for c in profile.claims:
+        if c.bullet_id is None:
+            items.append({"text": c.name_raw, "kind": "listed", "id": c.id, "source": "skills list", "link": None,
+                          "quote": c.name_raw})
+    return items
+
+
+def _plan_ctx(baseline, profile: Profile, evidence: dict):
+    from graph.context import Ctx
+    return Ctx(conn=None, deps=None, svc=None, candidate_id="", run_id=None, baseline=baseline, profile=profile,
+               today=date.today(), evidence=evidence)
+
+
+def requirements(baseline: Baseline, job: dict, scores: dict | None, profile: Profile,
+                 evidence: dict | None = None) -> list[dict]:
+    """Requirements vs evidence (specs/11 §5.3, specs/13 §0.3/§0.5). One source: the saved skill/tool evidence
+    judgment. Its label sets the backing (and the must-have chip and the score); the source is the evidence
+    item that earned that level: the one holding the judge's quote, else the first matching line the judge saw."""
+    from core.text import normalize_name
+    from graph.nodes.expertise import skills_plan, tools_plan
+    judged = _judged(scores or {})
+    evidence = evidence or {}
+    items = _evidence_items(profile, evidence)
+    asks = {a.subject_id: a for a in [*skills_plan(_plan_ctx(baseline, profile, evidence)),
+                                       *tools_plan(_plan_ctx(baseline, profile, evidence))]}
+
+    def holding(quote: str | None, kinds: tuple[str, ...]):
+        q = normalize_name(quote)
+        return next((i for i in items if q and i["kind"] in kinds and q in normalize_name(i["text"])), None) \
+            if q else None
+
+    def first_seen(c, field: str, kinds: tuple[str, ...]):
+        seen = [ln for ln in (asks[c.id].context.get(field) or [])] if c.id in asks else []
+        return next((i for ln in seen for i in items if i["kind"] in kinds and i["text"] == ln
+                     and (field != "skills_list" or mentions(ln, c))), None)
+
     rows = []
     for c in baseline.criteria:
-        bullet = next((b for b in profile.all_bullets() if mentions(b.text, c)), None)
-        repo = next((p for p in profile.projects if p.is_github and (mentions(p.name, c) or mentions(p.description, c))), None)
-        claim = next((x for x in profile.claims if mentions(x.name_raw, c)), None)
-        cert = next((x for x in profile.certifications if match_certification(x.name, [c])), None)
-        support = proof.get(claim.id) if claim else None
-        if support == "artifact" or repo or cert:
-            backing = "artifact"
-        elif bullet or support == "bullet":
-            backing = "in a bullet"
-        elif claim:
-            backing = "claimed only"
-        else:
+        j = judged.get(c.id)
+        label = j["label"] if j else None
+        quote = j.get("quote") if j else None
+        item, backing = None, "not scored yet" if not scores else "not judged"
+        if c.kind == "certification":
+            item = next((i for i in items if i["kind"] == "certification"
+                         and any(match_certification(x.name, [c]) for x in profile.certifications if x.id == i["id"])),
+                        None)
+            backing = "certification" if item else ("not shown" if scores else backing)
+        elif label in ("bullet", "used"):
+            item = holding(quote, ("repo", "bullet")) or (label == "used" and first_seen(c, "repositories", ("repo",))) \
+                or first_seen(c, "bullets", ("bullet",))
+            backing = "artifact" if item and item["kind"] == "repo" else "in a bullet"
+        elif label == "certified":
+            item = holding(quote, ("certification",)) or first_seen(c, "certifications", ("certification",))
+            backing = "certification"
+        elif label in ("keyword", "listed"):
+            item = holding(quote, ("listed",)) or first_seen(c, "skills_list", ("listed",))
+            backing = "listed only"
+        elif label is not None:
             backing = "not shown"
-        quote = bullet.text if bullet else (repo.description if repo else (cert.name if cert else
-                                                                            (claim.name_raw if claim else None)))
-        source = (f"{owners[bullet.id][0]}: {owners[bullet.id][1]}" if bullet else
-                  f"repo: {repo.name}" if repo else "certification" if cert else "skills list" if claim else None)
         rows.append({"criterion_id": c.id, "name": c.name, "kind": c.kind, "priority": c.priority,
-                     "must_have": c.id in job["must_haves"], "label": labels.get(c.id), "quote": quote,
-                     "backing": backing, "source": source, "link": repo.url if repo else None,
-                     "evidence_id": bullet.id if bullet else repo.id if repo else claim.id if claim else None})
+                     "must_have": c.id in job["must_haves"], "label": label, "status": BACKING_STATUS[backing],
+                     "backing": backing, "quote": item["quote"] if item else None,
+                     "source": item["source"] if item else None, "link": item["link"] if item else None,
+                     "evidence_id": item["id"] if item else None})
     return rows
 
 
@@ -296,13 +356,14 @@ def _context(conn, app: dict, job: dict):
     profile = store.load_profile(conn, app["candidate_id"])
     scores = run_scores(conn, app["run_id"]) if app["run_id"] else None
     agg = rescore(conn, app["run_id"], job["weights"]) if app["run_id"] else None
-    return baseline, profile, scores, agg
+    evidence = {e["id"]: e for e in store.list_evidence(conn, app["candidate_id"])}
+    return baseline, profile, scores, agg, evidence
 
 
 def applicant_row(conn, app: dict, job: dict) -> dict:
-    baseline, profile, scores, agg = _context(conn, app, job)
+    baseline, profile, scores, agg, evidence = _context(conn, app, job)
     cand = store.get_candidate(conn, app["candidate_id"])
-    mh = must_haves(conn, job, baseline, scores, profile)
+    mh = must_haves(conn, job, baseline, scores, profile, evidence)
     why = summaries(conn, app["run_id"], job["weights"], baseline, job, scores, profile, date.today())["why"] \
         if scores else []
     current = next((r for r in profile.roles if r.is_current), profile.roles[0] if profile.roles else None)
@@ -346,9 +407,9 @@ def applicants(conn, job: dict, *, sort: str = "match", status: str | None = Non
 def panel(conn, app: dict, job: dict) -> dict:
     """Everything the profile panel shows for one applicant."""
     from backend import media
-    baseline, profile, scores, agg = _context(conn, app, job)
+    baseline, profile, scores, agg, evidence_by_id = _context(conn, app, job)
     cand = store.get_candidate(conn, app["candidate_id"])
-    evidence = store.list_evidence(conn, app["candidate_id"])
+    evidence = list(evidence_by_id.values())
     gen = summaries(conn, app["run_id"], job["weights"], baseline, job, scores, profile, date.today()) if scores else {}
     repos = []
     for p in profile.projects:
@@ -372,10 +433,10 @@ def panel(conn, app: dict, job: dict) -> dict:
     return {
         **row,
         "job": {"id": job["id"], "title": job["title"], "company": job["company"]},
-        "must_haves": must_haves(conn, job, baseline, scores, profile),
+        "must_haves": must_haves(conn, job, baseline, scores, profile, evidence_by_id),
         "why_points": gen.get("why", []), "questions": gen.get("questions", []),
         "generated_label": "Demo text" if scores else None,
-        "requirements": requirements(baseline, job, scores, profile),
+        "requirements": requirements(baseline, job, scores, profile, evidence_by_id),
         "dimensions": agg.dimensions if agg else None,
         "subcategories": [{"key": s, "label": config.SUBCATEGORY_LABELS[s], "dimension": config.SUBCATEGORY_DIMENSION[s],
                            **{k: v for k, v in scores[s].items() if k != "details"},

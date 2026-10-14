@@ -55,7 +55,7 @@ def test_certification_must_have_follows_matching():
 
 def test_jobs_seeded_with_all_applicants(api):
     jobs = {j["baseline_id"]: j for j in api.get("/jobs").json()}
-    assert sum(j["applicants"] for j in jobs.values()) == 16 + 7
+    assert sum(j["applicants"] for j in jobs.values()) == 15 + 7          # DS4_padded is not an applicant
     assert all(len(j["must_haves"]) == 4 for j in jobs.values())
 
 

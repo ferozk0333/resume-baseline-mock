@@ -15,6 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
 
 from backend import recruiter as rc  # noqa: E402
 from core import config, db  # noqa: E402
@@ -38,9 +39,9 @@ def main() -> None:
     out = ["# Test profiles scored with real judging (Jev + Gemini 3.5 Flash-Lite)", "",
            f"Each profile against its own role's job, default weights, no plans. Expected order (DESIGN.md): {EXPECTED}.", ""]
     rows = {}
+    from score_test_profiles import targets
     for job in rc.list_jobs(conn):
-        apps = conn.execute("SELECT a.* FROM applications a JOIN candidates c ON c.id = a.candidate_id WHERE a.job_id = ? "
-                            "AND c.data_source = 'demo_parsed' AND a.run_id IS NOT NULL", (job["id"],)).fetchall()
+        apps = [a for a in targets(conn) if a["baseline_id"] == job["baseline_id"] and a["run_id"]]
         table = []
         for a in apps:
             pid = profile_id(conn, a["candidate_id"])

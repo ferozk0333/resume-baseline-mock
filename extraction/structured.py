@@ -26,6 +26,8 @@ from ingest.github import Repo, is_profile_repo
 
 ABSENT = "None provided."
 DEMO_SOURCE = "demo_parsed"
+# Test variants (e.g. DS4_padded) are kept for robustness checks only: never applicants, never in a benchmark pool.
+VARIANT_SOURCE = "test_variant"
 ROLE_FOLDERS = {"data-scientist": "Data Scientist", "ai-engineer": "AI Engineer", "product-manager": "Product Manager"}
 
 EXPERIENCE = {"experience", "professional experience", "work experience"}
@@ -285,7 +287,8 @@ def load_profile_file(conn, path: Path, rendered_dir: Path | None = None) -> str
     pf = read_profile_file(path)
     cid = store.create_candidate(conn, pf.name, pf.role, pf.github_username, None)
     with conn:
-        conn.execute("UPDATE candidates SET data_source = ? WHERE id = ?", (DEMO_SOURCE, cid))
+        conn.execute("UPDATE candidates SET data_source = ? WHERE id = ?",
+                     (VARIANT_SOURCE if is_variant(pf.id) else DEMO_SOURCE, cid))
     s = pf.sections
     profiles: list[Profile] = []
     if s.get("Resume"):
@@ -316,9 +319,14 @@ def load_profile_file(conn, path: Path, rendered_dir: Path | None = None) -> str
     return cid
 
 
+def is_variant(profile_id: str) -> bool:
+    """A test variant of another profile, named <id>_<variant> (e.g. DS4_padded)."""
+    return "_" in profile_id
+
+
 def load_all(conn, profiles_dir: Path, rendered_dir: Path | None = None) -> dict[str, str]:
     """profile id (e.g. "DS1") → candidate id, for every structured profile file."""
     return {p.stem: load_profile_file(conn, p, rendered_dir) for p in sorted(profiles_dir.glob("*/*.md"))}
 
 
-__all__ = ["DEMO_SOURCE", "load_all", "load_profile_file", "read_profile_file", "now_iso"]
+__all__ = ["DEMO_SOURCE", "VARIANT_SOURCE", "is_variant", "load_all", "load_profile_file", "read_profile_file", "now_iso"]

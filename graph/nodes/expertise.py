@@ -49,16 +49,17 @@ def criterion_text(c: BaselineCriterion) -> str:
 
 
 # --- Skills ------------------------------------------------------------------------------
-# Alias match → judge (may be Jev) with the matched lines. No alias match → Claude with ALL lines, and the
-# label must carry a quote found in the input (else retry once, then missing). Nothing at all → missing by rule.
+# Alias match in a bullet → judge (may be Jev) with the matched lines. No bullet match → the unmatched route
+# (model with ALL lines; the label must carry a quote found in the input, else retry once, then missing), also
+# when the alias matches only the skills list: a bullet with a near variant ("6 A/B tests" for "A/B testing")
+# can then earn credit (specs/13 §0.4). Nothing at all → missing by rule.
 
-def _skill_asks(ctx: Ctx, key: str, none_label: str, list_counts: bool) -> list[Ask]:
+def _skill_asks(ctx: Ctx, key: str, none_label: str) -> list[Ask]:
     asks = []
     lines, skills = evidence_lines(ctx), listed(ctx)
     for c in ctx.baseline.items("skill"):
         hits = [ln for ln in lines if mentions(ln, c)]
-        in_list = list_counts and any(mentions(s, c) for s in skills)
-        if hits or in_list:
+        if hits:
             asks.append(Ask(key, "criterion", c.id,
                             {"criterion": criterion_text(c), "bullets": hits, "skills_list": skills}))
         elif lines or skills:
@@ -78,7 +79,7 @@ def _by_priority(ctx: Ctx, labels: Labels, kind: str, key: str) -> tuple[dict, d
 
 
 def skills_plan(ctx: Ctx) -> list[Ask]:
-    return _skill_asks(ctx, "skill_evidence", "missing", list_counts=True)
+    return _skill_asks(ctx, "skill_evidence", "missing")
 
 
 def skills_compute(ctx: Ctx, labels: Labels) -> f.SubScore:
@@ -86,8 +87,7 @@ def skills_compute(ctx: Ctx, labels: Labels) -> f.SubScore:
 
 
 def applied_plan(ctx: Ctx) -> list[Ask]:
-    # Applying a skill needs a bullet; a skills-list match alone does not route to the matched-lines judge.
-    return _skill_asks(ctx, "applied_level", "mention_or_missing", list_counts=False)
+    return _skill_asks(ctx, "applied_level", "mention_or_missing")
 
 
 def applied_compute(ctx: Ctx, labels: Labels) -> f.SubScore:
@@ -110,7 +110,8 @@ def tools_plan(ctx: Ctx) -> list[Ask]:
         }
         everything = {"criterion": criterion_text(c), "bullets": lines, "repositories": repos,
                       "certifications": certs, "skills_list": skills}
-        if any(context[k] for k in ("bullets", "repositories", "certifications", "skills_list")):
+        # Matched only in the skills list → the unmatched route, so a bullet with a near variant can count (§0.4).
+        if any(context[k] for k in ("bullets", "repositories", "certifications")):
             asks.append(Ask("tool_evidence", "criterion", c.id, context))
         elif lines or repos or certs or skills:
             asks.append(Ask("tool_evidence", "criterion", c.id, everything, route="claude", require_quote=True))

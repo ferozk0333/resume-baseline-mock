@@ -38,14 +38,16 @@ def _member(conn, run_id: str, candidate_id: str, weights: dict) -> Member:
 
 
 def is_real_run(conn, run_id: str) -> bool:
-    """Only runs judged by a real judge enter pools. Runs recorded before judge_kind existed are scripted when
-    any of their judgments came from the test judge, or the candidate is a test archetype."""
+    """Only runs judged by a real judge enter pools, and never a test variant. Runs recorded before judge_kind
+    existed are scripted when any of their judgments came from the test judge, or the candidate is a test archetype."""
     import json
     row = conn.execute("SELECT r.models_json, c.data_source FROM runs r LEFT JOIN candidates c ON c.id = r.candidate_id "
                        "WHERE r.id = ?", (run_id,)).fetchone()
     if row is None:
         return False
     kind = json.loads(row["models_json"] or "{}").get("judge_kind")
+    if row["data_source"] == "test_variant":           # a duplicate of another profile (robustness tests only)
+        return False
     if kind is not None:
         return kind == "real"
     if row["data_source"] == "archetype":
