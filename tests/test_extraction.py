@@ -608,6 +608,12 @@ def test_award_claims_keep_their_context_from_the_quote():
     profile, _ = validate_extraction(_doc(f"Awards\n- {line}\n- Dean's List"), out)
     assert [c.name_raw for c in profile.claims] == [line, "Dean's List"]
     assert award_name("Fellowship", "Graduate fellowship, 2025") == "Graduate fellowship, 2025"
+    long = ("Top 10 Finalist from 600+ teams in CSI National Hackathon: Led and managed a team of 4 members "
+            "through 3 jury rounds")
+    assert award_name("Top 10 Finalist", long) == "Top 10 Finalist from 600+ teams in CSI National Hackathon"
+    assert award_name("Dean's List", "Dean's List. Awarded every semester for a GPA above 3.8.") == "Dean's List"
+    huge = "Winner " + "of the very long regional innovation challenge " * 5
+    assert len(award_name("Winner", huge)) <= 120 and award_name("Winner", huge).startswith("Winner of")
     assert award_name("Best Paper Award", "Best Paper Award") == "Best Paper Award"
 
 
@@ -636,6 +642,9 @@ def test_extraction_prompt_defines_publications_and_one_claim_per_name():
     assert "Certification = a credential issued by an organisation" in prompt
     assert '"Hyperparameter tuning (Bayesian, Hyperband, Random)" → one skill claim' in prompt
     assert "An award claim keeps its event or context" in prompt
+    assert '"AWS (SageMaker, Bedrock)" → AWS, SageMaker, Bedrock' in prompt
+    assert '"Vector databases (Chroma, Qdrant, OpenSearch)" → Chroma, Qdrant, OpenSearch' in prompt
+    assert "Drop a generic category label" in prompt
     assert "not every method" in prompt or "Do not make a claim of every method" in prompt
 
 

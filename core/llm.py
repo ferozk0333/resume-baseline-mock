@@ -298,8 +298,9 @@ def daily_limit_message(model: str) -> str:
     now = datetime.now(ZoneInfo("America/Los_Angeles"))
     reset = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     hours = (reset - now).total_seconds() / 3600
-    return (f"Daily free-tier limit for {model} reached. Everything extracted and judged so far is saved; "
-            f"run again after midnight Pacific (in about {hours:.0f} h) and it continues where it stopped.")
+    return (f"Daily free-tier limit for {model} reached. Its work stops here; other models keep going. Everything "
+            f"extracted and judged so far is saved: run again after midnight Pacific (in about {hours:.0f} h) and "
+            f"it continues where it stopped.")
 
 
 class RateLimiter:
@@ -308,11 +309,14 @@ class RateLimiter:
     acquire() blocks until the request fits the per-minute limits, or raises DailyLimitReached.
     """
 
-    def __init__(self, provider: str, rpm: int, tpm: int, rpd: int, db_path: str | None = None, clock=None,
-                 sleep=None):
+    def __init__(self, provider: str, rpm: int | None = None, tpm: int | None = None, rpd: int | None = None,
+                 db_path: str | None = None, clock=None, sleep=None, limits=None):
+        """Limits per model come from `limits(model) -> (rpm, tpm, rpd)`; rpm/tpm/rpd set one value for all."""
         import threading
         import time as _time
-        self.provider, self.rpm, self.tpm, self.rpd = provider, rpm, tpm, rpd
+        self.provider = provider
+        fixed = (rpm, tpm, rpd)
+        self.limits = limits if limits is not None else (lambda model: fixed)
         self.db_path = db_path
         self.clock = clock or _time.monotonic
         self.sleep = sleep or _time.sleep
@@ -343,6 +347,9 @@ class RateLimiter:
         finally:
             conn.close()
 
+    def rpd(self, model: str) -> int:
+        return self.limits(model)[2]
+
     def exhaust_today(self, model: str) -> None:
         """The API said the daily quota is gone: remember it so later calls stop at once."""
         conn = self._conn()
@@ -350,19 +357,20 @@ class RateLimiter:
             with conn:
                 conn.execute("INSERT INTO provider_usage (provider, model, day, requests, tokens) VALUES (?, ?, ?, ?, 0) "
                              "ON CONFLICT(provider, model, day) DO UPDATE SET requests = MAX(requests, excluded.requests)",
-                             (self.provider, model, pacific_day().isoformat(), self.rpd))
+                             (self.provider, model, pacific_day().isoformat(), self.rpd(model)))
         finally:
             conn.close()
 
     def acquire(self, model: str, tokens: int) -> None:
-        if self.used_today(model) >= self.rpd:
+        rpm, tpm, rpd = self.limits(model)
+        if self.used_today(model) >= rpd:
             raise DailyLimitReached(daily_limit_message(model))
         while True:
             with self._lock:
                 now = self.clock()
                 window = [(t, n) for t, n in self._recent.get(model, []) if now - t < 60]
                 self._recent[model] = window
-                fits = len(window) < self.rpm and sum(n for _, n in window) + tokens <= self.tpm
+                fits = len(window) < rpm and sum(n for _, n in window) + tokens <= tpm
                 if fits or not window:
                     window.append((now, tokens))
                     break
@@ -378,7 +386,7 @@ _GEMINI_LIMITER: RateLimiter | None = None
 def gemini_limiter() -> RateLimiter:
     global _GEMINI_LIMITER
     if _GEMINI_LIMITER is None:
-        _GEMINI_LIMITER = RateLimiter("gemini", config.GEMINI_RPM, config.GEMINI_TPM, config.GEMINI_RPD)
+        _GEMINI_LIMITER = RateLimiter("gemini", limits=config.gemini_limits)       # per model
     return _GEMINI_LIMITER
 
 

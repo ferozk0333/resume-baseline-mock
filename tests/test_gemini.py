@@ -188,3 +188,25 @@ def test_timeouts_are_retried_then_reported(limiter):
     with pytest.raises(LLMError, match="no answer"):
         GeminiLLM(session=flaky, api_key="k", limiter=limiter, max_retries=2, sleep=lambda s: None).parse(
             model="gemini/m", system="S", user="U", output_type=schemas.PortfolioExtract)
+
+
+def test_limits_are_per_model_and_one_models_daily_limit_does_not_stop_the_other(tmp_path):
+    path = str(tmp_path / "m.db")
+    db.init_app_db(path).close()
+    limits = {"flash": (100, 10**9, 2), "lite": (100, 10**9, 500)}     # per-minute limits out of the way
+    lim = RateLimiter("gemini", db_path=path, sleep=lambda s: None, limits=lambda m: limits[m])
+    for _ in range(2):
+        lim.acquire("flash", 1)
+    with pytest.raises(DailyLimitReached, match="other models keep going"):
+        lim.acquire("flash", 1)
+    for _ in range(20):
+        lim.acquire("lite", 1)                    # unaffected, and 20 > flash's limit
+    assert lim.used_today("flash") == 2 and lim.used_today("lite") == 20
+
+
+def test_configured_limits_and_role_models():
+    assert config.GEMINI_LIMITS["gemini-3.8-flash"] == (5, 250000, 20)
+    assert config.GEMINI_LIMITS["gemini-3.5-flash-lite"] == (15, 250000, 500)
+    assert config._limits("a=1/2/3, b=4/5/6") == {"a": (1, 2, 3), "b": (4, 5, 6)}
+    assert config.GEMINI_MODELS == {"extract": "gemini-3.8-flash", "judge": "gemini-3.5-flash-lite",
+                                    "complexity": "gemini-3.5-flash-lite", "plan": "gemini-3.8-flash"}

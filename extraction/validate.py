@@ -263,14 +263,26 @@ _CREDENTIAL = re.compile(r"\b(certified|certificate|certification|license|licen[
                          r"professional|specialty|nanodegree|badge)\b", re.I)
 
 
+AWARD_MAX_CHARS = 120
+_CLAUSE_END = re.compile(r"(?<=\w)[.;:](?:\s|$)|\s[–—]\s")
+
+
 def award_name(name: str, quote: str | None) -> str:
     """Award claims keep their event or context: when the name is a shorter piece of its quote
-    ("Top 10 finalist" in "Top 10 finalist out of 600+ teams, CSI National Hackathon"), use the quote."""
+    ("Top 10 finalist" in "Top 10 finalist out of 600+ teams, CSI National Hackathon: led a team of 4"),
+    use the clause of the quote that contains it ("… CSI National Hackathon"), at most one sentence and
+    about AWARD_MAX_CHARS characters (cut at a word boundary)."""
     q = re.sub(r"\s+", " ", (quote or "")).strip().strip("-•·,;. ")
     n = name.strip()
-    if q and len(q) > len(n) and normalize_name(n) in normalize_name(q):
-        return q
-    return n
+    if not q or len(q) <= len(n) or normalize_name(n) not in normalize_name(q):
+        return n
+    clauses = [c.strip(" ,") for c in _CLAUSE_END.split(q) if c and c.strip(" ,")]
+    clause = next((c for c in clauses if normalize_name(n) in normalize_name(c)), q)
+    if len(clause) > AWARD_MAX_CHARS:
+        cut = clause[:AWARD_MAX_CHARS]
+        clause = cut[:cut.rfind(" ")] if " " in cut else cut
+        clause = clause.rstrip(" ,;-–—") if normalize_name(n) in normalize_name(clause) else n
+    return clause if len(clause) >= len(n) else n
 
 
 def looks_like_publication(c: schemas.Certification) -> bool:

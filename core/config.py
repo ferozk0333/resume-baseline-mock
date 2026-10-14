@@ -41,17 +41,37 @@ LLM_PROVIDER = _env("LLM_PROVIDER", "claude")
 GEMINI_API_KEY = _env("GEMINI_API_KEY", "")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 # Free-tier models (pricing page, 2026-10-13). Set LLM_PROVIDER=gemini to use them.
+# Model per role. Fallback judging, unmatched-skill batches and complexity run often: Flash-Lite has the daily
+# limit for them. Extraction and the plan are few calls: Flash.
 GEMINI_MODELS = {
     "extract": _env("GEMINI_EXTRACT_MODEL", "gemini-3.8-flash"),
     "judge": _env("GEMINI_JUDGE_MODEL", "gemini-3.5-flash-lite"),
-    "complexity": _env("GEMINI_COMPLEXITY_MODEL", "gemini-3.8-flash"),
+    "complexity": _env("GEMINI_COMPLEXITY_MODEL", "gemini-3.5-flash-lite"),
     "plan": _env("GEMINI_PLAN_MODEL", "gemini-3.8-flash"),
 }
-# Free-tier limits are shown per project in AI Studio (aistudio.google.com/rate-limit), not in the docs:
-# copy yours here. Applied per model. RPD resets at midnight Pacific.
-GEMINI_RPM = int(_env("GEMINI_RPM", "10"))
+
+
+def _limits(spec: str) -> dict[str, tuple[int, int, int]]:
+    """"model=RPM/TPM/RPD,model=…" → {model: (rpm, tpm, rpd)}."""
+    out = {}
+    for part in filter(None, (p.strip() for p in spec.split(","))):
+        model, _, nums = part.partition("=")
+        rpm, tpm, rpd = (int(x) for x in nums.split("/"))
+        out[model.strip()] = (rpm, tpm, rpd)
+    return out
+
+
+# Free-tier limits per model, from the project's AI Studio rate-limit page (2026-10-13). Override with
+# GEMINI_LIMITS="model=RPM/TPM/RPD,…". RPD resets at midnight Pacific. A model not listed uses GEMINI_RPM/TPM/RPD.
+GEMINI_LIMITS = {**_limits("gemini-3.8-flash=5/250000/20,gemini-3.5-flash-lite=15/250000/500"),
+                 **_limits(_env("GEMINI_LIMITS", ""))}
+GEMINI_RPM = int(_env("GEMINI_RPM", "5"))
 GEMINI_TPM = int(_env("GEMINI_TPM", "250000"))
-GEMINI_RPD = int(_env("GEMINI_RPD", "250"))
+GEMINI_RPD = int(_env("GEMINI_RPD", "20"))
+
+
+def gemini_limits(model: str) -> tuple[int, int, int]:
+    return GEMINI_LIMITS.get(model, (GEMINI_RPM, GEMINI_TPM, GEMINI_RPD))
 GEMINI_CONCURRENCY = int(_env("GEMINI_CONCURRENCY", "4"))
 GEMINI_THINKING_LEVEL = _env("GEMINI_THINKING_LEVEL", "low")
 
