@@ -35,6 +35,7 @@ class Deps:
     max_parallel_calls: int = config.JUDGE_CONCURRENCY    # shared by every subgraph of a run
     claude_judge: Judge | None = None         # for asks that need a quote; default: the judge's Claude fallback
     planner: object | None = None             # StructuredLLM for the improvement plan; None = ranked gaps only
+    plan_in_background: bool = True           # return the score first, write the plan after (specs/09 §2.6)
     _sem: threading.BoundedSemaphore = field(init=False, repr=False)
 
     def __post_init__(self):

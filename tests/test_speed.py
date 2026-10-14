@@ -223,3 +223,74 @@ def test_all_sources_are_extracted_at_once():
     out = extract_all(docs, SlowLLM())
     assert len(out) == 9 and state["max"] == 9
     assert time.perf_counter() - start < 0.05 * 3
+
+
+# --- 2.6 Start early, finish late --------------------------------------------------------------------
+
+def _onboard(tmp_path, monkeypatch, judge):
+    from extraction.onboard import OnboardingInputs, Upload
+    from tests.helpers import SAMPLE_RESUME_LINES, FakeLLM, make_pdf, sample_resume_extract
+    monkeypatch.setattr(config, "UPLOAD_DIR", tmp_path / "uploads")
+    path = str(tmp_path / "e.db")
+    db.init_app_db(path).close()
+    p = Pipeline(Deps(path, judge, llm=FakeLLM({"resume": sample_resume_extract()}), today=TODAY))
+    r = p.start_onboarding(OnboardingInputs(resume=Upload("cv.pdf", make_pdf(SAMPLE_RESUME_LINES))), DS)
+    return path, p, r
+
+
+def _best(q, c):
+    return next(iter(QUESTIONS[q].options))
+
+
+def test_job_independent_judgments_start_during_review(tmp_path, monkeypatch):
+    from judges.fake_judge import FakeJudge
+    judge = FakeJudge(script=_best)
+    path, p, r = _onboard(tmp_path, monkeypatch, judge)
+    assert r["awaiting_review"] and p.wait_for_early(r["thread_id"]) > 0
+    asked = {k for k, _ in judge.calls}
+    assert set(BULLET_KEYS) <= asked and "quality_check_1" in asked
+    assert not asked & {k for k, q in QUESTIONS.items() if q.job_dependent}     # nothing job-dependent yet
+    judge.calls.clear()
+    done = p.confirm_review(r["thread_id"])
+    assert done["final"] is not None and done["errors"] == []
+    assert not {k for k, _ in judge.calls} & (set(BULLET_KEYS) | {f"quality_check_{i}" for i in range(1, 6)})
+
+
+def test_editing_a_bullet_during_review_rejudges_exactly_that_bullet(tmp_path, monkeypatch):
+    from extraction import store
+    from judges.fake_judge import FakeJudge
+    judge = FakeJudge(script=_best)
+    path, p, r = _onboard(tmp_path, monkeypatch, judge)
+    p.wait_for_early(r["thread_id"])
+    conn = db.connect(path)
+    role = store.load_profile(conn, r["candidate_id"]).roles[0]
+    texts = [b.text for b in role.bullets]
+    texts[0] = "Built a churn model in Python that cut churn 15% in one quarter."
+    store.set_bullets(conn, r["candidate_id"], texts, role_id=role.id)
+    edited = next(b for b in store.load_profile(conn, r["candidate_id"]).roles[0].bullets if b.text == texts[0])
+    judge.calls.clear()
+    p.confirm_review(r["thread_id"])
+    rejudged = {c.get("_subject_id") for k, c in judge.calls if k in BULLET_KEYS}
+    assert rejudged == {edited.id}
+    assert sorted(k for k, c in judge.calls if c.get("_subject_id") == edited.id) == sorted(BULLET_KEYS)
+
+
+def test_overlapping_asks_for_the_same_judgment_call_the_judge_once(tmp_path):
+    import threading
+    from judges.fake_judge import FakeJudge
+    from judges.service import JudgmentService
+    judge = FakeJudge(script=_best, delay=0.1)
+    path = str(tmp_path / "f.db")
+    db.init_app_db(path).close()
+    results = []
+
+    def ask():
+        svc = JudgmentService(db.connect(path), judge, "cand-1")
+        results.append(svc.ask("ownership", "bullet", "b-1", {"bullet": "Led a migration."}).label)
+
+    threads = [threading.Thread(target=ask) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(judge.calls) == 1 and len(set(results)) == 1 and len(results) == 4

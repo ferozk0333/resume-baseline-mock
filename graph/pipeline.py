@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from typing import Annotated, TypedDict
 
@@ -82,6 +83,7 @@ class RunState(TypedDict, total=False):
     ranked_gaps: list[dict]
     plan_markdown: str | None
     plan_error: str | None
+    plan_status: str | None                               # generating | ready | failed
 
 
 class ScoreOut(TypedDict, total=False):
@@ -301,26 +303,77 @@ def _aggregate(deps: Deps):
     return node
 
 
+# Background work (specs/09 §2.6): job-independent judgments during review, and the improvement plan
+# after the score is returned. PLAN_JOBS lets callers wait for a run's plan (tests, timing script).
+BACKGROUND = ThreadPoolExecutor(max_workers=4, thread_name_prefix="rightstaff-bg")
+PLAN_JOBS: dict[str, Future] = {}
+
+
+def write_plan(deps: Deps, run_id: str, candidate_id: str, baseline_id: str, subscores: dict, weights: dict):
+    """Generate and store the improvement plan, set runs.plan_status, and refresh the run's timings."""
+    from scoring.plan import generate_plan
+    conn = db.connect(deps.db_path)
+    try:
+        baseline = db.get_baseline(conn, baseline_id)
+        with timing.span(timing.PLAN, "improvement_plan"):
+            plan = generate_plan(conn, run_id, subscores, weights, baseline,
+                                 store.load_profile(conn, candidate_id), deps.planner)
+        db.set_plan_status(conn, run_id, "failed" if plan.error else "ready")
+        return plan
+    except Exception:
+        log.exception("plan generation failed")
+        db.set_plan_status(conn, run_id, "failed")
+        raise
+    finally:
+        rec = timing.active()
+        if rec is not None:
+            db.save_run_timings(conn, run_id, rec.summary())
+        conn.close()
+
+
 def _gap_analysis(deps: Deps):
     def node(state: RunState) -> dict:
         from scoring.gaps import rank_gaps
-        from scoring.plan import generate_plan
-        subscores = state.get("subcategory_scores", {})
+        subscores, run_id = state.get("subcategory_scores", {}), state["run_id"]
         conn = db.connect(deps.db_path)
         try:
-            baseline = db.get_baseline(conn, state["baseline_id"])
-            ranked = rank_gaps(subscores, state["weights"], baseline)
-            with timing.span(timing.PLAN, "improvement_plan"):
-                plan = generate_plan(conn, state["run_id"], subscores, state["weights"], baseline,
-                                     store.load_profile(conn, state["candidate_id"]), deps.planner)
+            ranked = [g.as_dict() for g in rank_gaps(subscores, state["weights"],
+                                                     db.get_baseline(conn, state["baseline_id"]))]
+            args = (deps, run_id, state["candidate_id"], state["baseline_id"], subscores, state["weights"])
+            if deps.planner is not None and deps.plan_in_background:
+                db.set_plan_status(conn, run_id, "generating")     # finish late: the score is shown first
+                PLAN_JOBS[run_id] = BACKGROUND.submit(timing.bind(write_plan), *args)
+                return {"ranked_gaps": ranked, "plan_markdown": None, "plan_error": None,
+                        "plan_status": "generating"}
+            plan = write_plan(*args)
         except Exception as exc:  # the scores are saved; a plan problem must not fail the run
             log.exception("gap analysis failed")
-            return {"plan_error": f"{exc.__class__.__name__}: {exc}", "ranked_gaps": []}
+            return {"plan_error": f"{exc.__class__.__name__}: {exc}", "ranked_gaps": [], "plan_status": "failed"}
         finally:
             conn.close()
-        return {"ranked_gaps": [g.as_dict() for g in ranked], "plan_markdown": plan.markdown,
-                "plan_error": plan.error}
+        return {"ranked_gaps": ranked, "plan_markdown": plan.markdown, "plan_error": plan.error,
+                "plan_status": "failed" if plan.error else "ready"}
     return node
+
+
+# Subcategories whose job-independent judgments start while the candidate reviews (specs/09 §2.6).
+EARLY_SUBCATEGORIES = ("outcomes", "impact", "ownership", "scope_of_impact", "proof_density", "consistency",
+                       "evidence_quality")
+
+
+def early_judgments(deps: Deps, candidate_id: str, baseline_id: str) -> int:
+    """Ask the job-independent questions of EARLY_SUBCATEGORIES now; scoring later finds them saved
+    (or waits for ones still in flight). Edited items have new text, so scoring judges them again."""
+    from judges.questions import QUESTIONS
+    with timing.span(timing.EARLY, "job_independent") as t:
+        with open_ctx(deps, {"candidate_id": candidate_id, "baseline_id": baseline_id}, with_relevance=False) as ctx:
+            if scoring_blocker(ctx.profile):
+                return 0
+            subs = [s for group in DIMENSIONS.values() for s in group if s.name in EARLY_SUBCATEGORIES]
+            asks = [a for s in subs for a in s.plan(ctx) if not QUESTIONS[a.key].job_dependent]
+            resolve(ctx, asks, call=True)
+            t.update(asks=len(asks), calls=ctx.svc.calls)
+            return len(asks)
 
 
 def build_graph(deps: Deps) -> StateGraph:
@@ -403,6 +456,7 @@ class Pipeline:
         self.graph = build_graph(deps).compile(checkpointer=checkpointer or InMemorySaver())
         self.print_timings = config.PRINT_TIMINGS if print_timings is None else print_timings
         self.recorders: dict[str, timing.Recorder] = {}     # thread_id → timings (onboarding + scoring)
+        self.early: dict[str, Future] = {}                   # thread_id → job-independent judgments job
 
     @staticmethod
     def _cfg(thread_id: str) -> dict:
@@ -461,11 +515,29 @@ class Pipeline:
             print(f"\nTimings for run {run_id}:\n{timing.table(summary)}", flush=True)
 
     def start_onboarding(self, inputs: OnboardingInputs, baseline_id: str, weights: dict | None = None,
-                         on_progress=None, on_event=None) -> dict:
-        """Ingest, extract, validate; stops at review (result["awaiting_review"])."""
+                         on_progress=None, on_event=None, early: bool = True) -> dict:
+        """Ingest, extract, validate; stops at review (result["awaiting_review"]).
+
+        early: start the job-independent judgments in the background while the candidate reviews.
+        """
         tid = str(uuid.uuid4())
-        return self._run({"inputs": inputs_to_state(inputs), "baseline_id": baseline_id,
-                          "weights": weights or config.default_weights()}, tid, on_progress, on_event)
+        res = self._run({"inputs": inputs_to_state(inputs), "baseline_id": baseline_id,
+                         "weights": weights or config.default_weights()}, tid, on_progress, on_event)
+        if early and res.get("awaiting_review") and res.get("candidate_id") and not res.get("blocked"):
+            with timing.recording(self.recorders[tid]):
+                self.early[tid] = BACKGROUND.submit(timing.bind(early_judgments), self.deps, res["candidate_id"],
+                                                    baseline_id)
+        return res
+
+    def wait_for_early(self, thread_id: str, timeout: float = 300) -> int | None:
+        job = self.early.get(thread_id)
+        return job.result(timeout) if job is not None else None
+
+    @staticmethod
+    def wait_for_plan(run_id: str, timeout: float = 300):
+        """The run's plan once written in the background (None if it was not started in the background)."""
+        job = PLAN_JOBS.get(run_id)
+        return job.result(timeout) if job is not None else None
 
     def confirm_review(self, thread_id: str, answer: dict | None = None, on_progress=None, on_event=None) -> dict:
         """Resume after the user reviewed the profile; runs scoring unless still blocked or cancelled."""

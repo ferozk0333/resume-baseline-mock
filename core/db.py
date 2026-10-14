@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -144,7 +144,8 @@ CREATE TABLE IF NOT EXISTS runs (
   logic_version TEXT,
   baseline_hash TEXT,
   models_json TEXT,
-  timings_json TEXT
+  timings_json TEXT,
+  plan_status TEXT                -- generating | ready | failed (improvement plan, written after the score)
 );
 
 CREATE TABLE IF NOT EXISTS document_texts (
@@ -292,6 +293,7 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (8, ["ALTER TABLE gap_reports ADD COLUMN plan_json TEXT"]),
     (9, ["ALTER TABLE runs ADD COLUMN timings_json TEXT"]),
     (10, [DOCUMENT_TEXTS, HTTP_CACHE]),
+    (11, ["ALTER TABLE runs ADD COLUMN plan_status TEXT"]),
 ]
 
 
@@ -429,6 +431,11 @@ def create_run(conn: sqlite3.Connection, candidate_id: str, baseline_id: str, we
 def finish_run(conn: sqlite3.Connection, run_id: str, status: str = "done") -> None:
     with conn:
         conn.execute("UPDATE runs SET status = ?, finished_at = ? WHERE id = ?", (status, now_iso(), run_id))
+
+
+def set_plan_status(conn: sqlite3.Connection, run_id: str, status: str) -> None:
+    with conn:
+        conn.execute("UPDATE runs SET plan_status = ? WHERE id = ?", (status, run_id))
 
 
 def save_run_timings(conn: sqlite3.Connection, run_id: str, timings: dict) -> None:

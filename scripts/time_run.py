@@ -74,11 +74,19 @@ def main() -> None:
         print("warnings:", *first["warnings"], sep="\n  ")
     if not first.get("awaiting_review"):
         sys.exit(f"onboarding did not reach review: blocked={first.get('blocked')!r}")
+    # The candidate reviews while job-independent judgments run (specs/09 §2.6); assume they take at least as long.
+    if hasattr(pipe, "wait_for_early"):
+        pipe.wait_for_early(first["thread_id"])
+    t_review = time.perf_counter()
     res = pipe.confirm_review(first["thread_id"])
     t2 = time.perf_counter()
+    if hasattr(Pipeline, "wait_for_plan") and res.get("run_id"):
+        Pipeline.wait_for_plan(res["run_id"])
+    t3 = time.perf_counter()
 
     summary = pipe.recorders[first["thread_id"]].summary()
-    summary["measured"] = {"upload_to_review": round(t1 - t0, 2), "confirm_to_end": round(t2 - t1, 2)}
+    summary["measured"] = {"upload_to_review": round(t1 - t0, 2), "review_wait": round(t_review - t1, 2),
+                           "confirm_to_score": round(t2 - t_review, 2), "confirm_to_plan": round(t3 - t_review, 2)}
     result = {"label": args.label, "baseline": args.baseline, "final": res.get("final"),
               "dimensions": res.get("dimension_scores"), "errors": res.get("errors"),
               "plan_error": res.get("plan_error"), "warnings": first.get("warnings"),
@@ -87,7 +95,7 @@ def main() -> None:
               "subcategories": {k: {"status": v["status"], "score": v["score"]}
                                 for k, v in (res.get("subcategory_scores") or {}).items()},
               "timings": summary}
-    text = timing.table(summary) + (f"\n\nfinal {res.get('final'):.1f}  errors {len(res.get('errors') or [])}"
+    text = timing.table(summary) + f"\n\nmeasured: {summary['measured']}" + (f"\n\nfinal {res.get('final'):.1f}  errors {len(res.get('errors') or [])}"
                                     if res.get("final") is not None else "\n\nno score")
     (out / f"{args.label}.json").write_text(json.dumps(result, indent=1, default=str))
     (out / f"{args.label}.txt").write_text(text + "\n")

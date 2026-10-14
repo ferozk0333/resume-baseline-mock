@@ -1,5 +1,6 @@
 """Gaps: ranked gaps (code) and the improvement plan as action cards. Weights re-price instantly."""
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -32,6 +33,10 @@ with services.connection() as conn:
 
     st.subheader("Improvement plan")
     plan = current_plan(conn, run["id"], weights)              # stored plan re-priced: no model call
+    if plan is None and run.get("plan_status") == "generating":   # written after the score (specs/09 §2.6)
+        st.info("Writing your improvement plan… it appears here in a few seconds. The ranked gaps above are final.")
+        time.sleep(2)
+        st.rerun()
     label = "Regenerate plan" if plan else "Generate plan"
     if st.button(label, type="primary"):
         try:

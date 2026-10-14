@@ -27,6 +27,13 @@ log = logging.getLogger(__name__)
 RULE_MODEL = f"rule-{config.LOGIC_VERSION}"
 
 
+# Single flight (specs/09 §2.6): a judgment being asked right now (e.g. by the early-start job during
+# review) is awaited rather than asked again, so overlapping work never pays twice.
+_INFLIGHT: dict[tuple, threading.Event] = {}
+_INFLIGHT_LOCK = threading.Lock()
+INFLIGHT_WAIT_SECONDS = 180
+
+
 def input_hash(key: str, context: dict) -> str:
     return hashlib.sha256(f"{key}\n{render_context(context)}".encode("utf-8")).hexdigest()
 
@@ -70,6 +77,25 @@ class JudgmentService:
             confidence=row["confidence"], score=row["score"],
         )
 
+    def _flight(self, key: str, subject_id: str, context: dict, baseline: Baseline | None) -> tuple:
+        return (self.candidate_id, subject_id, key, *self._scope(key, baseline), input_hash(key, context))
+
+    @staticmethod
+    def claim(flight: tuple) -> threading.Event | None:
+        """None: the caller now owns this judgment and must release() it. An Event: another thread is asking."""
+        with _INFLIGHT_LOCK:
+            event = _INFLIGHT.get(flight)
+            if event is None:
+                _INFLIGHT[flight] = threading.Event()
+            return event
+
+    @staticmethod
+    def release(flight: tuple) -> None:
+        with _INFLIGHT_LOCK:
+            event = _INFLIGHT.pop(flight, None)
+        if event is not None:
+            event.set()
+
     def cached(self, key: str, subject_id: str, context: dict, baseline: Baseline | None = None,
                judge: Judge | None = None) -> Judgment | None:
         """Saved judgment for exactly this input, from a model the judge would use (or a rule). No model call."""
@@ -99,6 +125,23 @@ class JudgmentService:
             with self._lock:
                 self.cache_hits += 1
             return hit
+        flight = self._flight(key, subject_id, context, baseline)
+        busy = self.claim(flight)
+        if busy is not None:                      # someone is asking this right now: use their answer
+            busy.wait(INFLIGHT_WAIT_SECONDS)
+            hit = self.cached(key, subject_id, context, baseline, judge)
+            if hit is not None:
+                with self._lock:
+                    self.cache_hits += 1
+                return hit
+            return self._ask(key, subject_type, subject_id, context, baseline, judge, require_quote)
+        try:
+            return self._ask(key, subject_type, subject_id, context, baseline, judge, require_quote)
+        finally:
+            self.release(flight)
+
+    def _ask(self, key: str, subject_type: str, subject_id: str, context: dict, baseline: Baseline | None,
+             judge: Judge, require_quote: bool) -> Judgment | None:
         q = question(key)
         try:
             judgment = self._call(judge, key, subject_id, context)
@@ -133,6 +176,18 @@ class JudgmentService:
                   baseline: Baseline | None) -> dict[str, Judgment | None]:
         """Several questions about one subject in one judge call (specs/09 §2.3). Each answer is saved as
         its own row with the same cache key as a single ask; fallbacks and failures are per question."""
+        flights = {k: self._flight(k, subject_id, context, baseline) for k in keys}
+        keys = [k for k in keys if self.claim(flights[k]) is None]     # the rest are being asked elsewhere
+        if not keys:
+            return {}
+        try:
+            return self._ask_group(keys, subject_type, subject_id, context, baseline)
+        finally:
+            for k in keys:
+                self.release(flights[k])
+
+    def _ask_group(self, keys: list[str], subject_type: str, subject_id: str, context: dict,
+                   baseline: Baseline | None) -> dict[str, Judgment | None]:
         with self._lock:
             self.calls += 1
         with timing.span(timing.JUDGE, "+".join(keys), group=len(keys)) as t:
@@ -166,6 +221,18 @@ class JudgmentService:
         input. A criterion that fails the check (or that the batch left out) is retried alone once; if it
         still fails, it is recorded as the none-option by rule. Failed answers are kept as not used.
         """
+        flights = {sid: self._flight(key, sid, ctx, baseline) for sid, ctx in items}
+        items = [(sid, ctx) for sid, ctx in items if self.claim(flights[sid]) is None]
+        if not items:
+            return {}
+        try:
+            return self._ask_batch(key, subject_type, items, baseline, judge)
+        finally:
+            for sid, _ in items:
+                self.release(flights[sid])
+
+    def _ask_batch(self, key: str, subject_type: str, items: list[tuple[str, dict]], baseline: Baseline | None,
+                   judge: Judge) -> dict[str, Judgment | None]:
         q = question(key)
         with self._lock:
             self.calls += 1

@@ -27,6 +27,7 @@ EXTRACT = "extract"    # one extraction call
 JUDGE = "judge"        # one judgment asked of a judge (Jev and/or Claude, retries included)
 MODEL = "model"        # one HTTP model call (claude | jev)
 PLAN = "plan"          # improvement plan generation
+EARLY = "early"        # job-independent judgments started during review (specs/09 §2.6)
 
 
 class Recorder:
@@ -54,13 +55,23 @@ class Recorder:
             return None
         return steps[last]["start"] + steps[last]["seconds"] - steps[first]["start"]
 
+    def _score_to_plan(self) -> float | None:
+        """Wall seconds from 'Confirm & score' (prepare_match starts) to the plan being saved."""
+        steps = {e["name"]: e for e in self.of(STEP)}
+        plans = self.of(PLAN)
+        if "prepare_match" not in steps:
+            return None
+        end = max([e["start"] + e["seconds"] for e in plans] +
+                  [steps[s]["start"] + steps[s]["seconds"] for s in ("aggregate", "gap_analysis") if s in steps])
+        return round(end - steps["prepare_match"]["start"], 3)
+
     def summary(self) -> dict:
         """Plain-data summary stored in runs.timings_json."""
         steps = [{"step": e["name"], "seconds": e["seconds"], "start": e["start"]} for e in self.of(STEP)]
         groups: dict[tuple, dict] = defaultdict(lambda: {"calls": 0, "seconds": 0.0, "max": 0.0,
                                                           **{k: 0 for k in TOKEN_KEYS}})
         for e in self.events:
-            if e["kind"] not in (INGEST, EXTRACT, JUDGE, MODEL, PLAN):
+            if e["kind"] not in (INGEST, EXTRACT, JUDGE, MODEL, PLAN, EARLY):
                 continue
             key = (e["kind"], e["name"], e.get("model") or "", e.get("method") or "")
             g = groups[key]
@@ -88,8 +99,9 @@ class Recorder:
             "judge_calls": len(self.of(JUDGE)),
             "onboarding_seconds": self.window("ingest", "validate"),
             "score_seconds": self.window("prepare_match", "aggregate"),
-            "plan_seconds": self.window("gap_analysis", "gap_analysis"),
-            "scoring_and_plan_seconds": self.window("prepare_match", "gap_analysis"),
+            "early_seconds": round(sum(e["seconds"] for e in self.of(EARLY)), 3) or None,
+            "plan_seconds": round(sum(e["seconds"] for e in self.of(PLAN)), 3) or None,
+            "scoring_and_plan_seconds": self._score_to_plan(),
             "subcategory_judge_seconds": {e["path"][-1]: e["seconds"] for e in self.of(NODE)
                                           if e["name"] == "judge" and e.get("path")},
         }
@@ -176,8 +188,9 @@ def table(summary: dict) -> str:
         if s["step"] == "review":
             continue
         lines.append(f"{s['step']:38s} {s['seconds']:8.2f} {100 * s['seconds'] / total:5.0f}%")
-    for label, key in (("upload → review", "onboarding_seconds"), ("confirm → score", "score_seconds"),
-                       ("plan", "plan_seconds")):
+    for label, key in (("upload → review", "onboarding_seconds"), ("early judging (during review)", "early_seconds"),
+                       ("confirm → score", "score_seconds"), ("plan (after the score)", "plan_seconds"),
+                       ("confirm → plan ready", "scoring_and_plan_seconds")):
         if summary.get(key) is not None:
             lines.append(f"{'= ' + label:38s} {summary[key]:8.2f}")
     lines.append("")

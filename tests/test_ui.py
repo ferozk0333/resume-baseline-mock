@@ -35,6 +35,7 @@ def scored_candidate(path, with_drop=False):
     p = Pipeline(deps)
     r = p.start_onboarding(OnboardingInputs(resume=Upload("cv.pdf", make_pdf(SAMPLE_RESUME_LINES)), name="Jane"), DS)
     done = p.confirm_review(r["thread_id"])
+    Pipeline.wait_for_plan(done["run_id"])           # the plan is written after the score
     return done["candidate_id"], done["run_id"]
 
 
