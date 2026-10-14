@@ -122,6 +122,16 @@ class WeightsIn(BaseModel):
     weights: dict
 
 
+class JobUpdate(BaseModel):
+    weights: dict | None = None
+    must_haves: list[str] | None = None
+    preset: str | None = None
+
+
+class StatusIn(BaseModel):
+    status: Literal["new", "shortlisted", "not_moving_forward"]
+
+
 class ProfileEdit(BaseModel):
     """One review edit. `item` is role | project | bullet? (bullets go with their role/project) | claim |
     certification; `op` add | edit | delete | add_back (add_back uses `id` of a dropped item)."""
@@ -468,6 +478,83 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 await asyncio.sleep(0.3)
         return StreamingResponse(stream(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    # --- Recruiter (phase 11) ----------------------------------------------------------------------------
+    from backend import recruiter as rc
+
+    def job_or_404(c, job_id: str) -> dict:
+        return rc.get_job(c, job_id) or not_found("Job")
+
+    def app_or_404(c, app_id: str) -> dict:
+        row = c.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone()
+        return dict(row) if row else not_found("Application")
+
+    @app.get("/jobs", tags=["recruiter"])
+    def jobs():
+        with conn() as c:
+            return rc.list_jobs(c)
+
+    @app.get("/jobs/{job_id}", tags=["recruiter"])
+    def job(job_id: str):
+        with conn() as c:
+            j = job_or_404(c, job_id)
+            return {**j, "baseline": db.get_baseline(c, j["baseline_id"]), "presets": list(rc.PRESETS),
+                    "presets_note": "All presets equal the team table until the team sets values."}
+
+    @app.put("/jobs/{job_id}", tags=["recruiter"])
+    def update_job(job_id: str, body: JobUpdate):
+        with conn() as c:
+            job_or_404(c, job_id)
+            try:
+                return rc.update_job(c, job_id, weights=body.weights, must_haves=body.must_haves, preset=body.preset)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/jobs/{job_id}/applicants", tags=["recruiter"])
+    def applicants(job_id: str, sort: str = "match", status: str | None = None, all_must_haves: bool = False,
+                   min_score: float | None = None):
+        """Ranked by the job's weights. Re-ranking after a weight change makes no model calls."""
+        with conn() as c:
+            j = job_or_404(c, job_id)
+            try:
+                rows = rc.applicants(c, j, sort=sort, status=status, all_must_haves=all_must_haves, min_score=min_score)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            return {"weights": j["weights"], "preset": j["preset"], "applicants": rows}
+
+    @app.get("/applications/{app_id}", tags=["recruiter"])
+    def application(app_id: str):
+        with conn() as c:
+            a = app_or_404(c, app_id)
+            return rc.panel(c, a, job_or_404(c, a["job_id"]))
+
+    @app.patch("/applications/{app_id}", tags=["recruiter"])
+    def application_status(app_id: str, body: StatusIn):
+        with conn() as c:
+            app_or_404(c, app_id)
+            rc.set_status(c, app_id, body.status)
+            return {"application_id": app_id, "status": body.status}
+
+    @app.get("/jobs/{job_id}/compare", tags=["recruiter"])
+    def compare(job_id: str, ids: str):
+        with conn() as c:
+            try:
+                return rc.compare(c, job_or_404(c, job_id), [i for i in ids.split(",") if i])
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/candidates/{candidate_id}/files/resume", tags=["candidates"])
+    def resume_file(candidate_id: str):
+        """The uploaded (or rendered demo) resume, for the inline viewer."""
+        from fastapi.responses import FileResponse
+        with conn() as c:
+            ev = next((e for e in store.list_evidence(c, candidate_id) if e["type"] == "resume" and e["file_path"]), None)
+        if ev is None or not os.path.exists(ev["file_path"]):
+            not_found("Resume file")
+        kind = "application/pdf" if ev["file_path"].endswith(".pdf") else \
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        return FileResponse(ev["file_path"], media_type=kind,
+                            headers={"Content-Disposition": f'inline; filename="resume.{ev["file_path"].rsplit(".", 1)[-1]}"'})
 
     @app.get("/config/weights", tags=["scoring"])
     def default_weights():

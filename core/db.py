@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS candidates (
   target_role TEXT,
   github_username TEXT,
   portfolio_url TEXT,
-  created_at TEXT
+  created_at TEXT,
+  data_source TEXT                -- null = uploaded; demo_parsed | archetype (demo data, labelled in the UI)
 );
 
 CREATE TABLE IF NOT EXISTS evidence_items (
@@ -154,6 +155,32 @@ CREATE TABLE IF NOT EXISTS document_texts (
   text TEXT,
   created_at TEXT,
   PRIMARY KEY (file_sha256, normalizer)
+);
+
+CREATE TABLE IF NOT EXISTS jobs (           -- recruiter view (phase 11): one job per baseline
+  id TEXT PRIMARY KEY,
+  baseline_id TEXT,
+  title TEXT, company TEXT,
+  weights_json TEXT,              -- defaults to the team table
+  must_haves_json TEXT,           -- list of baseline criterion ids
+  preset TEXT,                    -- weights preset name, or null for custom
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS applications (
+  id TEXT PRIMARY KEY,
+  job_id TEXT, candidate_id TEXT,
+  run_id TEXT,                    -- latest scoring run against the job's baseline
+  status TEXT,                    -- new | shortlisted | not_moving_forward
+  applied_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS generated_summaries (  -- "why" points and phone-screen questions, cached per run and weights
+  run_id TEXT, kind TEXT,         -- why | questions
+  weights_hash TEXT,
+  content_json TEXT, model TEXT,  -- model = "template-v1" for code templates ("Demo text")
+  created_at TEXT,
+  PRIMARY KEY (run_id, kind, weights_hash)
 );
 
 CREATE TABLE IF NOT EXISTS tasks (          -- background work started by the API (phase 10)
@@ -296,6 +323,14 @@ DOCUMENT_TEXTS = """CREATE TABLE IF NOT EXISTS document_texts (
   file_sha256 TEXT, normalizer TEXT, text TEXT, created_at TEXT, PRIMARY KEY (file_sha256, normalizer))"""
 EXTRACTION_CACHE = """CREATE TABLE IF NOT EXISTS extraction_cache (
   key TEXT PRIMARY KEY, model TEXT, output_json TEXT, created_at TEXT)"""
+JOBS = """CREATE TABLE IF NOT EXISTS jobs (
+  id TEXT PRIMARY KEY, baseline_id TEXT, title TEXT, company TEXT, weights_json TEXT, must_haves_json TEXT,
+  preset TEXT, created_at TEXT)"""
+APPLICATIONS = """CREATE TABLE IF NOT EXISTS applications (
+  id TEXT PRIMARY KEY, job_id TEXT, candidate_id TEXT, run_id TEXT, status TEXT, applied_at TEXT)"""
+GENERATED_SUMMARIES = """CREATE TABLE IF NOT EXISTS generated_summaries (
+  run_id TEXT, kind TEXT, weights_hash TEXT, content_json TEXT, model TEXT, created_at TEXT,
+  PRIMARY KEY (run_id, kind, weights_hash))"""
 TASKS = """CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY, kind TEXT, candidate_id TEXT, run_id TEXT, status TEXT, step TEXT, message TEXT,
   percent REAL, error TEXT, result_json TEXT, created_at TEXT, updated_at TEXT)"""
@@ -347,6 +382,7 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (12, [EXTRACTION_CACHE]),
     (13, [PROVIDER_USAGE]),
     (14, [TASKS, TASK_EVENTS, MEDIA_LINKS]),
+    (15, ["ALTER TABLE candidates ADD COLUMN data_source TEXT", JOBS, APPLICATIONS, GENERATED_SUMMARIES]),
 ]
 
 
