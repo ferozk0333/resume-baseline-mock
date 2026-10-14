@@ -44,7 +44,8 @@ def default_deps() -> Deps:
     if not config.ANTHROPIC_API_KEY and not all(m.startswith(("groq/", "gemini/")) for m in models):
         raise RuntimeError("ANTHROPIC_API_KEY is not set in .env (or set LLM_PROVIDER=gemini).")
     return Deps(str(config.DB_PATH), get_judge(), llm=RoutedLLM(effort=config.EXTRACT_EFFORT), extraction_cache=True,
-                planner=RoutedLLM(max_tokens=config.PLAN_MAX_TOKENS, effort=config.PLAN_EFFORT))
+                planner=RoutedLLM(max_tokens=config.PLAN_MAX_TOKENS, effort=config.PLAN_EFFORT),
+                writer=RoutedLLM())
 
 
 def build_deps() -> Deps:
@@ -62,6 +63,15 @@ class State:
         self._deps = deps
         self._pipeline: Pipeline | None = None
         self.review_threads: dict[str, str] = {}          # candidate_id → paused onboarding thread
+        self._rejection = None
+
+    @property
+    def rejection(self):
+        """The "Not moving forward" graph (paused drafts live in its in-memory checkpointer)."""
+        if self._rejection is None:
+            from backend.rejection_flow import RejectionFlow
+            self._rejection = RejectionFlow(self.db_path, self.deps.writer)
+        return self._rejection
 
     @property
     def deps(self) -> Deps:
@@ -130,6 +140,49 @@ class JobUpdate(BaseModel):
 
 class StatusIn(BaseModel):
     status: Literal["new", "shortlisted", "not_moving_forward"]
+
+
+class StageMove(BaseModel):
+    stage_id: str | None
+
+
+class StageIn(BaseModel):
+    name: str
+    focus: list[str] | None = None
+
+
+class StageEdit(BaseModel):
+    name: str | None = None
+    focus: list[str] | None = None
+
+
+class StageOrder(BaseModel):
+    ids: list[str]
+
+
+class JobSettingsIn(BaseModel):
+    recruiter_name: str | None = None
+    duration_minutes: int | None = None
+    availability: str | None = None
+    scheduling_link: str | None = None
+
+
+class RejectIn(BaseModel):
+    reason_ids: list[str] | None = None
+    note: str | None = None
+
+
+class LoopIn(BaseModel):
+    application_ids: list[str]
+
+
+class StageEmailIn(BaseModel):
+    stage_id: str
+
+
+class EmailEdit(BaseModel):
+    subject: str | None = None
+    body: str | None = None
 
 
 class ProfileEdit(BaseModel):
@@ -489,6 +542,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     # --- Recruiter (phase 11) ----------------------------------------------------------------------------
     from backend import recruiter as rc
+    from backend import workflows as wf
 
     def job_or_404(c, job_id: str) -> dict:
         return rc.get_job(c, job_id) or not_found("Job")
@@ -538,10 +592,138 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     @app.patch("/applications/{app_id}", tags=["recruiter"])
     def application_status(app_id: str, body: StatusIn):
+        """Shortlist or back to new (stages follow). Not moving forward normally goes through the email drawer."""
+        with conn() as c:
+            a = wf.set_status(c, app_or_404(c, app_id), body.status)
+            return {"application_id": app_id, "status": a["status"], "stage_id": a["stage_id"]}
+
+    # --- Interview plan, pipeline and activity (specs/13 §3) ------------------------------------------
+    def wf_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/jobs/{job_id}/settings", tags=["workflows"])
+    def job_settings(job_id: str):
+        with conn() as c:
+            job_or_404(c, job_id)
+            return {"settings": wf.settings(c, job_id), "stages": wf.stages(c, job_id)}
+
+    @app.put("/jobs/{job_id}/settings", tags=["workflows"])
+    def put_job_settings(job_id: str, body: JobSettingsIn):
+        with conn() as c:
+            job_or_404(c, job_id)
+            return {"settings": wf_call(wf.update_settings, c, job_id, body.model_dump()), "stages": wf.stages(c, job_id)}
+
+    @app.post("/jobs/{job_id}/stages", tags=["workflows"])
+    def add_stage(job_id: str, body: StageIn):
+        with conn() as c:
+            job_or_404(c, job_id)
+            return wf_call(wf.add_stage, c, job_id, body.name, body.focus)
+
+    @app.patch("/jobs/{job_id}/stages/{stage_id}", tags=["workflows"])
+    def edit_stage(job_id: str, stage_id: str, body: StageEdit):
+        with conn() as c:
+            job_or_404(c, job_id)
+            return wf_call(wf.update_stage, c, job_id, stage_id, body.name, body.focus)
+
+    @app.put("/jobs/{job_id}/stages/order", tags=["workflows"])
+    def order_stages(job_id: str, body: StageOrder):
+        with conn() as c:
+            job_or_404(c, job_id)
+            return wf_call(wf.reorder_stages, c, job_id, body.ids)
+
+    @app.delete("/jobs/{job_id}/stages/{stage_id}", tags=["workflows"])
+    def remove_stage(job_id: str, stage_id: str):
+        with conn() as c:
+            job_or_404(c, job_id)
+            return wf_call(wf.delete_stage, c, job_id, stage_id)
+
+    @app.get("/jobs/{job_id}/pipeline", tags=["workflows"])
+    def job_pipeline(job_id: str):
+        with conn() as c:
+            return wf.pipeline(c, job_or_404(c, job_id))
+
+    @app.patch("/applications/{app_id}/stage", tags=["workflows"])
+    def move_stage(app_id: str, body: StageMove):
+        """Move a card between stages; the move is logged in Activity."""
+        with conn() as c:
+            a = wf_call(wf.move, c, app_or_404(c, app_id), body.stage_id)
+            return {"application_id": app_id, "status": a["status"], "stage_id": a["stage_id"]}
+
+    @app.get("/applications/{app_id}/activity", tags=["workflows"])
+    def application_activity(app_id: str):
         with conn() as c:
             app_or_404(c, app_id)
-            rc.set_status(c, app_id, body.status)
-            return {"application_id": app_id, "status": body.status}
+            return wf.activity(c, app_id)
+
+    # --- Emails (specs/13 §2–§4): drafts only; nothing is sent without the Send action ----------------------
+    @app.get("/email/config", tags=["workflows"])
+    def email_config():
+        return {"provider": config.EMAIL_PROVIDER, "demo_redirect": config.DEMO_EMAIL_TO or None,
+                "model": config.EMAIL_MODEL if state.deps.writer is not None else None}
+
+    @app.post("/applications/{app_id}/not-moving-forward", tags=["workflows"])
+    def reject_draft(app_id: str, body: RejectIn | None = None):
+        """Reasons (code) → draft (model) → checks (code) → paused for the recruiter's review. Sends nothing."""
+        with conn() as c:
+            app_or_404(c, app_id)
+        return state.rejection.draft(app_id, body.reason_ids if body else None, body.note if body else None)
+
+    @app.post("/jobs/{job_id}/interview-loop", tags=["workflows"])
+    def start_loop(job_id: str, body: LoopIn):
+        with conn() as c:
+            return wf_call(wf.start_loop, c, job_or_404(c, job_id), body.application_ids, state.deps.writer)
+
+    @app.get("/jobs/{job_id}/interview-loop/{batch_id}", tags=["workflows"])
+    def loop_batch(job_id: str, batch_id: str):
+        with conn() as c:
+            job_or_404(c, job_id)
+            return {"batch_id": batch_id, "drafts": wf.list_emails(c, job_id=job_id, batch_id=batch_id)}
+
+    @app.post("/applications/{app_id}/stage-email", tags=["workflows"])
+    def stage_email(app_id: str, body: StageEmailIn):
+        with conn() as c:
+            a = app_or_404(c, app_id)
+            job = job_or_404(c, a["job_id"])
+            stage = next((s for s in wf.stages(c, job["id"]) if s["id"] == body.stage_id and not s["terminal"]), None)
+            if stage is None:
+                raise HTTPException(422, "Pick an interview stage of this job.")
+            return wf.draft_scheduling(c, a, job, stage, state.deps.writer)
+
+    @app.get("/emails", tags=["workflows"])
+    def emails(status: str | None = None, job_id: str | None = None):
+        with conn() as c:
+            return wf.list_emails(c, status=status, job_id=job_id)
+
+    @app.get("/emails/{email_id}", tags=["workflows"])
+    def email(email_id: str):
+        with conn() as c:
+            return wf.get_email(c, email_id) or not_found("Email")
+
+    @app.put("/emails/{email_id}", tags=["workflows"])
+    def edit_email(email_id: str, body: EmailEdit):
+        """Save draft: the recruiter's edits (checked again for scores, ranking, other candidates)."""
+        with conn() as c:
+            return wf_call(wf.edit_email, c, email_id, body.subject, body.body)
+
+    @app.post("/emails/{email_id}/send", tags=["workflows"])
+    def send(email_id: str):
+        """The recruiter's Send action: the only way an email is delivered."""
+        with conn() as c:
+            e = wf.get_email(c, email_id) or not_found("Email")
+            if e["kind"] == "not_moving_forward":
+                return wf_call(state.rejection.decide, email_id, "send")
+            return wf_call(wf.send_scheduling, c, email_id)
+
+    @app.post("/emails/{email_id}/cancel", tags=["workflows"])
+    def cancel(email_id: str):
+        with conn() as c:
+            e = wf.get_email(c, email_id) or not_found("Email")
+            if e["kind"] == "not_moving_forward" and e["status"] == "draft":
+                return wf_call(state.rejection.decide, email_id, "cancel")
+            return wf.cancel_email(c, email_id)
 
     @app.get("/jobs/{job_id}/compare", tags=["recruiter"])
     def compare(job_id: str, ids: str):

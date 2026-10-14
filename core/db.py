@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS candidates (
   github_username TEXT,
   portfolio_url TEXT,
   created_at TEXT,
-  data_source TEXT                -- null = uploaded; demo_parsed | archetype (demo data, labelled in the UI)
+  data_source TEXT,               -- null = uploaded; demo_parsed | archetype | test_variant (demo data, labelled in the UI)
+  email TEXT                      -- contact address for recruiter emails (demo: fictional, example.com)
 );
 
 CREATE TABLE IF NOT EXISTS evidence_items (
@@ -164,15 +165,43 @@ CREATE TABLE IF NOT EXISTS jobs (           -- recruiter view (phase 11): one jo
   weights_json TEXT,              -- defaults to the team table
   must_haves_json TEXT,           -- list of baseline criterion ids
   preset TEXT,                    -- weights preset name, or null for custom
-  created_at TEXT
+  created_at TEXT,
+  settings_json TEXT              -- recruiter name, interview duration, availability windows, scheduling link
 );
 
 CREATE TABLE IF NOT EXISTS applications (
   id TEXT PRIMARY KEY,
   job_id TEXT, candidate_id TEXT,
   run_id TEXT,                    -- latest scoring run against the job's baseline
-  status TEXT,                    -- new | shortlisted | not_moving_forward
-  applied_at TEXT
+  status TEXT,                    -- new | shortlisted | in_loop | not_moving_forward (follows the stage)
+  applied_at TEXT,
+  stage_id TEXT                   -- interview_stages.id; null = not yet in the interview plan
+);
+
+CREATE TABLE IF NOT EXISTS interview_stages (   -- interview plan per job (specs/13 §3)
+  id TEXT PRIMARY KEY, job_id TEXT,
+  name TEXT, position INTEGER,
+  focus_json TEXT,                -- focus areas (criterion names), pre-filled from the job's must-haves
+  terminal INTEGER DEFAULT 0      -- 1 = "Not moving forward"
+);
+
+CREATE TABLE IF NOT EXISTS activity (       -- stage moves, emails, decisions (Activity tab)
+  id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT,
+  kind TEXT,                      -- stage | email | decision | note
+  summary TEXT, detail_json TEXT, created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS emails (         -- every drafted or sent email (specs/13 §4)
+  id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT,
+  kind TEXT,                      -- not_moving_forward | scheduling | stage
+  stage_id TEXT, batch_id TEXT,
+  status TEXT,                    -- draft | sent | failed | cancelled
+  intended_to TEXT, actual_to TEXT,
+  subject TEXT, body TEXT,
+  model TEXT,                     -- model id, or "template" (labelled "Template draft")
+  provider TEXT,                  -- outbox | smtp
+  reasons_json TEXT, checks_json TEXT, error TEXT,
+  created_at TEXT, updated_at TEXT, sent_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS generated_summaries (  -- "why" points and phone-screen questions, cached per run and weights
@@ -339,6 +368,14 @@ TASK_EVENTS = """CREATE TABLE IF NOT EXISTS task_events (
   PRIMARY KEY (task_id, seq))"""
 MEDIA_LINKS = """CREATE TABLE IF NOT EXISTS media_links (
   id TEXT PRIMARY KEY, candidate_id TEXT, url TEXT, kind TEXT, title TEXT, project_id TEXT, created_at TEXT)"""
+INTERVIEW_STAGES = """CREATE TABLE IF NOT EXISTS interview_stages (
+  id TEXT PRIMARY KEY, job_id TEXT, name TEXT, position INTEGER, focus_json TEXT, terminal INTEGER DEFAULT 0)"""
+ACTIVITY = """CREATE TABLE IF NOT EXISTS activity (
+  id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT, kind TEXT, summary TEXT, detail_json TEXT, created_at TEXT)"""
+EMAILS = """CREATE TABLE IF NOT EXISTS emails (
+  id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT, kind TEXT, stage_id TEXT, batch_id TEXT, status TEXT,
+  intended_to TEXT, actual_to TEXT, subject TEXT, body TEXT, model TEXT, provider TEXT, reasons_json TEXT,
+  checks_json TEXT, error TEXT, created_at TEXT, updated_at TEXT, sent_at TEXT)"""
 PROVIDER_USAGE = """CREATE TABLE IF NOT EXISTS provider_usage (
   provider TEXT, model TEXT, day TEXT, requests INTEGER, tokens INTEGER, PRIMARY KEY (provider, model, day))"""
 HTTP_CACHE = """CREATE TABLE IF NOT EXISTS http_cache (
@@ -383,6 +420,8 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (13, [PROVIDER_USAGE]),
     (14, [TASKS, TASK_EVENTS, MEDIA_LINKS]),
     (15, ["ALTER TABLE candidates ADD COLUMN data_source TEXT", JOBS, APPLICATIONS, GENERATED_SUMMARIES]),
+    (16, ["ALTER TABLE candidates ADD COLUMN email TEXT", "ALTER TABLE jobs ADD COLUMN settings_json TEXT",
+          "ALTER TABLE applications ADD COLUMN stage_id TEXT", INTERVIEW_STAGES, ACTIVITY, EMAILS]),
 ]
 
 

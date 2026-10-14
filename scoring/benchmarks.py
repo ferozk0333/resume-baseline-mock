@@ -109,7 +109,8 @@ def percentiles(pool: list[Member], candidate_id: str) -> dict:
         vals = [get(o) for o in others if get(o) is not None]
         if mine is None or not vals:
             return None
-        return {"percentile": round(percentile(mine, vals)), "n": len(vals)}
+        # Median of the other candidates (the same N as the percentile), in the score's own units.
+        return {"percentile": round(percentile(mine, vals)), "n": len(vals), "median": _median(vals), "value": mine}
     return {**base, "shown": True, "final": one(lambda m: m.final),
             "dimensions": {d: one(lambda m, d=d: m.dimensions.get(d)) for d in DIMENSIONS}}
 

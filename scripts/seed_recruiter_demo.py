@@ -24,6 +24,14 @@ JOBS = {"baseline-data-scientist-entry": ("Data Scientist", "Northwind Analytics
         "baseline-product-manager-entry": ("Associate Product Manager", "Fernway Health")}
 
 
+def demo_email(conn, cid: str) -> None:
+    """Fictional address on the reserved example.com domain (the demo redirect sends everything elsewhere)."""
+    name = conn.execute("SELECT name FROM candidates WHERE id = ?", (cid,)).fetchone()[0] or ""
+    local = ".".join(p.lower() for p in name.split() if p.isalpha())
+    with conn:
+        conn.execute("UPDATE candidates SET email = ? WHERE id = ?", (f"{local}@example.com" if local else None, cid))
+
+
 def seed(db_path: str, reset: bool = False) -> dict:
     sys.path.insert(0, str(ROOT))
     from backend import recruiter as rc
@@ -59,6 +67,7 @@ def seed(db_path: str, reset: bool = False) -> dict:
     profiles_dir = ROOT / "rightstaff-test-profiles" / "profiles"
     ids = load_all(conn, profiles_dir, ROOT / "tests" / "fixtures" / "profiles" / "rendered")
     for pid, cid in ids.items():
+        demo_email(conn, cid)
         if is_variant(pid):                       # robustness tests only, never an applicant
             continue
         role = read_profile_file(next(profiles_dir.glob(f"*/{pid}.md"))).role

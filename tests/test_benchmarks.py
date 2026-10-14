@@ -51,7 +51,8 @@ def test_minimum_pool_rule(pool_db, monkeypatch):
                    "reason": "Not enough candidates for a comparison yet"}
     monkeypatch.setattr(config, "MIN_POOL", 7)
     out = bm.for_run(conn, runs["strong_ds"][1])["percentiles"]
-    assert out["shown"] and out["final"] == {"percentile": 100, "n": 6} and out["demo_pool"]
+    assert out["shown"] and out["demo_pool"]
+    assert (out["final"]["percentile"], out["final"]["n"]) == (100, 6)
 
 
 def test_pool_is_one_latest_run_per_candidate_for_the_same_baseline(pool_db, demo_limits):

@@ -29,5 +29,11 @@ class AlwaysPlanner:
 
 
 def make_deps() -> Deps:
+    """No network, except EMAIL_LIVE=1: recruiter email drafts then come from the real EMAIL_MODEL (demo)."""
+    import os
+    writer = None
+    if os.getenv("EMAIL_LIVE") == "1":
+        from core.llm import RoutedLLM
+        writer = RoutedLLM()
     return Deps(str(config.DB_PATH), FakeJudge(script=best), llm=FakeLLM({"resume": sample_resume_extract()}),
-                planner=AlwaysPlanner())
+                planner=AlwaysPlanner(), writer=writer)

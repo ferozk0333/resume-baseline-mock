@@ -28,7 +28,7 @@ STALE_YEARS = 3                   # proposal (specs/11 §6.2): best evidence old
 TEMPLATE_MODEL = "template-v1"
 DEMO_LABELS = {"demo_parsed": "Demo data: parsed from structured profile",
                "archetype": "Test archetype"}
-STATUSES = ("new", "shortlisted", "not_moving_forward")
+STATUSES = ("new", "shortlisted", "in_loop", "not_moving_forward")
 # [OPEN] presets: storage and UI exist, but every preset equals the team table until the team sets values.
 PRESETS = ("Startup", "Enterprise", "Proof-first")
 
@@ -377,7 +377,14 @@ def applicant_row(conn, app: dict, job: dict) -> dict:
         "why": why[0]["text"] if why else None,
         "tags": tags(scores, agg.effective_weights) if scores else [],
         "demo": DEMO_LABELS.get(cand.get("data_source")),
+        "stage_id": app.get("stage_id"),
+        "stage": _stage_name(conn, app.get("stage_id")),
     }
+
+
+def _stage_name(conn, stage_id: str | None) -> str | None:
+    row = conn.execute("SELECT name FROM interview_stages WHERE id = ?", (stage_id,)).fetchone() if stage_id else None
+    return row[0] if row else None
 
 
 def applicants(conn, job: dict, *, sort: str = "match", status: str | None = None, all_must_haves: bool = False,

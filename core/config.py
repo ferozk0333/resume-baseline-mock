@@ -48,6 +48,7 @@ GEMINI_MODELS = {
     "judge": _env("GEMINI_JUDGE_MODEL", "gemini-3.5-flash-lite"),
     "complexity": _env("GEMINI_COMPLEXITY_MODEL", "gemini-3.5-flash-lite"),
     "plan": _env("GEMINI_PLAN_MODEL", "gemini-3.8-flash"),
+    "email": _env("GEMINI_EMAIL_MODEL", "gemini-3.5-flash-lite"),
 }
 
 
@@ -90,6 +91,8 @@ JUDGE_FALLBACK_MODEL = _role_model("JUDGE_FALLBACK_MODEL", "claude-haiku-4-5-202
 REASONING_MODEL = _role_model("REASONING_MODEL", "claude-sonnet-5-5", "plan")
 # Complexity judgments; can be switched to Haiku if labels flip between fresh runs (07 §5).
 COMPLEXITY_MODEL = _role_model("COMPLEXITY_MODEL", REASONING_MODEL, "complexity")
+# Recruiter emails (specs/13 §2–§4): drafts only; a recruiter sends. Template draft when the model is unavailable.
+EMAIL_MODEL = _role_model("EMAIL_MODEL", "claude-haiku-4-5-20251001", "email")
 JEV_MODEL = _env("JEV_MODEL", "jev-1.13.0")   # pinned; saved judgments are matched on this version
 JEV_URL = "https://api.typesafe.ai/v1/systemone"
 # Effort per purpose (low | medium | high; empty = the model's default: high on Sonnet 5.5, medium on
@@ -232,3 +235,17 @@ SUBCATEGORY_LABELS: dict[str, str] = {
 def default_weights() -> dict:
     """A fresh, mutable copy of the default weight table."""
     return copy.deepcopy(_DEFAULT_WEIGHTS)
+
+
+# --- Recruiter email (specs/13 §4) -------------------------------------------------------------
+EMAIL_PROVIDER = _env("EMAIL_PROVIDER", "outbox")        # outbox: stored and shown, nothing leaves the machine | smtp
+SMTP_HOST = _env("SMTP_HOST", "")
+SMTP_PORT = int(_env("SMTP_PORT", "587"))
+SMTP_USER = _env("SMTP_USER", "")
+SMTP_PASSWORD = _env("SMTP_PASSWORD", "")
+EMAIL_FROM = _env("EMAIL_FROM", "")
+# Demo redirect: while set, every email goes to this address only (subject and body name the intended recipient).
+# Set DEMO_EMAIL_TO= (empty) to turn the redirect off.
+DEMO_EMAIL_TO = os.getenv("DEMO_EMAIL_TO", "you@example.com").split("#", 1)[0].strip()
+REJECTION_MAX_WORDS = 150
+SCHEDULING_MAX_WORDS = 120
