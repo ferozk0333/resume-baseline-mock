@@ -15,7 +15,7 @@ class Judgment(BaseModel):
     probabilities: dict[str, float] | None = None
     quote: str | None = None
     reasoning: str | None = None
-    method: Literal["jev", "claude", "rule"]
+    method: Literal["jev", "claude", "gemini", "groq", "rule"]
     model_version: str
     confidence: float | None = None   # Jev confidence (yes/no: |2p - 1|); drives the Claude fallback
     score: float | None = None        # Jev Score's in-between position; stored only, never used in scoring

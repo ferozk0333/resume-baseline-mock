@@ -46,6 +46,22 @@ def main() -> None:
     if args.dry_run or not todo:
         return
     pipe = Pipeline(Deps(args.db, get_judge(), planner=None), print_timings=False)
+    began = time.time()
+    try:
+        _score_all(conn, pipe, todo)
+    finally:
+        from collections import Counter
+        calls, limits = Counter(), Counter()
+        for rec in pipe.recorders.values():
+            s = rec.summary()
+            calls.update(s["model_calls"])
+            limits.update(s.get("rate_limits") or {})
+            for m, tk in s["tokens_by_model"].items():
+                calls[f"  {m}"] += tk["calls"]
+        print(f"\nTotal {time.time() - began:.0f} s; model HTTP calls: {dict(calls)}; rate limits: {dict(limits) or 'none'}")
+
+
+def _score_all(conn, pipe, todo) -> None:
     for i, a in enumerate(todo, 1):
         start = time.time()
         res = pipe.score(a["candidate_id"], a["baseline_id"])

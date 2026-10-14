@@ -210,3 +210,21 @@ def test_configured_limits_and_role_models():
     assert config._limits("a=1/2/3, b=4/5/6") == {"a": (1, 2, 3), "b": (4, 5, 6)}
     assert config.GEMINI_MODELS == {"extract": "gemini-3.8-flash", "judge": "gemini-3.5-flash-lite",
                                     "complexity": "gemini-3.5-flash-lite", "plan": "gemini-3.8-flash"}
+
+
+def test_a_gemini_judge_answer_is_a_valid_judgment_end_to_end(limiter, monkeypatch):
+    """Regression: the 'gemini' method label must be accepted by Judgment (a live run failed on it)."""
+    from judges.claude_judge import ClaudeJudge, output_model
+    monkeypatch.setattr(config, "JUDGE_FALLBACK_MODEL", "gemini/gemini-3.5-flash-lite")
+    answer = {"label": "yes", "quote": "cut churn 12%", "reasoning": "A number is stated."}
+    judge = ClaudeJudge(llm=llm(Session(ok(answer)), limiter))
+    j = judge.yes_no("outcome_metric", {"bullet": "Built a model that cut churn 12%."})
+    assert (j.label, j.method, j.model_version, j.quote) == ("yes", "gemini", "gemini/gemini-3.5-flash-lite", "cut churn 12%")
+    assert output_model("outcome_metric")
+
+
+def test_timing_summary_of_a_run_that_stopped_early():
+    from core import timing
+    rec = timing.Recorder()
+    rec.add(timing.STEP, "prepare_match", 0.0, 1.0)
+    assert rec.summary()["scoring_and_plan_seconds"] is None

@@ -66,9 +66,11 @@ class Recorder:
         plans = self.of(PLAN)
         if "prepare_match" not in steps:
             return None
-        end = max([e["start"] + e["seconds"] for e in plans] +
-                  [steps[s]["start"] + steps[s]["seconds"] for s in ("aggregate", "gap_analysis") if s in steps])
-        return round(end - steps["prepare_match"]["start"], 3)
+        ends = [e["start"] + e["seconds"] for e in plans] + \
+            [steps[s]["start"] + steps[s]["seconds"] for s in ("aggregate", "gap_analysis") if s in steps]
+        if not ends:                       # the run stopped before scores were combined
+            return None
+        return round(max(ends) - steps["prepare_match"]["start"], 3)
 
     def summary(self) -> dict:
         """Plain-data summary stored in runs.timings_json."""
