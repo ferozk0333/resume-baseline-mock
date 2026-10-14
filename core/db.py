@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -156,6 +156,30 @@ CREATE TABLE IF NOT EXISTS document_texts (
   PRIMARY KEY (file_sha256, normalizer)
 );
 
+CREATE TABLE IF NOT EXISTS tasks (          -- background work started by the API (phase 10)
+  id TEXT PRIMARY KEY,
+  kind TEXT,                      -- onboard | score | plan | rejudge
+  candidate_id TEXT, run_id TEXT,
+  status TEXT,                    -- running | awaiting_review | done | error
+  step TEXT, message TEXT, percent REAL, error TEXT,
+  result_json TEXT,
+  created_at TEXT, updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS task_events (    -- progress lines streamed over SSE
+  task_id TEXT, seq INTEGER,
+  step TEXT, message TEXT, percent REAL, status TEXT, created_at TEXT,
+  PRIMARY KEY (task_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS media_links (    -- demo videos (YouTube, Loom); display only, not scored
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT,
+  url TEXT, kind TEXT,            -- youtube | loom
+  title TEXT, project_id TEXT,
+  created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS provider_usage (  -- free-tier daily quota, counted across restarts
   provider TEXT, model TEXT,
   day TEXT,                       -- Pacific date (quotas reset at midnight Pacific)
@@ -272,6 +296,14 @@ DOCUMENT_TEXTS = """CREATE TABLE IF NOT EXISTS document_texts (
   file_sha256 TEXT, normalizer TEXT, text TEXT, created_at TEXT, PRIMARY KEY (file_sha256, normalizer))"""
 EXTRACTION_CACHE = """CREATE TABLE IF NOT EXISTS extraction_cache (
   key TEXT PRIMARY KEY, model TEXT, output_json TEXT, created_at TEXT)"""
+TASKS = """CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY, kind TEXT, candidate_id TEXT, run_id TEXT, status TEXT, step TEXT, message TEXT,
+  percent REAL, error TEXT, result_json TEXT, created_at TEXT, updated_at TEXT)"""
+TASK_EVENTS = """CREATE TABLE IF NOT EXISTS task_events (
+  task_id TEXT, seq INTEGER, step TEXT, message TEXT, percent REAL, status TEXT, created_at TEXT,
+  PRIMARY KEY (task_id, seq))"""
+MEDIA_LINKS = """CREATE TABLE IF NOT EXISTS media_links (
+  id TEXT PRIMARY KEY, candidate_id TEXT, url TEXT, kind TEXT, title TEXT, project_id TEXT, created_at TEXT)"""
 PROVIDER_USAGE = """CREATE TABLE IF NOT EXISTS provider_usage (
   provider TEXT, model TEXT, day TEXT, requests INTEGER, tokens INTEGER, PRIMARY KEY (provider, model, day))"""
 HTTP_CACHE = """CREATE TABLE IF NOT EXISTS http_cache (
@@ -314,6 +346,7 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (11, ["ALTER TABLE runs ADD COLUMN plan_status TEXT"]),
     (12, [EXTRACTION_CACHE]),
     (13, [PROVIDER_USAGE]),
+    (14, [TASKS, TASK_EVENTS, MEDIA_LINKS]),
 ]
 
 
