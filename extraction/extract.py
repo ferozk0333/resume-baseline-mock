@@ -52,6 +52,13 @@ def cache_model(model: str) -> str:
 
 
 def extract_document(doc: SourceDoc, llm: StructuredLLM, model: str | None = None):
+    from core.routing import answer_budget
+    budget = None if doc.type in ("resume", "linkedin_pdf") else config.TASK_MAX_TOKENS["extract_web"]
+    with answer_budget(budget):                       # résumé/LinkedIn keep EXTRACT_MAX_TOKENS
+        return _extract(doc, llm, model)
+
+
+def _extract(doc: SourceDoc, llm: StructuredLLM, model: str | None = None):
     return llm.parse(
         model=model or model_for(doc),
         system=load_prompt("extract_system"),

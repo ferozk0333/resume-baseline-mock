@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, create_model
 
 from core import config
-from core.routing import clear_last, last_model
+from core.routing import answer_budget, clear_last, last_model
 from core.llm import LLMError, RoutedLLM, StructuredLLM, is_gemini, is_groq
 from extraction.extract import load_prompt
 from extraction.validate import QuoteIndex
@@ -105,8 +105,10 @@ class ClaudeJudge:
         model = self.model_for(key)
         llm = self.complexity_llm if key == "complexity" else self.llm
         clear_last()
+        budget = config.TASK_MAX_TOKENS["complexity" if key == "complexity" else "judge_single"]
         try:
-            out = llm.parse(model=model, system=system_prompt(q), user=user, output_type=output_model(key))
+            with answer_budget(budget):
+                out = llm.parse(model=model, system=system_prompt(q), user=user, output_type=output_model(key))
         except LLMError as exc:
             raise JudgeError(str(exc)) from exc
         quote = out.quote.strip() or None
@@ -131,8 +133,9 @@ class ClaudeJudge:
         model = self.batch_model_for(key)
         clear_last()
         try:
-            out = self.llm.parse(model=model, system=batch_system_prompt(q), user=user,
-                                 output_type=batch_output_model(key))
+            with answer_budget(config.grouped_budget(len(contexts))):
+                out = self.llm.parse(model=model, system=batch_system_prompt(q), user=user,
+                                     output_type=batch_output_model(key))
         except LLMError as exc:
             raise JudgeError(str(exc)) from exc
         model = last_model(model)

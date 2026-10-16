@@ -157,6 +157,20 @@ def model_concurrency(model: str) -> int:
     return rpm if rpm else CLAUDE_MAX_CONCURRENCY
 
 
+# Answer budget (max output tokens) per kind of call (specs/18 Phase 1 review): small for single questions, larger for
+# complexity (it reasons first), per item for grouped questions. Thinking/reasoning tokens count toward it. Smaller
+# budgets reserve less of Groq's 8K and Gemma's 16K tokens per minute. Override with TASK_MAX_TOKENS="key=n,…".
+_TASK_TOKENS = {"judge_single": 1024, "complexity": 2048, "judge_grouped_base": 512, "judge_grouped_item": 192,
+                "judge_grouped_max": 4096, "extract_web": 4096}
+TASK_MAX_TOKENS = {**_TASK_TOKENS, **{k.strip(): int(v) for k, _, v in (x.partition("=") for x in
+                                                                      _env("TASK_MAX_TOKENS", "").split(",") if "=" in x)}}
+
+
+def grouped_budget(items: int) -> int:
+    t = TASK_MAX_TOKENS
+    return min(t["judge_grouped_base"] + t["judge_grouped_item"] * items, t["judge_grouped_max"])
+
+
 GEMINI_TIMEOUT_S = float(_env("GEMINI_TIMEOUT_S", "45"))
 GROQ_TIMEOUT_S = float(_env("GROQ_TIMEOUT_S", "20"))
 ROUTE_MAX_ATTEMPTS = int(_env("ROUTE_MAX_ATTEMPTS", "4"))      # model calls per request, across the list

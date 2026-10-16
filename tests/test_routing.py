@@ -269,3 +269,72 @@ def test_routed_llm_records_the_answering_model_for_extraction(env, tmp_path, mo
     out = ex.extract_all([SourceDoc("e1", "resume", "Jane Doe resume text", "Resume")], llm, cache)
     assert not isinstance(out["e1"], Exception)
     assert conn.execute("SELECT model FROM extraction_cache").fetchone()[0] == B
+
+
+# --- Answer budgets per task and the bad-output rule (spec 18 Phase 1 review) --------------------------------------
+
+def _gemini_router(env, *responses):
+    from core.llm import GeminiLLM
+    from tests.test_gemini import Session
+    session = Session(*responses)
+    client = GeminiLLM(session=session, api_key="k")
+    return RoutedLLM(router=Router(lambda m: client, limiter=env.lim, sleep=env.sleep, clock=env.clock)), session
+
+
+def test_answer_budget_per_task(env, monkeypatch):
+    from judges.claude_judge import ClaudeJudge
+    from tests.test_gemini import ok
+    monkeypatch.setattr(config, "JUDGE_FALLBACK_MODEL", A)
+    monkeypatch.setattr(config, "COMPLEXITY_MODEL", A)
+    single = {"label": "yes", "quote": "", "reasoning": "r"}
+    llm, session = _gemini_router(env, ok(single), ok({"label": "meets", "quote": "", "reasoning": "r"}),
+                                  ok({"answers": [{"criterion": f"C{i}", "label": "keyword", "quote": "", "reasoning": ""}
+                                                  for i in range(1, 6)]}))
+    judge = ClaudeJudge(llm=llm)
+    judge.yes_no("outcome_metric", {"bullet": "Cut churn 12%."})
+    judge.choice("complexity", ["meets", "partly", "no"], {"item": "x"})
+    judge.batch("skill_evidence", [{"skills_list": "Python, SQL", "criterion": f"c{i}"} for i in range(5)])
+    budgets = [b["generationConfig"]["maxOutputTokens"] for b in session.bodies]
+    assert budgets == [1024, 2048, 512 + 5 * 192]
+    assert config.grouped_budget(40) == 4096                                       # capped
+
+
+def test_web_pages_get_a_smaller_budget_than_documents(env, monkeypatch):
+    from extraction import extract as ex
+    from extraction.validate import SourceDoc
+    from tests.test_gemini import ok
+    empty_profile = {"roles": [], "projects": [], "claims": [], "certifications": []}
+    llm, session = _gemini_router(env, ok({"projects": [], "claims": []}), ok(empty_profile))
+    monkeypatch.setattr(config, "EXTRACT_WEB_MODEL", A)
+    monkeypatch.setattr(config, "EXTRACT_MODEL", A)
+    ex.extract_document(SourceDoc("e1", "github_repo", "readme text", "README"), llm)
+    ex.extract_document(SourceDoc("e2", "resume", "resume text", "Resume"), llm)
+    assert [b["generationConfig"]["maxOutputTokens"] for b in session.bodies] == [4096, config.EXTRACT_MAX_TOKENS]
+
+
+def test_groq_budget_is_the_task_budget_within_its_token_limit():
+    from core.llm import GroqLLM
+    from core.routing import answer_budget
+    g = GroqLLM(session=object(), api_key="k", max_tokens=12000)
+    with answer_budget(1024):
+        assert g._budget("groq/openai/gpt-oss-120b", "S", "U") == 1024
+    assert g._budget("groq/openai/gpt-oss-120b", "S" * 300, "U" * 3000) == 8000 - (3300 // 3 + 200)
+
+
+def test_an_invalid_or_cut_off_answer_is_retried_once_on_the_next_model_then_missing(env):
+    s = Script(**{A: [LLMError("A output was cut off at max_tokens")], B: [LLMError("output failed validation")],
+                  C: [Out(label="never")]})
+    with pytest.raises(LLMError, match="no valid answer from two models"):
+        ask(router(env, s))
+    assert s.calls == [A, B]                                                       # C not asked
+    s2 = Script(**{A: [LLMError("cut off")]})
+    assert ask(router(env, s2)).label == B                                         # once on the next model
+
+
+def test_a_routed_call_makes_one_attempt_per_model(env):
+    from tests.test_gemini import ok
+    invalid = ok({"nope": 1})
+    llm, session = _gemini_router(env, invalid, invalid)
+    with pytest.raises(LLMError, match="no valid answer from two models"):
+        llm.parse(model="route:judge_single", system="S", user="U", output_type=Out)
+    assert len(session.bodies) == 2                                               # A once, B once (no same-model retry)

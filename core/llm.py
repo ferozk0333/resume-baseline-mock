@@ -117,7 +117,8 @@ class ClaudeLLM:
         self.effort = effort or None
 
     def _request(self, model: str, system: str, user: str, output_type: type[T]) -> dict:
-        return dict(model=model, max_tokens=self.max_tokens, system=system,
+        from core.routing import current_budget
+        return dict(model=model, max_tokens=current_budget(self.max_tokens), system=system,
                     messages=[{"role": "user", "content": user}], output_format=output_type,
                     **sampling_kwargs(model), **effort_kwargs(model, self.effort))
 
@@ -165,6 +166,9 @@ class ClaudeLLM:
         return response.parsed_output
 
     def parse(self, *, model: str, system: str, user: str, output_type: type[T]) -> T:
+        from core.routing import routed
+        if routed():                     # the router retries an invalid or cut-off answer on the next model
+            return self._call(model, system, user, output_type)
         try:
             return self._call(model, system, user, output_type)
         except RunawayOutput:
@@ -226,9 +230,10 @@ class GroqLLM:
         self.effort = effort or config.GROQ_REASONING_EFFORT
 
     def _budget(self, model: str, system: str, user: str) -> int:
+        from core.routing import current_budget
         est_input = (len(system) + len(user)) // 3 + 200            # conservative chars → tokens
         tpm = config.model_limits(model).tpm or config.GROQ_TPM
-        return min(self.max_tokens, tpm - est_input)
+        return min(current_budget(self.max_tokens), tpm - est_input)
 
     def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
         from core.routing import LIMITER, Overloaded, Throttled, Unusable, parse_duration
@@ -371,7 +376,7 @@ class GeminiLLM:
         return "PerDay" in text or "per day" in text.lower()
 
     def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
-        from core.routing import Overloaded, Throttled, Unusable
+        from core.routing import Overloaded, Throttled, Unusable, current_budget
         if self._real:
             require_live("Gemini")
         if not self.api_key:
@@ -379,7 +384,7 @@ class GeminiLLM:
         name = model.removeprefix(GEMINI_PREFIX)
         gen = {"responseMimeType": "application/json",
                "responseJsonSchema": gemini_schema(output_type.model_json_schema()),
-               "temperature": 0, "maxOutputTokens": self.max_tokens}
+               "temperature": 0, "maxOutputTokens": current_budget(self.max_tokens)}
         if config.GEMINI_THINKING_LEVEL:
             gen["thinkingConfig"] = {"thinkingLevel": config.GEMINI_THINKING_LEVEL}
         body = {"systemInstruction": {"parts": [{"text": system}]},

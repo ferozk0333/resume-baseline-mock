@@ -15,14 +15,18 @@ The model that answered is recorded (`last_model()`), so judgments and extractio
 """
 from __future__ import annotations
 
+import contextvars
 import logging
 import random
+from contextlib import contextmanager
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait as wait_futures
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+
+from pydantic import ValidationError
 
 from core import config, timing
 
@@ -68,6 +72,31 @@ def models_of(model: str) -> list[str]:
 
 def task_of(model: str) -> str:
     return model.removeprefix(ROUTE_PREFIX) if is_route(model) else "direct"
+
+
+# --- Answer budget and routed calls ---------------------------------------------------------------------------------
+
+_budget: contextvars.ContextVar[int | None] = contextvars.ContextVar("answer_budget", default=None)
+_routed: contextvars.ContextVar[bool] = contextvars.ContextVar("routed", default=False)
+
+
+@contextmanager
+def answer_budget(tokens: int | None):
+    """Max output tokens for the calls inside (the caller knows the kind of question; clients read it)."""
+    token = _budget.set(tokens)
+    try:
+        yield
+    finally:
+        _budget.reset(token)
+
+
+def current_budget(default: int) -> int:
+    return _budget.get() or default
+
+
+def routed() -> bool:
+    """Inside a routed call, a client makes exactly one attempt: an invalid or cut-off answer goes to the next model."""
+    return _routed.get()
 
 
 # --- Which model answered ----------------------------------------------------------------------------------------
@@ -296,9 +325,9 @@ class Router:
 
     def _run(self, task: str, models: list[str], system: str, user: str, output_type, tried: set | None = None):
         from core.llm import LLMError, DailyLimitReached
-        tokens = estimate_tokens(system, user, self.max_tokens)
+        tokens = estimate_tokens(system, user, current_budget(self.max_tokens))
         tried = tried if tried is not None else set()
-        attempts, waited, last_error = 0, 0.0, None
+        attempts, waited, last_error, bad = 0, 0.0, None, 0
         while True:
             m, seen = self._pick(models, tokens, tried)
             if m is None:
@@ -343,9 +372,14 @@ class Router:
                 why = f"unusable ({exc})"
             except DailyLimitReached:
                 raise
-            except LLMError as exc:                            # invalid output twice, cut off, refused
-                last_error = exc
-                why = f"no valid answer ({exc})"
+            except (LLMError, ValidationError) as exc:         # invalid or cut-off answer, refused
+                last_error, bad = exc, bad + 1
+                why = f"no valid answer ({str(exc)[:160]})"
+                if bad >= 2:                                    # once on the next model, then missing with the reason
+                    self.limiter.release(m)
+                    tried.add(m)
+                    log.warning("failover: %s %s → none (no valid answer from two models: %s)", task, m, why)
+                    raise LLMError(f"{task}: no valid answer from two models ({str(exc)[:200]})") from exc
             finally:
                 self.limiter.release(m)
             tried.add(m)
@@ -361,8 +395,12 @@ class Router:
 
     def _attempt(self, task: str, model: str, system: str, user: str, output_type, tokens: int):
         client = self.client_for(model)
-        with timing.span(timing.MODEL, provider_of(model), model=model, method=task):
-            return client.parse(model=model, system=system, user=user, output_type=output_type)
+        token = _routed.set(True)
+        try:
+            with timing.span(timing.MODEL, provider_of(model), model=model, method=task):
+                return client.parse(model=model, system=system, user=user, output_type=output_type)
+        finally:
+            _routed.reset(token)
 
     def _hedged(self, task: str, models: list[str], system: str, user: str, output_type):
         """No answer after HEDGE_AFTER_S: a duplicate goes to the next model; the first answer wins (the other call

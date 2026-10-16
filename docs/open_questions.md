@@ -129,3 +129,6 @@ ask if wanted.
     application details are hidden from recruiters (specs/17 §3.2, confirmed in the Phase A review).
 19. **"Not moving forward" waits for the email (specs/17 §7).** The candidate sees it once the decision email is
     approved and sent; before that, the stage the application was in. Please confirm.
+20. **Production cost of early start for abandoned onboardings** [OPEN]. Role-specific judging starts as soon as the
+    documents are read (specs/18 §2 item 7), so an onboarding that is never confirmed still spends its judge calls.
+    Accepted for the demo; to decide before production (e.g. start only after Review opens, or cap per day).
