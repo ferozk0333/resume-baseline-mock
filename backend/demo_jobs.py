@@ -47,6 +47,13 @@ def job_baseline(role: Baseline, spec: dict, owner: str) -> Baseline:
                     is_mock=True, criteria=criteria)
 
 
+def _seed_events(conn, jid: str, spec: dict, now: datetime) -> None:
+    for kind, days in (("panel_opened", spec.get("activity_days_ago")), ("stage_moved", spec.get("stage_moved_days_ago"))):
+        if days is not None:
+            conn.execute("INSERT INTO job_events (id, job_id, application_id, kind, demo, created_at) "
+                         "VALUES (?, ?, NULL, ?, 1, ?)", (new_id(), jid, kind, _iso(now - timedelta(days=days))))
+
+
 def seed(conn, now: datetime | None = None, path: Path | None = None) -> dict:
     """Insert the demo jobs that are not there yet, and mark the earlier demo jobs (the 3 seeded jobs and
     Brightwater) as demo data. Returns counts."""
@@ -78,20 +85,30 @@ def seed(conn, now: datetime | None = None, path: Path | None = None) -> dict:
         with conn:
             conn.execute("UPDATE baselines SET owner_job_id = ? WHERE id = ?", (jid, baseline.id))
             conn.execute("INSERT INTO jobs (id, baseline_id, title, company, weights_json, must_haves_json, preset, "
-                         "created_at, status, details_json, updated_at, data_source, role_baseline_id) "
-                         "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 'open', ?, ?, 'demo', ?)",
+                         "created_at, status, details_json, updated_at, data_source, role_baseline_id, published_at) "
+                         "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 'open', ?, ?, 'demo', ?, ?)",
                          (jid, baseline.id, spec["title"], spec["company"], json.dumps(config.default_weights()),
-                          json.dumps(musts), _iso(posted), json.dumps(details), _iso(posted), spec["role"]))
-            for kind, days in (("panel_opened", spec.get("activity_days_ago")),
-                               ("stage_moved", spec.get("stage_moved_days_ago"))):
-                if days is not None:
-                    conn.execute("INSERT INTO job_events (id, job_id, application_id, kind, demo, created_at) "
-                                 "VALUES (?, ?, NULL, ?, 1, ?)", (new_id(), jid, kind, _iso(now - timedelta(days=days))))
+                          json.dumps(musts), _iso(posted), json.dumps(details), _iso(posted), spec["role"], _iso(posted)))
+            _seed_events(conn, jid, spec, now)
         wf.stages(conn, jid)                                  # default interview plan, like a published job
         added += 1
-    with conn:
-        marked = conn.execute(f"UPDATE jobs SET data_source = 'demo' WHERE data_source IS NULL AND company IN "
-                              f"({','.join('?' * len(LEGACY_DEMO_COMPANIES))}) AND status != 'draft'",
-                              LEGACY_DEMO_COMPANIES).rowcount
+    raw = json.loads((path or SEED_FILE).read_text())
+    marked = 0
+    for company, spec in raw.get("legacy", {}).items():
+        if company.startswith("_"):
+            continue
+        for (jid,) in conn.execute("SELECT id FROM jobs WHERE company = ? AND status != 'draft' AND (data_source IS NULL "
+                                   "OR (data_source = 'demo' AND NOT EXISTS (SELECT 1 FROM job_events e WHERE "
+                                   "e.job_id = jobs.id AND e.demo = 1)))", (company,)).fetchall():
+            posted = _iso(now - timedelta(days=spec["posted_days_ago"]))
+            with conn:
+                conn.execute("UPDATE jobs SET data_source = 'demo', created_at = ?, published_at = ?, updated_at = ? "
+                             "WHERE id = ?", (posted, posted, posted, jid))
+                _seed_events(conn, jid, spec, now)
+            marked += 1
+    with conn:                                        # Brightwater (created in the demo) is demo data too
+        marked += conn.execute(f"UPDATE jobs SET data_source = 'demo' WHERE data_source IS NULL AND company IN "
+                               f"({','.join('?' * len(LEGACY_DEMO_COMPANIES))}) AND status != 'draft'",
+                               LEGACY_DEMO_COMPANIES).rowcount
     return {"added": added, "marked_demo": marked, "total_demo": conn.execute(
         "SELECT COUNT(*) FROM jobs WHERE data_source = 'demo'").fetchone()[0]}

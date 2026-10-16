@@ -1,16 +1,10 @@
 # Backlog
 
-## From the retired Streamlit UI (`legacy/app/`), not yet in the web app
-Recorded when Streamlit was retired in phase 10. Not scheduled; phase 11 does not wait for them.
+Agreed but not scheduled. Each item names where it came from.
 
-1. **Live pipeline diagram.** Streamlit showed the LangGraph run as a Graphviz diagram that updated per node
-   (running, scored, missing, N/A, error) and a static copy of the last run (`legacy/app/components/graph_view.py`).
-   The web app shows progress lines only.
-2. **Discarded low-confidence Jev answers.** On the Score page Streamlit listed, per judgment, the answers that were
-   saved but not used (Jev below the confidence threshold, then Claude), with confidence and model
-   (`services.unused_judgments`).
-3. **"Save weights to this run".** Streamlit could store the slider weights on the run. The API has
-   `PUT /runs/{id}/weights`; the web app has no button for it.
-4. **The plan's dropped actions and first-attempt errors.** Streamlit showed actions the validator dropped and the
-   errors fixed by the retry. The API returns `dropped`; the web app does not show them, and the first-attempt
-   errors are not returned yet.
+- **Undo for approved name merges** (specs/15 review). Approved merges can only be changed by editing
+  `config/market_synonyms.json`. An Undo on the Admin → Market baselines merges list would remove the mapping and
+  put the suggestion back to pending.
+- **Admin list of "unknown"-level postings with a manual level override** (specs/15 review). Postings whose level
+  the code and the extraction couldn't state count toward no level baseline. A filtered list with a level picker
+  would let an admin set it (stored with level_method = "manual").

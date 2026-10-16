@@ -40,8 +40,8 @@ def _dt(s: str | None) -> datetime | None:
 def job_role(conn, job: dict) -> str | None:
     """The role baseline a job was written from: recorded (seeded jobs), the job's baseline itself (the first demo
     jobs), or the role whose title filter matches the job title (config/market_sources.yaml). None if unknown."""
-    if job.get("role_baseline_id"):
-        return job["role_baseline_id"]
+    if job.get("role_baseline_id"):                  # the recruiter's "Role family" ("none": no role family)
+        return None if job["role_baseline_id"] == "none" else job["role_baseline_id"]
     roles = cx.role_baselines(conn)
     if job.get("baseline_id") in roles:
         return job["baseline_id"]
@@ -120,9 +120,12 @@ def activity(conn, job: dict, now: datetime | None = None) -> dict:
     """Last recruiter action on the job, and whether applications are being reviewed (a stage moved lately)."""
     now = now or _now()
     jid = job["id"]
-    times = [job.get("created_at"), job.get("updated_at") if job.get("status") != "draft" else None]
+    # Posting the job counts once; editing it does not. Afterwards only actions on applicants count: an applicant
+    # panel opened, a stage change, an email approved (sent), a workflow step the recruiter took.
+    times = [job.get("published_at") or job.get("created_at")]
     times += [r[0] for r in conn.execute("SELECT created_at FROM job_events WHERE job_id = ?", (jid,))]
-    times += [r[0] for r in conn.execute("SELECT created_at FROM activity WHERE job_id = ?", (jid,))]
+    times += [r[0] for r in conn.execute("SELECT created_at FROM activity WHERE job_id = ? AND kind IN "
+                                         "('stage', 'email', 'decision')", (jid,))]
     times += [r[0] for r in conn.execute("SELECT sent_at FROM emails WHERE job_id = ? AND status = 'sent'", (jid,))]
     times += [r[0] for r in conn.execute("SELECT e.created_at FROM workflow_events e JOIN applications a ON "
                                          "a.id = e.application_id WHERE a.job_id = ? AND e.actor = 'recruiter'", (jid,))]
@@ -191,7 +194,7 @@ def _row(conn, candidate_id: str, job: dict, targets: set[str], pref: dict, appl
     jm = jobmatch_preview(conn, candidate_id, job, cache)
     d = job["details"]
     return {"id": job["id"], "title": job["title"], "company": job["company"], "location": d.get("location") or "",
-            "workplace": d.get("workplace"), "salary": salary(d), "posted_at": job["created_at"],
+            "workplace": d.get("workplace"), "salary": salary(d), "posted_at": job.get("published_at") or job["created_at"],
             "activity": activity(conn, job, now), "jobmatch": jm, "group": group_of(jm["value"] if jm else None),
             "role_baseline_id": role, "target": role in targets, "saved": bool(pref.get("saved")),
             "hidden": bool(pref.get("hidden")), "applied": applied.get(job["id"]), "demo": job.get("data_source") == "demo"}

@@ -29,6 +29,29 @@ EMPTY_DETAILS = {"title": "", "company": "", "department": "", "location": "", "
                  "responsibilities": []}
 
 
+def suggest_role(conn, title: str) -> str | None:
+    """The role family a job title suggests (title keywords in config/market_sources.yaml), or None."""
+    from market import sources
+    roles = {b.id for b in db.list_baselines(conn)}
+    for r in sources.load().values():
+        if r.manual_baseline in roles and r.title_matches(title or ""):
+            return r.manual_baseline
+    return None
+
+
+def with_role_family(conn, details: dict) -> dict:
+    """"Role family" on step 2: follows the title until the recruiter picks one ("none" = no role family)."""
+    d = dict(details)
+    if d.get("role_family_auto", True) or not d.get("role_family"):
+        d["role_family"] = suggest_role(conn, d.get("title") or "") or "none"
+        d["role_family_auto"] = True
+    return d
+
+
+def _role_column(conn, details: dict) -> str:
+    return with_role_family(conn, details)["role_family"]
+
+
 def default_plan() -> dict:
     return {"stages": list(wf.DEFAULT_STAGES), **wf.DEFAULT_SETTINGS}
 
@@ -182,12 +205,16 @@ def load_draft(conn, job_id: str) -> dict:
     if job["draft"] is None:
         b = db.get_baseline(conn, job["baseline_id"])
         job["draft"] = {**_draft_from(conn, b, job, "edit"), "step": 2}
+        if job.get("role_baseline_id"):
+            job["draft"]["details"].update(role_family=job["role_baseline_id"], role_family_auto=False)
+    job["draft"]["details"] = with_role_family(conn, job["draft"]["details"])
     return {"job_id": job_id, "status": job["status"], "draft": job["draft"], "jd_text": job.get("jd_text"),
             "has_jd_file": bool(job.get("jd_file")), "warnings": warnings(job["draft"]),
             "applicants": conn.execute("SELECT COUNT(*) FROM applications WHERE job_id = ?", (job_id,)).fetchone()[0]}
 
 
 def save_draft(conn, job_id: str, draft: dict) -> dict:
+    draft = {**draft, "details": with_role_family(conn, draft.get("details") or {})}
     """Autosave: the whole form as the recruiter sees it. Never touches a published job's live fields."""
     job = get(conn, job_id)
     if job is None:
@@ -333,9 +360,11 @@ def publish(conn, job_id: str) -> dict:
     with conn:
         conn.execute("UPDATE baselines SET owner_job_id = ? WHERE id = ?", (job_id, baseline_id))
         conn.execute("UPDATE jobs SET baseline_id = ?, title = ?, company = ?, weights_json = ?, must_haves_json = ?, "
-                     "preset = ?, details_json = ?, status = 'open', draft_json = NULL, updated_at = ? WHERE id = ?",
+                     "preset = ?, details_json = ?, status = 'open', draft_json = NULL, updated_at = ?, "
+                     "role_baseline_id = ?, published_at = COALESCE(published_at, updated_at) WHERE id = ?",
                      (baseline_id, d["title"].strip(), d["company"].strip(), json.dumps(weights),
-                      json.dumps(_must_ids(baseline, draft)), ranking.get("preset"), json.dumps(d), now_iso(), job_id))
+                      json.dumps(_must_ids(baseline, draft)), ranking.get("preset"), json.dumps(d), now_iso(),
+                      _role_column(conn, d), job_id))
     _apply_plan(conn, job_id, draft.get("plan") or default_plan())
     _focus_from_musts(conn, job_id)
     return get(conn, job_id)
@@ -396,9 +425,10 @@ def save_edit(conn, job_id: str) -> dict:
     d = draft["details"]
     with conn:
         conn.execute("UPDATE jobs SET title = ?, company = ?, weights_json = ?, must_haves_json = ?, preset = ?, "
-                     "details_json = ?, draft_json = NULL, updated_at = ? WHERE id = ?",
+                     "details_json = ?, draft_json = NULL, updated_at = ?, role_baseline_id = ? WHERE id = ?",
                      (d["title"].strip(), d["company"].strip(), json.dumps(weights),
-                      json.dumps(_must_ids(baseline, draft)), ranking.get("preset"), json.dumps(d), now_iso(), job_id))
+                      json.dumps(_must_ids(baseline, draft)), ranking.get("preset"), json.dumps(d), now_iso(),
+                      _role_column(conn, d), job_id))
     _apply_plan(conn, job_id, draft.get("plan") or default_plan())
     rescore = [dict(r) for r in conn.execute("SELECT id, candidate_id FROM applications WHERE job_id = ? AND run_id "
                                              "IS NOT NULL", (job_id,))] if scoring else []
@@ -433,7 +463,8 @@ def posting(conn, job: dict) -> dict:
         "responsibilities")},
             "required": [c.name for c in b.criteria if c.priority == "required"] if b else [],
             "preferred": [c.name for c in b.criteria if c.priority == "preferred"] if b else [],
-            "reach": REACH_LABELS.get(b.expected_reach) if b else None, "created_at": job["created_at"]}
+            "reach": REACH_LABELS.get(b.expected_reach) if b else None, "created_at": job["created_at"],
+            "posted_at": job.get("published_at") or job["created_at"]}
 
 
 def open_jobs(conn) -> list[dict]:

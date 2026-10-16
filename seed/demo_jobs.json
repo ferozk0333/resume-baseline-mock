@@ -2,98 +2,373 @@
   "_comment": "Fictional demo jobs (specs/17 §9). Each job baseline is its role baseline plus the listed differences; no model calls. posted_days_ago / activity_days_ago / stage_moved_days_ago are relative to the seeding time. All companies are made up.",
   "jobs": [
     {
-      "key": "lumen-ai-applied-llm", "role": "baseline-ai-engineer-entry",
-      "title": "AI Engineer, Applied LLMs", "company": "Lumen Robotics", "department": "Applied AI",
-      "location": "Boston, MA", "workplace": "hybrid", "salary": [125000, 145000, "USD"],
-      "posted_days_ago": 3, "activity_days_ago": 0, "stage_moved_days_ago": 2,
+      "key": "lumen-ai-applied-llm",
+      "role": "baseline-ai-engineer-entry",
+      "title": "AI Engineer, Applied LLMs",
+      "company": "Lumen Robotics",
+      "department": "Applied AI",
+      "location": "Boston, MA",
+      "workplace": "hybrid",
+      "salary": [
+        125000,
+        145000,
+        "USD"
+      ],
+      "posted_days_ago": 3,
+      "activity_days_ago": 0,
+      "stage_moved_days_ago": 2,
       "short_description": "Build the LLM features our field robots use to answer operator questions, from retrieval to evaluation.",
-      "responsibilities": ["Ship retrieval-augmented assistants used by field operators", "Design offline evaluations for every model change", "Wrap models in reliable internal APIs"],
-      "must_haves": ["LLM application development", "Retrieval-augmented generation", "Python", "Model evaluation"],
-      "add": [{"name": "Vector databases", "kind": "tool", "priority": "preferred", "aliases": ["pgvector", "Pinecone", "Weaviate", "FAISS"]}],
-      "drop": ["Cloud ML certification"], "promote": [], "required_years": 1
+      "responsibilities": [
+        "Ship retrieval-augmented assistants used by field operators",
+        "Design offline evaluations for every model change",
+        "Wrap models in reliable internal APIs"
+      ],
+      "must_haves": [
+        "LLM application development",
+        "Retrieval-augmented generation",
+        "Python",
+        "Model evaluation"
+      ],
+      "add": [
+        {
+          "name": "Vector databases",
+          "kind": "tool",
+          "priority": "preferred",
+          "aliases": [
+            "pgvector",
+            "Pinecone",
+            "Weaviate",
+            "FAISS"
+          ]
+        }
+      ],
+      "drop": [
+        "Cloud ML certification"
+      ],
+      "promote": [],
+      "required_years": 1
     },
     {
-      "key": "kestrel-junior-mle", "role": "baseline-ai-engineer-entry",
-      "title": "Junior Machine Learning Engineer", "company": "Kestrel Health", "department": "Data Platform",
-      "location": "Remote (US)", "workplace": "remote", "salary": [110000, 130000, "USD"],
-      "posted_days_ago": 12, "activity_days_ago": 4, "stage_moved_days_ago": null,
+      "key": "kestrel-junior-mle",
+      "role": "baseline-ai-engineer-entry",
+      "title": "Junior Machine Learning Engineer",
+      "company": "Kestrel Health",
+      "department": "Data Platform",
+      "location": "Remote (US)",
+      "workplace": "remote",
+      "salary": [
+        110000,
+        130000,
+        "USD"
+      ],
+      "posted_days_ago": 12,
+      "activity_days_ago": 4,
+      "stage_moved_days_ago": null,
       "short_description": "Help move clinical-note models from notebooks to monitored services.",
-      "responsibilities": ["Package models as containerized services", "Clean and version training data", "Monitor models in production"],
-      "must_haves": ["Machine learning fundamentals", "Python", "PyTorch", "Docker"],
-      "add": [], "drop": ["LangChain or LangGraph"], "promote": ["Docker", "MLOps basics"], "required_years": 1
+      "responsibilities": [
+        "Package models as containerized services",
+        "Clean and version training data",
+        "Monitor models in production"
+      ],
+      "must_haves": [
+        "Machine learning fundamentals",
+        "Python",
+        "PyTorch",
+        "Docker"
+      ],
+      "add": [],
+      "drop": [
+        "LangChain or LangGraph"
+      ],
+      "promote": [
+        "Docker",
+        "MLOps basics"
+      ],
+      "required_years": 1
     },
     {
-      "key": "harborline-ai-new-grad", "role": "baseline-ai-engineer-entry",
-      "title": "AI Engineer (New Grad)", "company": "Harborline Logistics", "department": "Routing",
-      "location": "Chicago, IL", "workplace": "on_site", "salary": null,
-      "posted_days_ago": 38, "activity_days_ago": 34, "stage_moved_days_ago": null,
+      "key": "harborline-ai-new-grad",
+      "role": "baseline-ai-engineer-entry",
+      "title": "AI Engineer (New Grad)",
+      "company": "Harborline Logistics",
+      "department": "Routing",
+      "location": "Chicago, IL",
+      "workplace": "on_site",
+      "salary": null,
+      "posted_days_ago": 38,
+      "activity_days_ago": 34,
+      "stage_moved_days_ago": null,
       "short_description": "Join the routing team to prototype LLM tools for dispatchers.",
-      "responsibilities": ["Prototype LLM tools for dispatchers", "Evaluate model quality against dispatcher feedback", "Write clean, tested Python"],
-      "must_haves": ["LLM application development", "Python", "Git"],
-      "add": [], "drop": ["Fine-tuning"], "promote": [], "required_years": 0
+      "responsibilities": [
+        "Prototype LLM tools for dispatchers",
+        "Evaluate model quality against dispatcher feedback",
+        "Write clean, tested Python"
+      ],
+      "must_haves": [
+        "LLM application development",
+        "Python",
+        "Git"
+      ],
+      "add": [],
+      "drop": [
+        "Fine-tuning"
+      ],
+      "promote": [],
+      "required_years": 0
     },
     {
-      "key": "cedarpine-ds1", "role": "baseline-data-scientist-entry",
-      "title": "Data Scientist I", "company": "Cedar & Pine Insurance", "department": "Claims Analytics",
-      "location": "Hartford, CT", "workplace": "hybrid", "salary": [95000, 115000, "USD"],
-      "posted_days_ago": 1, "activity_days_ago": 1, "stage_moved_days_ago": null,
+      "key": "cedarpine-ds1",
+      "role": "baseline-data-scientist-entry",
+      "title": "Data Scientist I",
+      "company": "Cedar & Pine Insurance",
+      "department": "Claims Analytics",
+      "location": "Hartford, CT",
+      "workplace": "hybrid",
+      "salary": [
+        95000,
+        115000,
+        "USD"
+      ],
+      "posted_days_ago": 1,
+      "activity_days_ago": 1,
+      "stage_moved_days_ago": null,
       "short_description": "Model claim outcomes and explain them to adjusters and actuaries.",
-      "responsibilities": ["Build and validate claim-severity models", "Run analyses that answer adjusters' questions", "Present findings to non-technical teams"],
-      "must_haves": ["Statistical analysis", "Machine learning", "SQL", "Python"],
-      "add": [{"name": "Insurance or risk modeling", "kind": "skill", "priority": "preferred", "aliases": ["actuarial", "risk modeling", "claims modeling"]}],
-      "drop": [], "promote": [], "required_years": 1
+      "responsibilities": [
+        "Build and validate claim-severity models",
+        "Run analyses that answer adjusters' questions",
+        "Present findings to non-technical teams"
+      ],
+      "must_haves": [
+        "Statistical analysis",
+        "Machine learning",
+        "SQL",
+        "Python"
+      ],
+      "add": [
+        {
+          "name": "Insurance or risk modeling",
+          "kind": "skill",
+          "priority": "preferred",
+          "aliases": [
+            "actuarial",
+            "risk modeling",
+            "claims modeling"
+          ]
+        }
+      ],
+      "drop": [],
+      "promote": [],
+      "required_years": 1
     },
     {
-      "key": "brightline-associate-ds", "role": "baseline-data-scientist-entry",
-      "title": "Associate Data Scientist", "company": "Brightline Media", "department": "Audience",
-      "location": "New York, NY", "workplace": "hybrid", "salary": [105000, 125000, "USD"],
-      "posted_days_ago": 9, "activity_days_ago": 2, "stage_moved_days_ago": 5,
+      "key": "brightline-associate-ds",
+      "role": "baseline-data-scientist-entry",
+      "title": "Associate Data Scientist",
+      "company": "Brightline Media",
+      "department": "Audience",
+      "location": "New York, NY",
+      "workplace": "hybrid",
+      "salary": [
+        105000,
+        125000,
+        "USD"
+      ],
+      "posted_days_ago": 9,
+      "activity_days_ago": 2,
+      "stage_moved_days_ago": 5,
       "short_description": "Design and read experiments on how readers discover stories.",
-      "responsibilities": ["Design A/B tests with product teams", "Build dashboards the newsroom uses daily", "Forecast subscription trends"],
-      "must_haves": ["Experimentation / A/B testing", "SQL", "Python", "Data visualization and communication"],
-      "add": [], "drop": ["Data science or analytics certification"], "promote": ["Forecasting"], "required_years": 1
+      "responsibilities": [
+        "Design A/B tests with product teams",
+        "Build dashboards the newsroom uses daily",
+        "Forecast subscription trends"
+      ],
+      "must_haves": [
+        "Experimentation / A/B testing",
+        "SQL",
+        "Python",
+        "Data visualization and communication"
+      ],
+      "add": [],
+      "drop": [
+        "Data science or analytics certification"
+      ],
+      "promote": [
+        "Forecasting"
+      ],
+      "required_years": 1
     },
     {
-      "key": "tidewater-junior-ds", "role": "baseline-data-scientist-entry",
-      "title": "Junior Data Scientist, Growth", "company": "Tidewater Bikes", "department": "Growth",
-      "location": "Remote (US)", "workplace": "remote", "salary": null,
-      "posted_days_ago": 22, "activity_days_ago": 10, "stage_moved_days_ago": null,
+      "key": "tidewater-junior-ds",
+      "role": "baseline-data-scientist-entry",
+      "title": "Junior Data Scientist, Growth",
+      "company": "Tidewater Bikes",
+      "department": "Growth",
+      "location": "Remote (US)",
+      "workplace": "remote",
+      "salary": null,
+      "posted_days_ago": 22,
+      "activity_days_ago": 10,
+      "stage_moved_days_ago": null,
       "short_description": "Find what drives repeat rentals and test ideas to grow them.",
-      "responsibilities": ["Analyze rider behavior across cities", "Run growth experiments with marketing", "Automate weekly reporting"],
-      "must_haves": ["Exploratory data analysis", "Experimentation / A/B testing", "SQL"],
-      "add": [{"name": "dbt", "kind": "tool", "priority": "preferred", "aliases": ["data build tool"]}],
-      "drop": ["Forecasting"], "promote": [], "required_years": 0
+      "responsibilities": [
+        "Analyze rider behavior across cities",
+        "Run growth experiments with marketing",
+        "Automate weekly reporting"
+      ],
+      "must_haves": [
+        "Exploratory data analysis",
+        "Experimentation / A/B testing",
+        "SQL"
+      ],
+      "add": [
+        {
+          "name": "dbt",
+          "kind": "tool",
+          "priority": "preferred",
+          "aliases": [
+            "data build tool"
+          ]
+        }
+      ],
+      "drop": [
+        "Forecasting"
+      ],
+      "promote": [],
+      "required_years": 0
     },
     {
-      "key": "larkspur-apm-payments", "role": "baseline-product-manager-entry",
-      "title": "Associate Product Manager, Payments", "company": "Larkspur Pay", "department": "Payments",
-      "location": "San Francisco, CA", "workplace": "hybrid", "salary": [120000, 140000, "USD"],
-      "posted_days_ago": 5, "activity_days_ago": 0, "stage_moved_days_ago": 1,
+      "key": "larkspur-apm-payments",
+      "role": "baseline-product-manager-entry",
+      "title": "Associate Product Manager, Payments",
+      "company": "Larkspur Pay",
+      "department": "Payments",
+      "location": "San Francisco, CA",
+      "workplace": "hybrid",
+      "salary": [
+        120000,
+        140000,
+        "USD"
+      ],
+      "posted_days_ago": 5,
+      "activity_days_ago": 0,
+      "stage_moved_days_ago": 1,
       "short_description": "Own small payment flows end to end with an engineering pod.",
-      "responsibilities": ["Write clear requirements for checkout changes", "Talk to merchants every week", "Track conversion with product analytics"],
-      "must_haves": ["Requirements writing", "Product discovery and user research", "Product analytics", "Jira or Linear"],
-      "add": [{"name": "Payments domain knowledge", "kind": "skill", "priority": "preferred", "aliases": ["payments", "fintech", "checkout"]}],
-      "drop": [], "promote": [], "required_years": 1
+      "responsibilities": [
+        "Write clear requirements for checkout changes",
+        "Talk to merchants every week",
+        "Track conversion with product analytics"
+      ],
+      "must_haves": [
+        "Requirements writing",
+        "Product discovery and user research",
+        "Product analytics",
+        "Jira or Linear"
+      ],
+      "add": [
+        {
+          "name": "Payments domain knowledge",
+          "kind": "skill",
+          "priority": "preferred",
+          "aliases": [
+            "payments",
+            "fintech",
+            "checkout"
+          ]
+        }
+      ],
+      "drop": [],
+      "promote": [],
+      "required_years": 1
     },
     {
-      "key": "mosaic-junior-pm", "role": "baseline-product-manager-entry",
-      "title": "Junior Product Manager", "company": "Mosaic Learning", "department": "Learner Experience",
-      "location": "Remote (US)", "workplace": "remote", "salary": [90000, 105000, "USD"],
-      "posted_days_ago": 17, "activity_days_ago": 7, "stage_moved_days_ago": 12,
+      "key": "mosaic-junior-pm",
+      "role": "baseline-product-manager-entry",
+      "title": "Junior Product Manager",
+      "company": "Mosaic Learning",
+      "department": "Learner Experience",
+      "location": "Remote (US)",
+      "workplace": "remote",
+      "salary": [
+        90000,
+        105000,
+        "USD"
+      ],
+      "posted_days_ago": 17,
+      "activity_days_ago": 7,
+      "stage_moved_days_ago": 12,
       "short_description": "Improve how adult learners plan and finish courses.",
-      "responsibilities": ["Run learner interviews and usability tests", "Prioritize the team backlog", "Measure course completion"],
-      "must_haves": ["Product discovery and user research", "Prioritization", "Cross-functional collaboration"],
-      "add": [], "drop": ["Product management certification"], "promote": ["Figma"], "required_years": 0
+      "responsibilities": [
+        "Run learner interviews and usability tests",
+        "Prioritize the team backlog",
+        "Measure course completion"
+      ],
+      "must_haves": [
+        "Product discovery and user research",
+        "Prioritization",
+        "Cross-functional collaboration"
+      ],
+      "add": [],
+      "drop": [
+        "Product management certification"
+      ],
+      "promote": [
+        "Figma"
+      ],
+      "required_years": 0
     },
     {
-      "key": "granite-apm-platform", "role": "baseline-product-manager-entry",
-      "title": "Associate Product Manager, Platform", "company": "Granite Cloud", "department": "Developer Platform",
-      "location": "Austin, TX", "workplace": "on_site", "salary": [100000, 118000, "USD"],
-      "posted_days_ago": 40, "activity_days_ago": 31, "stage_moved_days_ago": null,
+      "key": "granite-apm-platform",
+      "role": "baseline-product-manager-entry",
+      "title": "Associate Product Manager, Platform",
+      "company": "Granite Cloud",
+      "department": "Developer Platform",
+      "location": "Austin, TX",
+      "workplace": "on_site",
+      "salary": [
+        100000,
+        118000,
+        "USD"
+      ],
+      "posted_days_ago": 40,
+      "activity_days_ago": 31,
+      "stage_moved_days_ago": null,
       "short_description": "Shape internal developer tools with platform engineers.",
-      "responsibilities": ["Write specs for developer tooling", "Interview internal developers", "Coordinate releases across teams"],
-      "must_haves": ["Requirements writing", "Technical fluency", "Cross-functional collaboration"],
-      "add": [], "drop": ["Go-to-market"], "promote": ["Technical fluency"], "required_years": 1
+      "responsibilities": [
+        "Write specs for developer tooling",
+        "Interview internal developers",
+        "Coordinate releases across teams"
+      ],
+      "must_haves": [
+        "Requirements writing",
+        "Technical fluency",
+        "Cross-functional collaboration"
+      ],
+      "add": [],
+      "drop": [
+        "Go-to-market"
+      ],
+      "promote": [
+        "Technical fluency"
+      ],
+      "required_years": 1
     }
-  ]
+  ],
+  "legacy": {
+    "_comment": "The 3 first demo jobs (scripts/seed_recruiter_demo.py) get fixed posting dates and activity too, so a fresh demo database always looks the same.",
+    "Northwind Analytics": {
+      "posted_days_ago": 6,
+      "activity_days_ago": 1,
+      "stage_moved_days_ago": 3
+    },
+    "Quarry Labs": {
+      "posted_days_ago": 14,
+      "activity_days_ago": 5,
+      "stage_moved_days_ago": null
+    },
+    "Fernway Health": {
+      "posted_days_ago": 26,
+      "activity_days_ago": 9,
+      "stage_moved_days_ago": 9
+    }
+  }
 }

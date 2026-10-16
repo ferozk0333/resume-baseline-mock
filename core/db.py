@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -176,7 +176,8 @@ CREATE TABLE IF NOT EXISTS jobs (           -- recruiter view (phase 11): one jo
   draft_json TEXT,                -- the create/edit form while it is being worked on (autosaved)
   updated_at TEXT,
   data_source TEXT,               -- 'demo' for seeded demo jobs (specs/17 §9), null otherwise
-  role_baseline_id TEXT           -- the role baseline this job's own baseline was written from, when known
+  role_baseline_id TEXT,          -- "Role family": a role baseline id, 'none', or null (unknown)
+  published_at TEXT               -- when the job was posted (drafts: null)
 );
 
 CREATE TABLE IF NOT EXISTS applications (
@@ -405,6 +406,10 @@ CREATE TABLE IF NOT EXISTS candidate_job_prefs (  -- Save / Not interested on th
   candidate_id TEXT, job_id TEXT, saved INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, reason TEXT, updated_at TEXT,
   PRIMARY KEY (candidate_id, job_id)
 );
+CREATE TABLE IF NOT EXISTS candidate_plan_done (    -- "Mark done" on a plan action (changes no score)
+  candidate_id TEXT, baseline_id TEXT, action_key TEXT, title TEXT, done_at TEXT,
+  PRIMARY KEY (candidate_id, baseline_id, action_key)
+);
 CREATE TABLE IF NOT EXISTS candidate_application_details (  -- "fill once": never sent to a model, never shown
   candidate_id TEXT PRIMARY KEY,                            -- to recruiters, never used in scoring or pools
   work_auth_json TEXT, questions_json TEXT, eeo_json TEXT, saved_at TEXT, dismissed_at TEXT, updated_at TEXT
@@ -582,6 +587,10 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
           "demo INTEGER DEFAULT 0, created_at TEXT)",
           "CREATE TABLE IF NOT EXISTS candidate_job_prefs (candidate_id TEXT, job_id TEXT, saved INTEGER DEFAULT 0, "
           "hidden INTEGER DEFAULT 0, reason TEXT, updated_at TEXT, PRIMARY KEY (candidate_id, job_id))"]),
+    (23, ["ALTER TABLE jobs ADD COLUMN published_at TEXT",
+          "UPDATE jobs SET published_at = created_at WHERE status IS NOT 'draft'",
+          "CREATE TABLE IF NOT EXISTS candidate_plan_done (candidate_id TEXT, baseline_id TEXT, action_key TEXT, "
+          "title TEXT, done_at TEXT, PRIMARY KEY (candidate_id, baseline_id, action_key))"]),
 ]
 
 

@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PostingPreview } from "@/components/app/jobs/posting-preview";
 import { ApiError, DIMENSIONS, del, get, post, put, REACH, titleCase, WORKPLACE, type JobDraft, type JobForm,
-  type ReqRow } from "@/lib/api";
+  type Baseline, type ReqRow } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const STEPS = ["Start", "Role & requirements", "Hiring setup", "Review & publish"];
@@ -74,7 +74,9 @@ export function JobFormPage({ jobId }: { jobId: string }) {
     setSaved("saving");
     try {
       const f = await put<JobForm>(`/jobs/${jobId}/draft`, { draft: d });
-      setForm((cur) => (cur ? { ...cur, warnings: f.warnings } : f));
+      // The role family follows the title until the recruiter picks one: take the server's suggestion.
+      setForm((cur) => (cur ? { ...cur, warnings: f.warnings, draft: cur.draft.details.role_family_auto === false ? cur.draft
+        : { ...cur.draft, details: { ...cur.draft.details, role_family: f.draft.details.role_family, role_family_auto: true } } } : f));
       setSaved("saved");
     } catch (e) { setSaved("error"); toast.error((e as Error).message); }
   }, [jobId]);
@@ -216,6 +218,8 @@ function StepRole({ d, update, aside }: { d: JobDraft; update: Upd; aside: React
   const set = (patch: Partial<JobDraft["details"]>) => update((x) => ({ ...x, details: { ...x.details, ...patch } }));
   const q = d.detail_quotes ?? {};
   const required = d.requirements.filter((r) => r.priority === "required" && r.name.trim()).length;
+  const [families, setFamilies] = useState<Baseline[]>([]);
+  useEffect(() => { get<Baseline[]>("/baselines").then(setFamilies).catch(() => setFamilies([])); }, []);
   const text = (key: keyof JobDraft["details"], label: string, star = false, placeholder = "") => (
     <div className="space-y-1">
       <Label htmlFor={key} className="flex items-center gap-1.5">{label}{star && <span className="text-red-600">*</span>}<FromJd quote={q[key]} /></Label>
@@ -250,6 +254,16 @@ function StepRole({ d, update, aside }: { d: JobDraft; update: Upd; aside: React
               {["entry", "mid", "senior", "lead"].map((l) => <option key={l} value={l}>{titleCase(l)}</option>)}
             </select>
             <Hint>A label for the posting. Scoring uses the minimum years: up to 2 years is entry level.</Hint>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="role_family">Role family</Label>
+            <select id="role_family" value={det.role_family ?? "none"} className={field}
+              onChange={(e) => set({ role_family: e.target.value, role_family_auto: false })}>
+              {families.map((f) => <option key={f.id} value={f.id!}>{f.title}</option>)}
+              <option value="none">None</option>
+            </select>
+            <Hint>{det.role_family_auto !== false ? "Suggested from the title. " : ""}Candidates&apos; preview match for this
+              job starts from their baseline score for this role. Doesn&apos;t change how you rank applicants.</Hint>
           </div>
           <div className="space-y-1">
             <Label htmlFor="min_years" className="flex items-center gap-1.5">Minimum years<span className="text-red-600">*</span><FromJd quote={q.min_years} /></Label>

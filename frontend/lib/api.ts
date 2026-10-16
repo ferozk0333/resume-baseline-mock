@@ -202,7 +202,7 @@ export type ReqRow = { key: string; criterion_id: string | null; name: string; k
   description: string; from_jd: boolean; quote: string | null };
 export type JobDetails = { title: string; company: string; department: string; location: string;
   workplace: "on_site" | "hybrid" | "remote" | null; employment_type: string; level: string; min_years: number | null;
-  short_description: string; responsibilities: string[] };
+  short_description: string; responsibilities: string[]; role_family?: string; role_family_auto?: boolean };
 export type JobDraft = { step: number; source: "jd" | "copy" | "scratch" | "edit"; details: JobDetails;
   detail_quotes: Record<string, string>; requirements: ReqRow[];
   good: { scope_expectation: string; complexity_criteria: string; expected_reach: number | null };
@@ -215,7 +215,7 @@ export type JobForm = { job_id: string; status: JobStatus; draft: JobDraft; jd_t
 export type Posting = { id: string; title: string; company: string; department: string; location: string;
   workplace: string | null; employment_type: string; level: string; min_years: number | null;
   short_description: string; responsibilities: string[]; required: string[]; preferred: string[];
-  reach: string | null; created_at: string; status?: JobStatus; jd_text?: string | null; has_jd_file?: boolean };
+  reach: string | null; created_at: string; posted_at?: string; status?: JobStatus; jd_text?: string | null; has_jd_file?: boolean };
 export type JobTemplate = { kind: "job" | "template"; id: string; title: string; company: string; status: JobStatus | null;
   level?: string };
 export const WORKPLACE: Record<string, string> = { on_site: "On-site", hybrid: "Hybrid", remote: "Remote" };

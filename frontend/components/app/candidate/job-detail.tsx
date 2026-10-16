@@ -76,7 +76,7 @@ export function JobDetailView({ cid, jobId, onChanged }: { cid: string; jobId: s
         </div>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           <span className={pay ? "font-medium" : "text-muted-foreground"}>{pay ?? "Salary not listed"}</span>
-          <span className="text-muted-foreground">{postedAgo(j.created_at)}</span>
+          <span className="text-muted-foreground">{postedAgo(j.posted_at ?? j.created_at)}</span>
           <ActivityLine a={d.activity} />
         </p>
         {!d.profile_confirmed && !d.applied && (

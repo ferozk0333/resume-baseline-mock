@@ -48,9 +48,9 @@ def create_job(conn, baseline_id: str, title: str, company: str, must_haves: lis
     job_id = new_id()
     with conn:
         conn.execute("INSERT INTO jobs (id, baseline_id, title, company, weights_json, must_haves_json, preset, "
-                     "created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)",
+                     "created_at, published_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)",
                      (job_id, baseline_id, title, company, json.dumps(config.default_weights()),
-                      json.dumps(must_haves or []), now_iso()))
+                      json.dumps(must_haves or []), now_iso(), now_iso()))
     return job_id
 
 

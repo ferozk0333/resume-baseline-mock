@@ -43,6 +43,7 @@ def make(path, job_llm):
                           planner=ui_fakes.AlwaysPlanner(), job_llm=job_llm))
     client = TestClient(app)
     client.tasks = app.state.tasks
+    client.db_path = path
     return client
 
 
@@ -242,3 +243,39 @@ def test_closed_jobs_leave_the_candidate_side_but_keep_applications(api):
     assert api.post(f"/candidates/{cid}/apply", json={"job_id": job_id}).status_code == 422
     assert len(api.get(f"/jobs/{job_id}/applicants").json()["applicants"]) == 1
     assert [j["status"] for j in api.get("/recruiter/jobs").json()] == ["closed"]
+
+
+# --- Role family (specs/17 phase B review) ------------------------------------------------------------------------
+
+AI_ROLE = "baseline-ai-engineer-entry"
+
+
+def test_role_family_follows_the_title_until_picked_and_is_stored_on_publish(api):
+    form = read(api)
+    d = form["draft"]
+    assert d["details"]["role_family"] == AI_ROLE and d["details"]["role_family_auto"]       # "AI Engineer" title
+    d["details"]["title"] = "Platform Generalist"
+    d = api.put(f"/jobs/{form['job_id']}/draft", json={"draft": d}).json()["draft"]
+    assert d["details"]["role_family"] == "none"                                              # no keyword match
+    d["details"].update(role_family=AI_ROLE, role_family_auto=False)                          # the recruiter picks
+    d["details"]["title"] = "Platform Generalist II"
+    d = api.put(f"/jobs/{form['job_id']}/draft", json={"draft": d}).json()["draft"]
+    assert d["details"]["role_family"] == AI_ROLE
+    assert api.post(f"/jobs/{form['job_id']}/publish").status_code == 200
+    with db.connect(api.db_path) as c:
+        assert c.execute("SELECT role_baseline_id, published_at IS NOT NULL FROM jobs WHERE id = ?",
+                         (form["job_id"],)).fetchone()[:] == (AI_ROLE, 1)
+
+
+def test_role_family_none_means_jobmatch_starts_from_55(api):
+    from backend import candidate_jobs as cj
+    form = read(api)
+    d = form["draft"]
+    d["details"].update(role_family="none", role_family_auto=False)
+    api.put(f"/jobs/{form['job_id']}/draft", json={"draft": d})
+    api.post(f"/jobs/{form['job_id']}/publish")
+    with db.connect(api.db_path) as c:
+        from backend import jobs as jb
+        job = jb.get(c, form["job_id"])
+        assert job["role_baseline_id"] == "none" and cj.job_role(c, job) is None
+        assert cj.jobmatch_preview(c, "cand", job)["value"] == cj.jobmatch_value("cand", job["id"], None)

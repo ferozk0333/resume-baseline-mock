@@ -1193,8 +1193,9 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             blocker = scoring_blocker(store.load_profile(c, candidate_id))
             if blocker:
                 raise HTTPException(409, blocker)
-            if candidate_id in state.review_threads:
-                raise HTTPException(409, "Finish reviewing the profile first: applying uses the confirmed profile.")
+            if candidate_id in state.review_threads or not cj.profile_confirmed(c, candidate_id):
+                raise HTTPException(409, "Confirm your profile first: applying uses your confirmed profile. "
+                                         "Finish the Review step, then apply.")
             try:
                 app_id = jb.apply(c, body.job_id, candidate_id)
             except ValueError as exc:

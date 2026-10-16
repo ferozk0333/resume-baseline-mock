@@ -251,3 +251,52 @@ def test_detail_hides_drafts_and_closed_jobs_not_applied_to(seeded_env):
     api.post(f"/jobs/{job}/status", json={"status": "closed"})
     assert api.get(f"/candidates/{cid}/jobs/{job}").status_code == 404
     assert job not in {j["id"] for j in api.get(f"/candidates/{cid}/jobs").json()["jobs"]}
+
+
+# --- Phase B review: activity, apply needs a confirmed profile, fixed demo dates -----------------------------------
+
+def test_posting_counts_once_and_editing_the_job_does_not(seeded_env):
+    with db.connect(seeded_env.path) as c:
+        job = jb.get(c, dj("harborline-ai-new-grad"))                       # posted 38 days ago, last action 34
+        now = datetime.now(timezone.utc)
+        assert cj.activity(c, job, now)["low"]
+        c.execute("UPDATE jobs SET updated_at = ? WHERE id = ?", (now.isoformat(), job["id"]))   # an edit
+        c.execute("INSERT INTO activity (id, application_id, job_id, kind, summary, detail_json, created_at) VALUES "
+                  "('n1', NULL, ?, 'note', 'a note', '{}', ?)", (job["id"], now.isoformat()))     # not an applicant action
+        c.commit()
+        assert cj.activity(c, jb.get(c, job["id"]), now)["label"] == "Low recent activity"
+        c.execute("INSERT INTO activity (id, application_id, job_id, kind, summary, detail_json, created_at) VALUES "
+                  "('s1', NULL, ?, 'stage', 'moved', '{}', ?)", (job["id"], now.isoformat()))
+        c.commit()
+        assert cj.activity(c, jb.get(c, job["id"]), now)["label"] == "Recruiter active today"
+        fresh = jb.get(c, dj("cedarpine-ds1"))
+        c.execute("DELETE FROM job_events WHERE job_id = ?", (fresh["id"],))
+        c.commit()
+        assert cj.activity(c, fresh, now)["days"] == 1                     # posting itself (1 day ago) counts
+
+
+def test_apply_needs_a_confirmed_profile(seeded_env):
+    api = seeded_env.api
+    from tests.test_candidate import new_profile
+    cid, read = new_profile(api)
+    api.tasks.wait(read)
+    api.put(f"/candidates/{cid}/targets", json={"baseline_ids": [DS]})
+    r = api.post(f"/candidates/{cid}/apply", json={"job_id": dj("cedarpine-ds1")})
+    assert r.status_code == 409 and "Confirm your profile first" in r.json()["detail"]
+    with db.connect(seeded_env.path) as c:
+        assert c.execute("SELECT COUNT(*) FROM applications WHERE candidate_id = ?", (cid,)).fetchone()[0] == 0
+
+
+def test_the_first_demo_jobs_get_fixed_dates_and_activity(env):  # noqa: F811
+    from backend import recruiter as rc
+    now = datetime(2026, 10, 16, 12, tzinfo=timezone.utc)
+    with db.connect(env.path) as c:
+        ids = {co: rc.create_job(c, DS, "Data Scientist", co) for co in ("Northwind Analytics", "Quarry Labs", "Fernway Health")}
+        demo_jobs.seed(c, now=now)
+        north = jb.get(c, ids["Northwind Analytics"])
+        assert north["data_source"] == "demo" and north["published_at"] == (now - timedelta(days=6)).isoformat()
+        assert cj.activity(c, north, now)["label"] == "Recruiter active yesterday" and cj.activity(c, north, now)["reviewing"]
+        events = c.execute("SELECT COUNT(*) FROM job_events WHERE demo = 1").fetchone()[0]
+        demo_jobs.seed(c, now=now + timedelta(days=3))                     # idempotent: not re-dated
+        assert jb.get(c, ids["Quarry Labs"])["published_at"] == (now - timedelta(days=14)).isoformat()
+        assert c.execute("SELECT COUNT(*) FROM job_events WHERE demo = 1").fetchone()[0] == events
