@@ -102,4 +102,16 @@ test("copy an existing job and start from scratch", async ({ page }) => {
   await next(page);
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("No applicants yet.")).toBeVisible({ timeout: 20_000 });
+
+  // Row menu on a one-row table (Closed tab): every item fully visible, nothing clipped by the table
+  await page.goto("/recruiter");
+  await page.getByRole("button", { name: "Actions for Analytics Engineer" }).click();
+  await page.getByRole("menuitem", { name: "Close" }).click();
+  await page.getByRole("tab", { name: /Closed/ }).click();
+  await page.getByRole("button", { name: "Actions for Analytics Engineer" }).click();
+  const menu = page.getByRole("menu", { name: "Actions for Analytics Engineer" });
+  for (const item of ["Edit", "Duplicate", "Reopen"]) await expect(menu.getByRole("menuitem", { name: item })).toBeInViewport({ ratio: 1 });
+  await page.screenshot({ path: "e2e/.tmp/job-8-closed-row-menu.png" });
+  await menu.getByRole("menuitem", { name: "Reopen" }).click();
+  await expect(page.getByRole("table", { name: "Closed jobs" })).toHaveCount(0);
 });

@@ -20,7 +20,9 @@ export default function JobsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<JobStatus>("open");
   const [jobs, setJobs] = useState<JobRow[] | null>(null);
-  const [menu, setMenu] = useState<string | null>(null);
+  // The row menu floats (fixed position from the ⋯ button) so the table's scroll container never clips it; it opens
+  // upward when there is no room below.
+  const [menu, setMenu] = useState<{ id: string; top: number; right: number; up: boolean } | null>(null);
   const load = useCallback(() => {
     get<JobRow[]>("/recruiter/jobs").then(setJobs).catch((e) => toast.error(e.message));
   }, []);
@@ -29,7 +31,13 @@ export default function JobsPage() {
     if (!menu) return;
     const close = () => setMenu(null);
     window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, [menu]);
 
   const shown = (jobs ?? []).filter((j) => j.status === tab);
@@ -100,9 +108,17 @@ export default function JobsPage() {
                   </TableCell>
                   <TableCell className="relative" onClick={(e) => e.stopPropagation()}>
                     <Button size="icon-sm" variant="ghost" aria-label={`Actions for ${j.title || "draft"}`}
-                      onClick={(e) => { e.stopPropagation(); setMenu(menu === j.id ? null : j.id); }}><MoreHorizontal /></Button>
-                    {menu === j.id && (
-                      <div role="menu" className="absolute right-2 z-20 mt-1 w-36 rounded-lg border bg-popover p-1 text-sm shadow-md">
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const r = e.currentTarget.getBoundingClientRect();
+                        const up = window.innerHeight - r.bottom < 180;
+                        setMenu(menu?.id === j.id ? null : { id: j.id, top: up ? r.top - 4 : r.bottom + 4,
+                          right: window.innerWidth - r.right, up });
+                      }}><MoreHorizontal /></Button>
+                    {menu?.id === j.id && (
+                      <div role="menu" aria-label={`Actions for ${j.title || "draft"}`}
+                        style={{ position: "fixed", top: menu.top, right: menu.right, transform: menu.up ? "translateY(-100%)" : undefined }}
+                        className="z-50 w-36 rounded-lg border bg-popover p-1 text-sm shadow-md">
                         <MenuItem onClick={() => router.push(`/recruiter/jobs/${j.id}/edit`)}>Edit</MenuItem>
                         {j.status !== "draft" && <MenuItem onClick={() => duplicate(j.id)}>Duplicate</MenuItem>}
                         {j.status === "open" && <MenuItem onClick={() => setStatus(j.id, "closed")}>Close</MenuItem>}
