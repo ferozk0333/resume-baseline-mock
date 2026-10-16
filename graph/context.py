@@ -36,6 +36,7 @@ class Deps:
     claude_judge: Judge | None = None         # for asks that need a quote; default: the judge's Claude fallback
     planner: object | None = None             # StructuredLLM for the improvement plan; None = ranked gaps only
     writer: object | None = None              # StructuredLLM for recruiter email drafts; None = code templates
+    job_llm: object | None = None             # StructuredLLM for reading job descriptions; None = manual form
     plan_in_background: bool = True           # return the score first, write the plan after (specs/09 §2.6)
     extraction_cache: bool = False            # reuse saved extraction outputs for identical documents (app: on)
     _sem: threading.BoundedSemaphore = field(init=False, repr=False)

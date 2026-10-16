@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { get, post, type Baseline, type Candidate } from "@/lib/api";
+import { PostingPreview } from "@/components/app/jobs/posting-preview";
+import { ApiError, get, post, WORKPLACE, type Baseline, type Candidate, type Posting, type Task } from "@/lib/api";
 
 type Run = { id: string; baseline_id: string; baseline_title: string; status: string; started_at: string };
 
@@ -20,8 +21,12 @@ export default function Home() {
   const [runsFor, setRunsFor] = useState<{ id: string; runs: Run[] }>({ id: "", runs: [] });
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [jobs, setJobs] = useState<Posting[]>([]);
+  const [applying, setApplying] = useState<string | null>(null);
+  const [openJob, setOpenJob] = useState<string | null>(null);
 
   useEffect(() => {
+    get<Posting[]>("/open-jobs").then(setJobs).catch(() => {});
     Promise.all([get<Candidate[]>("/candidates"), get<Baseline[]>("/baselines")])
       .then(([c, b]) => {
         setCandidates(c);
@@ -49,6 +54,24 @@ export default function Home() {
     } catch (e) {
       toast.error((e as Error).message);
       setBusy(false);
+    }
+  }
+
+  async function apply(jobId: string) {
+    if (!selected) return;
+    setApplying(jobId);
+    try {
+      const { task_id } = await post<{ task_id: string }>(`/candidates/${selected}/apply`, { job_id: jobId });
+      toast.info("Applied. Scoring against the job…");
+      for (;;) {                                     // the run page shows progress once the run exists
+        await new Promise((r) => setTimeout(r, 1000));
+        const t = await get<Task>(`/tasks/${task_id}`);
+        if (t.status === "error") throw new Error(t.error ?? "Scoring failed.");
+        if (t.run_id) { router.push(`/runs/${t.run_id}`); return; }
+      }
+    } catch (e) {
+      toast.error(e instanceof ApiError && e.status === 409 ? e.message : (e as Error).message);
+      setApplying(null);
     }
   }
 
@@ -141,6 +164,36 @@ export default function Home() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Apply to a job</CardTitle>
+          <CardDescription>
+            Open jobs. Applying uses the selected candidate&apos;s confirmed profile and scores it against the job; the
+            recruiter sees the application.{!selected && " Pick a saved candidate first."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {jobs.length === 0 ? <p className="text-sm text-muted-foreground">No open jobs right now.</p> : (
+            <ul aria-label="Open jobs" className="divide-y">
+              {jobs.map((j) => (
+                <li key={j.id} className="py-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="button" className="min-w-0 text-left" onClick={() => setOpenJob(openJob === j.id ? null : j.id)} aria-expanded={openJob === j.id}>
+                      <div className="font-medium hover:underline">{j.title}</div>
+                      <div className="text-xs text-muted-foreground">{[j.company, j.location, j.workplace ? WORKPLACE[j.workplace] : null].filter(Boolean).join(" · ")}</div>
+                    </button>
+                    <Button size="sm" className="ml-auto" disabled={!selected || applying !== null} onClick={() => apply(j.id)}>
+                      {applying === j.id ? "Scoring…" : "Apply"}
+                    </Button>
+                  </div>
+                  {openJob === j.id && <div className="mt-3 rounded-lg border bg-muted/30 p-4"><PostingPreview p={j} /></div>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

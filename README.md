@@ -53,6 +53,16 @@ robustness checks only: it is never an applicant.
 - `make demo` drafts emails with templates (no model). For model drafts on the free tier:
   `EMAIL_LIVE=1 EMAIL_MODEL=gemini/gemini-3.5-flash-lite make demo`. "Why" points and phone-screen questions are code templates ("Demo text").
 
+### Create a job (specs/14)
+Jobs page: tabs Open · Drafts · Closed and **Create job** in 4 steps: start (upload or paste a job description,
+copy a job or role template, or from scratch) → role & requirements → hiring setup → review & publish. Every change
+is autosaved, so a draft resumes at its step. Reading a JD is one `JOB_EXTRACT_MODEL` call (default
+`gemini/gemini-3.8-flash`); every field is quote-checked and marked "From JD"; salary, benefits, EEO, team size and
+"how to apply" are never requirements. If the model is unavailable the form opens empty next to the JD text.
+A published job owns its baseline (never listed as a candidate role); candidates apply from Home with their
+confirmed profile. Editing requirements or "What good looks like" asks first: "N applicants will be re-scored.
+About M model calls." Demo: `JOB_EXTRACT_LIVE=1 make demo` reads JDs with the real model.
+
 ### Hiring workflow (specs/16)
 One workflow per application, from shortlist to decision: a LangGraph graph that waits for the recruiter at every
 email and every decision. **Nothing is sent automatically.**

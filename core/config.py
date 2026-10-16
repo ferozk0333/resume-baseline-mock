@@ -95,6 +95,8 @@ REASONING_MODEL = _role_model("REASONING_MODEL", "claude-sonnet-5-5", "plan")
 COMPLEXITY_MODEL = _role_model("COMPLEXITY_MODEL", REASONING_MODEL, "complexity")
 # Recruiter emails (specs/13 §2–§4): drafts only; a recruiter sends. Template draft when the model is unavailable.
 EMAIL_MODEL = _role_model("EMAIL_MODEL", "claude-haiku-4-5-20251001", "email")
+# Reading a job description into the create-job form (specs/14 §4): one call per JD; manual form if unavailable.
+JOB_EXTRACT_MODEL = _env("JOB_EXTRACT_MODEL", "gemini/gemini-3.8-flash")
 # Hiring workflow (specs/16): reading candidate replies and summarizing interview feedback. Code rules / a code
 # summary when the model is unavailable; the recruiter always decides.
 REPLY_MODEL = _role_model("REPLY_MODEL", "claude-haiku-4-5-20251001", "reply")

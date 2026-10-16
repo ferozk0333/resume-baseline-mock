@@ -1,41 +1,126 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Briefcase, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { get, type Job } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { del, get, post, WORKPLACE, type JobForm, type JobRow, type JobStatus } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
-export default function RecruiterHome() {
-  const [jobs, setJobs] = useState<Job[] | null>(null);
-  useEffect(() => { get<Job[]>("/jobs").then(setJobs).catch((e) => toast.error(e.message)); }, []);
+const TABS: { key: JobStatus; label: string }[] = [{ key: "open", label: "Open" }, { key: "draft", label: "Drafts" },
+  { key: "closed", label: "Closed" }];
+
+/** Jobs (specs/14 §2): Open · Drafts · Closed, Create job, and a row menu (Edit, Duplicate, Close/Reopen). */
+export default function JobsPage() {
+  const router = useRouter();
+  const [tab, setTab] = useState<JobStatus>("open");
+  const [jobs, setJobs] = useState<JobRow[] | null>(null);
+  const [menu, setMenu] = useState<string | null>(null);
+  const load = useCallback(() => {
+    get<JobRow[]>("/recruiter/jobs").then(setJobs).catch((e) => toast.error(e.message));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [menu]);
+
+  const shown = (jobs ?? []).filter((j) => j.status === tab);
+  const count = (s: JobStatus) => (jobs ?? []).filter((j) => j.status === s).length;
+
+  async function duplicate(id: string) {
+    try {
+      const f = await post<JobForm>("/jobs/drafts/copy", { kind: "job", id });
+      router.push(`/recruiter/jobs/${f.job_id}/edit`);
+    } catch (e) { toast.error((e as Error).message); }
+  }
+  async function setStatus(id: string, status: "open" | "closed") {
+    try { await post(`/jobs/${id}/status`, { status }); toast.success(status === "closed" ? "Job closed" : "Job reopened"); load(); }
+    catch (e) { toast.error((e as Error).message); }
+  }
+  async function remove(id: string) {
+    try { await del(`/jobs/${id}/draft`); load(); } catch (e) { toast.error((e as Error).message); }
+  }
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Open jobs</h1>
-        <p className="text-sm text-muted-foreground">Applicants ranked by match score. Pick a job to review them.</p>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Jobs</h1>
+          <p className="text-sm text-muted-foreground">Applicants are ranked by match score. Open a job to review them.</p>
+        </div>
+        <Link href="/recruiter/jobs/new" className={buttonVariants()}><Plus /> Create job</Link>
       </div>
-      {jobs && jobs.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          No jobs yet. Seed the demo with <code className="rounded bg-muted px-1">python scripts/seed_recruiter_demo.py</code>.
-        </p>
-      )}
-      <div className="grid gap-4 md:grid-cols-3">
-        {(jobs ?? []).map((j) => (
-          <Link key={j.id} href={`/recruiter/jobs/${j.id}`} className="rounded-xl focus-visible:outline-2 focus-visible:outline-ring">
-            <Card className="h-full transition-shadow hover:shadow-md">
-              <CardHeader>
-                <Briefcase className="size-5 text-primary" />
-                <CardTitle className="text-base">{j.title}</CardTitle>
-                <CardDescription>{j.company}</CardDescription>
-                <div className="flex items-center gap-1.5 pt-2 text-sm text-muted-foreground">
-                  <Users className="size-4" /> {j.applicants} applicant{j.applicants === 1 ? "" : "s"}
-                </div>
-              </CardHeader>
-            </Card>
-          </Link>
+      <div role="tablist" aria-label="Job status" className="flex w-fit rounded-lg border bg-muted p-0.5 text-sm">
+        {TABS.map((t) => (
+          <button key={t.key} role="tab" type="button" aria-selected={tab === t.key} onClick={() => setTab(t.key)}
+            className={cn("rounded-md px-3 py-1", tab === t.key ? "bg-white shadow-sm" : "text-muted-foreground")}>
+            {t.label} <span className="tabular-nums text-muted-foreground">{jobs ? count(t.key) : ""}</span>
+          </button>
         ))}
       </div>
+      {jobs === null ? <Skeleton className="h-48" /> : shown.length === 0 ? (
+        <p className="rounded-xl border border-dashed bg-white px-4 py-8 text-center text-sm text-muted-foreground">
+          {tab === "draft" ? "No drafts. Create job saves a draft as you go." : tab === "closed" ? "No closed jobs." : "No open jobs yet."}
+        </p>
+      ) : (
+        <div className="rounded-xl border bg-white">
+          <Table aria-label={`${TABS.find((t) => t.key === tab)!.label} jobs`}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead><TableHead>Company</TableHead><TableHead>Location</TableHead>
+                <TableHead className="text-right">Applicants</TableHead><TableHead>Created</TableHead><TableHead>Status</TableHead>
+                <TableHead className="w-10"><span className="sr-only">Actions</span></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {shown.map((j) => (
+                <TableRow key={j.id}>
+                  <TableCell className="font-medium">
+                    <Link href={j.status === "draft" ? `/recruiter/jobs/${j.id}/edit` : `/recruiter/jobs/${j.id}`} className="hover:underline">
+                      {j.title || "Untitled job"}
+                    </Link>
+                    {j.has_draft && <Badge variant="outline" className="ml-2 text-[10px]">unsaved edit</Badge>}
+                  </TableCell>
+                  <TableCell>{j.company || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{[j.location, j.workplace ? WORKPLACE[j.workplace] : null].filter(Boolean).join(" · ") || "—"}</TableCell>
+                  <TableCell className="text-right tabular-nums">{j.applicants}</TableCell>
+                  <TableCell className="text-muted-foreground">{new Date(j.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <Badge variant={j.status === "open" ? "default" : "secondary"} className="capitalize">
+                      {j.status === "draft" && j.step ? `Draft · step ${j.step} of 4` : j.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="relative">
+                    <Button size="icon-sm" variant="ghost" aria-label={`Actions for ${j.title || "draft"}`}
+                      onClick={(e) => { e.stopPropagation(); setMenu(menu === j.id ? null : j.id); }}><MoreHorizontal /></Button>
+                    {menu === j.id && (
+                      <div role="menu" className="absolute right-2 z-20 mt-1 w-36 rounded-lg border bg-popover p-1 text-sm shadow-md">
+                        <MenuItem onClick={() => router.push(`/recruiter/jobs/${j.id}/edit`)}>Edit</MenuItem>
+                        {j.status !== "draft" && <MenuItem onClick={() => duplicate(j.id)}>Duplicate</MenuItem>}
+                        {j.status === "open" && <MenuItem onClick={() => setStatus(j.id, "closed")}>Close</MenuItem>}
+                        {j.status === "closed" && <MenuItem onClick={() => setStatus(j.id, "open")}>Reopen</MenuItem>}
+                        {j.status === "draft" && <MenuItem onClick={() => remove(j.id)}>Delete draft</MenuItem>}
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
+}
+
+function MenuItem({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return <button role="menuitem" type="button" onClick={onClick}
+    className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted">{children}</button>;
 }

@@ -6,7 +6,7 @@ test("upload → review → score → plan", async ({ page }) => {
   page.on("console", (m) => { if (m.type() === "error") problems.push(m.text()); });
   page.on("pageerror", (e) => problems.push(e.message));
   await page.goto("/");
-  await page.getByRole("button", { name: /^Data Scientist/ }).click();
+  await page.getByRole("button", { name: /^Data Scientist entry/ }).click();       // the target role, not an open job
   await page.getByLabel("Name").fill("Jane Doe");
   await page.screenshot({ path: "e2e/.tmp/home.png", fullPage: true });
   await page.getByRole("button", { name: "Start" }).click();

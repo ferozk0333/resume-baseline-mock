@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, CalendarClock, Columns3, Settings2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, Columns3, Pencil, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,12 +12,14 @@ import { ApplicantList } from "@/components/app/recruiter/applicant-list";
 import { RejectDrawer, StageEmailDrawer } from "@/components/app/recruiter/decision-drawers";
 import { useStartLoop } from "@/components/app/recruiter/start-loop";
 import { PipelineBoard } from "@/components/app/recruiter/pipeline-board";
+import { JobDescription } from "@/components/app/jobs/job-description";
 import { ProfilePanel, TABS, type Tab } from "@/components/app/recruiter/profile-panel";
 import { get, patch, type ApplicantRow, type Job, type Panel, type Stage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const selectClass = "h-8 rounded-lg border border-input bg-white px-2 text-sm";
-type Nav = { view: "ranked" | "pipeline"; tab: Tab; app: string | null };
+type View = "ranked" | "pipeline" | "jd";
+type Nav = { view: View; tab: Tab; app: string | null };
 
 export default function JobPage() {
   return <Suspense fallback={<Skeleton className="h-96" />}><Workspace /></Suspense>;
@@ -30,7 +32,7 @@ function Workspace() {
   const params = useSearchParams();
   // View, tab and selected applicant live in state and are mirrored to the URL synchronously, so fast clicks
   // and ↑/↓ never read a stale URL. The tab persists when switching candidates.
-  const [nav, setNav] = useState<Nav>(() => ({ view: params.get("view") === "pipeline" ? "pipeline" : "ranked",
+  const [nav, setNav] = useState<Nav>(() => ({ view: (["pipeline", "jd"].includes(params.get("view") ?? "") ? params.get("view") : "ranked") as View,
     tab: (TABS as readonly string[]).includes(params.get("tab") ?? "") ? params.get("tab") as Tab : "overview",
     app: params.get("app") }));
   const { view, tab } = nav;
@@ -51,7 +53,7 @@ function Workspace() {
   const setUrl = useCallback((patchNav: Partial<Nav>) => setNav((cur) => ({ ...cur, ...patchNav })), []);
   useEffect(() => {                                     // mirror the state into the URL (shareable, survives reload)
     const q = new URLSearchParams();
-    if (nav.view === "pipeline") q.set("view", "pipeline");
+    if (nav.view !== "ranked") q.set("view", nav.view);
     if (nav.app) q.set("app", nav.app);
     if (nav.tab !== "overview") q.set("tab", nav.tab);
     const url = `${pathname}${q.size ? `?${q}` : ""}`;
@@ -124,10 +126,10 @@ function Workspace() {
           <p className="text-xs text-muted-foreground">{job?.company} · ranked with {weightsLabel}</p>
         </div>
         <div role="group" aria-label="View" className="flex rounded-lg border bg-muted p-0.5 text-sm">
-          {(["ranked", "pipeline"] as const).map((v) => (
+          {(["ranked", "pipeline", "jd"] as const).map((v) => (
             <button key={v} type="button" aria-pressed={view === v} onClick={() => setUrl({ view: v })}
               className={cn("rounded-md px-3 py-0.5", view === v ? "bg-white shadow-sm" : "text-muted-foreground")}>
-              {v === "ranked" ? "Ranked" : "Pipeline"}
+              {v === "ranked" ? "Ranked" : v === "pipeline" ? "Pipeline" : "Job description"}
             </button>
           ))}
         </div>
@@ -140,14 +142,23 @@ function Workspace() {
             onClick={() => router.push(`/recruiter/jobs/${id}/compare?ids=${picked.join(",")}`)}>
             <Columns3 /> Compare{picked.length ? ` (${picked.length})` : ""}
           </Button>
+          <Link href={`/recruiter/jobs/${id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Pencil /> Edit job
+          </Link>
           <Link href={`/recruiter/jobs/${id}/settings`} className={buttonVariants({ variant: "outline", size: "sm" })}>
             <Settings2 /> Job settings
           </Link>
         </div>
       </div>
 
-      {view === "pipeline" ? (
+      {view === "jd" ? (
+        <JobDescription jobId={id} />
+      ) : view === "pipeline" ? (
         <PipelineBoard jobId={id} />
+      ) : rows !== null && rows.length === 0 && !status && !allMust && !minScore ? (
+        <p className="rounded-xl border border-dashed bg-white px-4 py-10 text-center text-sm text-muted-foreground">
+          No applicants yet. Candidates can apply from the candidate side once the job is open.
+        </p>
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)] gap-3">
           <section aria-label="Ranked applicants" className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-white">

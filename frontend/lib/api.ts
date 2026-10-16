@@ -191,3 +191,32 @@ export type WorkflowView = {
 };
 export type RecruiterTask = { application_id: string; candidate: string; job_id: string; job_title: string;
   company: string; stage: string; step: string; title: string; since: string; kind: string };
+
+// --- Create a job (specs/14) ------------------------------------------------------------------------------
+export type JobStatus = "draft" | "open" | "closed";
+export type JobRow = { id: string; title: string; company: string; location: string; workplace: string | null;
+  applicants: number; created_at: string; updated_at: string | null; status: JobStatus; has_draft: boolean;
+  step: number | null; baseline_id: string | null };
+export type ReqRow = { key: string; criterion_id: string | null; name: string; kind: "skill" | "tool" | "certification";
+  priority: "required" | "preferred"; must_have: boolean; aliases: string[]; suggested_aliases: string[];
+  description: string; from_jd: boolean; quote: string | null };
+export type JobDetails = { title: string; company: string; department: string; location: string;
+  workplace: "on_site" | "hybrid" | "remote" | null; employment_type: string; level: string; min_years: number | null;
+  short_description: string; responsibilities: string[] };
+export type JobDraft = { step: number; source: "jd" | "copy" | "scratch" | "edit"; details: JobDetails;
+  detail_quotes: Record<string, string>; requirements: ReqRow[];
+  good: { scope_expectation: string; complexity_criteria: string; expected_reach: number | null };
+  good_quotes: Record<string, string | null>; ranking: { preset: string | null; weights: Weights };
+  plan: { stages: string[] } & JobSettings;
+  extraction: { status: string; model: string | null; notice: string | null;
+    dropped: { item: string; text: string; reason: string; quote?: string }[] | null } | null };
+export type JobForm = { job_id: string; status: JobStatus; draft: JobDraft; jd_text: string | null; has_jd_file: boolean;
+  warnings: string[]; applicants: number };
+export type Posting = { id: string; title: string; company: string; department: string; location: string;
+  workplace: string | null; employment_type: string; level: string; min_years: number | null;
+  short_description: string; responsibilities: string[]; required: string[]; preferred: string[];
+  reach: string | null; created_at: string; status?: JobStatus; jd_text?: string | null; has_jd_file?: boolean };
+export type JobTemplate = { kind: "job" | "template"; id: string; title: string; company: string; status: JobStatus | null;
+  level?: string };
+export const WORKPLACE: Record<string, string> = { on_site: "On-site", hybrid: "Hybrid", remote: "Remote" };
+export const REACH: Record<number, string> = { 1: "Own work", 2: "Team", 3: "Cross-functional", 4: "Organization", 5: "External" };

@@ -35,5 +35,12 @@ def make_deps() -> Deps:
     if os.getenv("EMAIL_LIVE") == "1":
         from core.llm import RoutedLLM
         writer = RoutedLLM()
+    job_llm = None
+    if os.getenv("JOB_EXTRACT_FAKE") == "1":                # e2e: the scripted Brightwater answer, else the fallback
+        from tests.helpers import FakeJobReader
+        job_llm = FakeJobReader()
+    if os.getenv("JOB_EXTRACT_LIVE") == "1":                # reading job descriptions with JOB_EXTRACT_MODEL (demo)
+        from core.llm import RoutedLLM
+        job_llm = RoutedLLM(max_tokens=config.EXTRACT_MAX_TOKENS)
     return Deps(str(config.DB_PATH), FakeJudge(script=best), llm=FakeLLM({"resume": sample_resume_extract()}),
-                planner=AlwaysPlanner(), writer=writer)
+                planner=AlwaysPlanner(), writer=writer, job_llm=job_llm)

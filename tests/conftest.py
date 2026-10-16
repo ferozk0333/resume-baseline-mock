@@ -15,3 +15,9 @@ def no_real_email(monkeypatch):
         raise AssertionError("a test tried to open an SMTP connection")
     monkeypatch.setattr("smtplib.SMTP", refuse)
     monkeypatch.setattr("smtplib.SMTP_SSL", refuse)
+
+
+@pytest.fixture(autouse=True)
+def no_workflow_ticker(monkeypatch):
+    """The scheduled workflow checks never run in the background during tests (tests call tick() directly)."""
+    monkeypatch.setattr(config, "WORKFLOW_TICK_SECONDS", 0)

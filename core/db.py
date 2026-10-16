@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS baselines (
   complexity_criteria TEXT,
   description TEXT,
   is_mock INTEGER DEFAULT 1,
-  updated_at TEXT
+  updated_at TEXT,
+  owner_job_id TEXT               -- set for a recruiter-created job's own baseline (specs/14); never listed as a role
 );
 
 CREATE TABLE IF NOT EXISTS baseline_criteria (
@@ -167,7 +168,12 @@ CREATE TABLE IF NOT EXISTS jobs (           -- recruiter view (phase 11): one jo
   must_haves_json TEXT,           -- list of baseline criterion ids
   preset TEXT,                    -- weights preset name, or null for custom
   created_at TEXT,
-  settings_json TEXT              -- recruiter name, interview duration, availability windows, scheduling link
+  settings_json TEXT,             -- recruiter name, interview duration, availability windows, scheduling link
+  status TEXT DEFAULT 'open',     -- draft | open | closed (specs/14)
+  details_json TEXT,              -- department, location, workplace, employment type, level, years, short description
+  jd_text TEXT, jd_file TEXT,     -- the original job description (normalized text, saved file)
+  draft_json TEXT,                -- the create/edit form while it is being worked on (autosaved)
+  updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS applications (
@@ -496,6 +502,9 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (18, [*(f"ALTER TABLE emails ADD COLUMN {c} TEXT" for c in ("token", "message_id", "in_reply_to",
                                                                 "attachments_json", "interview_id")),
           *WORKFLOW_TABLES]),
+    (19, ["ALTER TABLE baselines ADD COLUMN owner_job_id TEXT", "ALTER TABLE jobs ADD COLUMN status TEXT DEFAULT 'open'",
+          *(f"ALTER TABLE jobs ADD COLUMN {c} TEXT" for c in ("details_json", "jd_text", "jd_file", "draft_json",
+                                                              "updated_at"))]),
 ]
 
 
@@ -557,8 +566,10 @@ def get_baseline(conn: sqlite3.Connection, baseline_id: str) -> Baseline | None:
     return _row_to_baseline(row, _criteria_rows(conn, baseline_id))
 
 
-def list_baselines(conn: sqlite3.Connection) -> list[Baseline]:
-    rows = conn.execute("SELECT * FROM baselines ORDER BY title, id").fetchall()
+def list_baselines(conn: sqlite3.Connection, include_owned: bool = False) -> list[Baseline]:
+    """Role baselines. A recruiter job's own baseline (specs/14) is listed only with include_owned."""
+    rows = conn.execute("SELECT * FROM baselines" + ("" if include_owned else " WHERE owner_job_id IS NULL") +
+                        " ORDER BY title, id").fetchall()
     return [_row_to_baseline(r, _criteria_rows(conn, r["id"])) for r in rows]
 
 

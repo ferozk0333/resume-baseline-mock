@@ -65,7 +65,8 @@ def get_job(conn, job_id: str) -> dict | None:
 
 
 def list_jobs(conn) -> list[dict]:
-    rows = conn.execute("SELECT j.id FROM jobs j ORDER BY j.created_at, j.rowid").fetchall()
+    rows = conn.execute("SELECT j.id FROM jobs j WHERE COALESCE(j.status, 'open') != 'draft' "
+                        "ORDER BY j.created_at, j.rowid").fetchall()
     out = []
     for r in rows:
         job = get_job(conn, r[0])
