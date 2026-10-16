@@ -548,3 +548,25 @@ def test_board_drag_updates_the_workflow_and_sends_nothing(seeded, delivered):
     api.patch(f"/applications/{other}/stage", json={"stage_id": stages["Offer"]})
     vo = api.get(f"/applications/{other}/workflow").json()
     assert vo["step"]["title"] == "Send stage email? (offer note)" and not delivered
+
+
+def test_errors_reach_the_browser_with_cors_headers(seeded, monkeypatch):
+    """A server error must not look like "Failed to fetch": the 500 carries CORS headers and a message."""
+    api = client(seeded, Model())
+    monkeypatch.setattr(hr, "view", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    job, rows = ds(api)
+    r = api.get(f"/applications/{rows[0]['application_id']}/workflow", headers={"Origin": "http://localhost:3000"})
+    assert r.status_code == 500 and r.json()["detail"] and r.headers.get("access-control-allow-origin") == "http://localhost:3000"
+
+
+def test_workflows_do_not_need_the_judge(seeded, monkeypatch):
+    """Starting a workflow builds only the email model, never the scoring deps (no Jev key needed)."""
+    from backend import main
+    monkeypatch.delenv("RIGHTSTAFF_DEPS_FACTORY", raising=False)
+    monkeypatch.setattr(config, "DB_PATH", seeded)
+    monkeypatch.setattr(main, "default_deps", lambda: (_ for _ in ()).throw(ValueError("JUDGE=jev needs JEV_API_KEY")))
+    monkeypatch.setattr("core.llm.RoutedLLM.parse", lambda self, **kw: (_ for _ in ()).throw(LLMError("offline")))
+    api = TestClient(main.create_app())
+    job, rows = ds(api)
+    r = api.post(f"/applications/{rows[0]['application_id']}/workflow", json={"confirm_move": True})
+    assert r.status_code == 200 and r.json()["step"]["email"]["template"]

@@ -67,11 +67,30 @@ class State:
         self._hiring = None
 
     @property
+    def writer(self):
+        """The email/reply/feedback model. Recruiter workflows need only this, never the judge: building the full
+        scoring deps (and its Jev key check) is left to scoring."""
+        if self._deps is not None or os.getenv("RIGHTSTAFF_DEPS_FACTORY"):
+            return self.deps.writer
+        from core.llm import RoutedLLM
+        self._writer = getattr(self, "_writer", None) or RoutedLLM()
+        return self._writer
+
+    @property
+    def job_llm(self):
+        """The JD / market reader (specs/14, 15). Like `writer`, it never needs the judge."""
+        if self._deps is not None or os.getenv("RIGHTSTAFF_DEPS_FACTORY"):
+            return self.deps.job_llm
+        from core.llm import RoutedLLM
+        self._job_llm = getattr(self, "_job_llm", None) or RoutedLLM(max_tokens=config.EXTRACT_MAX_TOKENS)
+        return self._job_llm
+
+    @property
     def rejection(self):
-        """The "Not moving forward" graph (paused drafts live in its in-memory checkpointer)."""
+        """The "Not moving forward" graph (paused drafts are checkpointed to SQLite)."""
         if self._rejection is None:
             from backend.rejection_flow import RejectionFlow
-            self._rejection = RejectionFlow(self.db_path, self.deps.writer)
+            self._rejection = RejectionFlow(self.db_path, self.writer)
         return self._rejection
 
     @property
@@ -79,7 +98,7 @@ class State:
         """The hiring workflow graph, one thread per application (checkpointed to SQLite)."""
         if self._hiring is None:
             from backend.hiring_flow import HiringFlow
-            self._hiring = HiringFlow(self.db_path, self.deps.writer, rejection=self.rejection)
+            self._hiring = HiringFlow(self.db_path, self.writer, rejection=self.rejection)
         return self._hiring
 
     @property
@@ -310,6 +329,16 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         yield
     app = FastAPI(title="RightStaff API", version="0.2", lifespan=lifespan,
                   description="Scores a candidate against a baseline role profile (EEAT). Local mock.")
+    @app.middleware("http")
+    async def errors_with_cors(request: Request, call_next):
+        """An unexpected error becomes a JSON 500 inside the CORS layer, so the browser shows the message instead
+        of "Failed to fetch". Stack traces stay in the log."""
+        try:
+            return await call_next(request)
+        except Exception as exc:                            # noqa: BLE001
+            log.exception("request failed: %s %s", request.method, request.url.path)
+            return JSONResponse(status_code=500, content={"detail": clean_error(exc)})
+
     app.add_middleware(CORSMiddleware, allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
                        allow_methods=["*"], allow_headers=["*"])     # local mock: any local web port
     app.state.rs = state
@@ -758,7 +787,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             raise HTTPException(422, str(exc)) from exc
         if len(jd_text.strip()) < 200:
             raise HTTPException(422, "Paste or upload the full job description (at least a few sentences).")
-        read = await asyncio.to_thread(read_job, state.deps.job_llm, jd_text)
+        read = await asyncio.to_thread(read_job, state.job_llm, jd_text)
         with conn() as c:
             return jb.load_draft(c, jb.from_extraction(c, read, jd_text, jd_file))
 
@@ -948,7 +977,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
         def work():
             with conn() as c:
-                return mb.recompute(c, r, llm=state.deps.job_llm, test=bool(body and body.test))
+                return mb.recompute(c, r, llm=state.job_llm, test=bool(body and body.test))
         return await asyncio.to_thread(work)
 
     @app.post("/market/{role}/fixtures", tags=["market"])
@@ -1130,7 +1159,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     @app.get("/email/config", tags=["workflows"])
     def email_config():
         return {"provider": config.EMAIL_PROVIDER, "demo_redirect": config.DEMO_EMAIL_TO or None,
-                "model": config.EMAIL_MODEL if state.deps.writer is not None else None}
+                "model": config.EMAIL_MODEL if state.writer is not None else None}
 
     @app.post("/applications/{app_id}/not-moving-forward", tags=["workflows"])
     def reject_draft(app_id: str, body: RejectIn | None = None):
@@ -1251,7 +1280,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             stage = next((s for s in wf.stages(c, job["id"]) if s["id"] == body.stage_id and not s["terminal"]), None)
             if stage is None:
                 raise HTTPException(422, "Pick an interview stage of this job.")
-            return wf.draft_scheduling(c, a, job, stage, state.deps.writer)
+            return wf.draft_scheduling(c, a, job, stage, state.writer)
 
     @app.get("/emails", tags=["workflows"])
     def emails(status: str | None = None, job_id: str | None = None, application_id: str | None = None,
