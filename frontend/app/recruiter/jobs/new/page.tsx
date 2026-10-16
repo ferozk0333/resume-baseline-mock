@@ -80,8 +80,15 @@ export default function NewJob() {
                 {templates.filter((t) => t.kind === "job").map((t) => <option key={t.id} value={`job:${t.id}`}>{t.title} · {t.company}</option>)}
               </optgroup>
               <optgroup label="Role templates">
-                {templates.filter((t) => t.kind === "template").map((t) => <option key={t.id} value={`template:${t.id}`}>{t.title} ({t.level})</option>)}
+                {templates.filter((t) => t.kind === "template" && t.company !== "Market template").map((t) =>
+                  <option key={t.id} value={`template:${t.id}`}>{t.title} ({t.level})</option>)}
               </optgroup>
+              {templates.some((t) => t.company === "Market template") && (
+                <optgroup label="Market templates (from job postings)">
+                  {templates.filter((t) => t.company === "Market template").map((t) =>
+                    <option key={t.id} value={`template:${t.id}`}>{t.title}</option>)}
+                </optgroup>
+              )}
             </select>
             <Button variant="outline" disabled={!copyFrom || busy !== null}
               onClick={() => { const [kind, id] = copyFrom.split(/:(.*)/); go("copy", () => post<JobForm>("/jobs/drafts/copy", { kind, id })); }}>

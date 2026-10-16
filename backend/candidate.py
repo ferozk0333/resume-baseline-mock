@@ -162,9 +162,13 @@ def score_card(conn, candidate_id: str, target: dict) -> dict:
     pct = benchmarks.for_run(conn, run["id"])["percentiles"]
     final = pct.get("final") if pct.get("shown") else None
     plan = current_plan(conn, run["id"], weights)
-    actions = [{"title": p.action.title, "type_label": TYPE_LABELS.get(p.action.type, p.action.type),
-                "points": round(p.points, 1), "points_text": p.points_text, "covers_criteria": p.action.covers_criteria}
+    done = done_actions(conn, candidate_id, target["baseline_id"])
+    actions = [{"key": action_key(p.action.title), "title": p.action.title,
+                "type_label": TYPE_LABELS.get(p.action.type, p.action.type), "points": round(p.points, 1),
+                "points_text": p.points_text, "covers_criteria": p.action.covers_criteria,
+                "done": action_key(p.action.title) in done}
                for p in (plan.actions if plan and not plan.error else [])]
+    ranked = sorted(actions, key=lambda a: -a["points"])
     gaps = [{"label": g.label, "dimension": g.dimension, "gain_text": g.gain_text, "status": g.status}
             for g in run_gaps(conn, run["id"], weights)]
     status = (run.get("plan_status") or "none") if plan is None else ("failed" if plan.error else "ready")
@@ -172,9 +176,34 @@ def score_card(conn, candidate_id: str, target: dict) -> dict:
             "percentile": {"shown": bool(final), "top": None if not final else max(5, 5 * round((100 - final["percentile"]) / 5)),
                            "value": final["percentile"] if final else None, "pool_size": pct.get("pool_size"),
                            "min_pool": pct.get("min_pool", config.MIN_POOL)},
-            "plan_status": status, "actions": sorted(actions, key=lambda a: -a["points"])[:3], "gaps": gaps[:3],
+            "plan_status": status, "actions": ranked[:3], "gaps": gaps[:3],
+            "next_action": next((a for a in ranked if not a["done"]), None),
+            "done_actions": [a for a in ranked if a["done"]],
             "thin": agg.final is not None and agg.final < THIN_SCORE,
             "baseline_source": "standard" if run["baseline_id"] == target["baseline_id"] else "market"}
+
+
+# --- "Mark done" on plan actions (changes no score) --------------------------------------------------------------
+
+def action_key(title: str) -> str:
+    import hashlib
+    return hashlib.sha1(" ".join(title.casefold().split()).encode()).hexdigest()[:12]
+
+
+def done_actions(conn, candidate_id: str, baseline_id: str) -> set[str]:
+    return {r[0] for r in conn.execute("SELECT action_key FROM candidate_plan_done WHERE candidate_id = ? AND "
+                                       "baseline_id = ?", (candidate_id, baseline_id))}
+
+
+def mark_done(conn, candidate_id: str, baseline_id: str, title: str, done: bool = True) -> None:
+    """Stored per candidate, role and action. The score is unchanged until new proof is added and scored."""
+    with conn:
+        if done:
+            conn.execute("INSERT OR REPLACE INTO candidate_plan_done (candidate_id, baseline_id, action_key, title, done_at) "
+                         "VALUES (?, ?, ?, ?, ?)", (candidate_id, baseline_id, action_key(title), title, now_iso()))
+        else:
+            conn.execute("DELETE FROM candidate_plan_done WHERE candidate_id = ? AND baseline_id = ? AND action_key = ?",
+                         (candidate_id, baseline_id, action_key(title)))
 
 
 def score_cards(conn, candidate_id: str) -> list[dict]:

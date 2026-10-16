@@ -607,3 +607,29 @@ def test_imap_errors_are_reported_not_raised(seeded, monkeypatch):
         raise OSError("login failed")
     out = api.app.state.rs.hiring.poll_inbox(replies.ImapInbox(broken))
     assert out["error"] == "OSError: login failed" and api.get("/workflows/inbox").json()["last_poll"]["error"]
+
+
+def test_a_message_without_message_id_is_read_once_across_polls_and_restarts(seeded, monkeypatch):
+    """No Message-ID: a fallback key (sender, date, subject, first 500 characters) keeps it from being read twice."""
+    monkeypatch.setattr(config, "IMAP_USER", "demo@example.org")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "x")
+    api = client(seeded, Model())
+    job, rows = ds(api)
+    a = rows[0]["application_id"]
+    api.post(f"/jobs/{job['id']}/workflows", json={"application_ids": [a], "confirm_move": True})
+    approve(api, a)
+    conn = db.connect(seeded)
+    ours = hr.last_out(conn, a)
+    raw = raw_mail(f"Re: {ours['subject']}", "Will the interview be on video?", "X").replace(b"Message-ID: X\r\n", b"")
+    assert b"Message-ID" not in raw
+    box = FakeImap([raw])
+    assert len(api.app.state.rs.hiring.poll_inbox(replies.ImapInbox(lambda: box))["matched"]) == 1
+    assert api.app.state.rs.hiring.poll_inbox(replies.ImapInbox(lambda: box))["matched"] == []
+    restarted = client(seeded, Model())                                # a new server on the same database
+    assert restarted.app.state.rs.hiring.poll_inbox(replies.ImapInbox(lambda: FakeImap([raw])))["matched"] == []
+    inbound = conn.execute("SELECT COUNT(*) FROM messages WHERE application_id = ? AND direction = 'in'", (a,)).fetchone()[0]
+    assert inbound == 1
+    tasks = [t for t in api.get("/recruiter/tasks").json() if t["application_id"] == a]
+    assert len(tasks) <= 1
+    assert replies.parse_message(raw).message_id == replies.parse_message(raw).message_id.strip()
+    assert replies.parse_message(raw).message_id.startswith("<no-message-id-")

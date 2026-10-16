@@ -261,12 +261,14 @@ export type OnboardingState = { candidate: Candidate;
     confirmed_at: string | null; finished_at: string | null };
   targets: Target[]; read_task: Task | null; score_task: Task | null; awaiting_review: boolean;
   details: { saved_at: string | null; dismissed_at: string | null }; roles: { baseline_id: string; title: string }[] };
-export type CardAction = { title: string; type_label: string; points: number; points_text: string; covers_criteria: string[] };
+export type CardAction = { key: string; title: string; type_label: string; points: number; points_text: string;
+  covers_criteria: string[]; done: boolean };
 export type ScoreCard = Target & { run_id: string | null; status: "scored" | "running" | "not_scored";
   final: number | null; dimensions: Record<string, number | null>;
   percentile: { shown: boolean; top: number | null; value: number | null; pool_size: number; min_pool: number } | null;
   plan_status: "ready" | "generating" | "failed" | "deferred" | "none" | null; actions: CardAction[];
   gaps: { label: string; dimension: string; gain_text: string; status: string }[]; thin: boolean;
+  next_action: CardAction | null; done_actions: CardAction[];
   baseline_source: "standard" | "market" };
 export type YesNo = "yes" | "no";
 export type ApplicationDetails = {
@@ -322,3 +324,9 @@ export type ScoringRole = { baseline_id: string; title: string; is_primary: bool
   status: "waiting" | "scoring" | "ready" | "failed"; dimensions: Record<string, number> };
 export type ScoringProgress = { roles: ScoringRole[]; overall: number; line: string; all_ready: boolean; running: boolean;
   typical_minutes: number | null };
+export type MyApplication = { application_id: string; job_id: string; title: string; company: string; applied_at: string;
+  status: "Applied" | "Viewed by recruiter" | "Shortlisted" | "Interview" | "Offer" | "Hired" | "Declined" | "Not moving forward";
+  round: string | null; final: boolean;
+  timeline: { key: string; label: string; state: "done" | "current" | "upcoming" | "not_reached"; date: string | null }[];
+  reasons: { title: string; detail: string; advice: string; link: string | null }[]; waiting: boolean;
+  waiting_text: string | null };

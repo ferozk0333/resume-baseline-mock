@@ -61,9 +61,9 @@ export function BaselineSwitch({ runId }: { runId: string }) {
           <DialogHeader>
             <DialogTitle>Re-score against {notice?.target}?</DialogTitle>
             <DialogDescription>
-              Your profile is scored again against {notice?.target}. Judgments that depend on the baseline are redone
-              {notice?.reused ? " (already saved from an earlier score: no model calls)" : ` (about ${notice?.calls} model calls)`};
-              the others are reused. Percentiles compare you only with candidates scored on the same baseline version.
+              Your profile is scored again against {notice?.target}. The parts of the check that depend on the baseline
+              are redone{notice?.reused ? " (already saved from an earlier score, so it's quick)" : ""}; the rest is reused.
+              Percentiles compare you only with candidates scored on the same baseline version.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

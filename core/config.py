@@ -156,6 +156,9 @@ JOBMATCH_CLOSE = int(_env("JOBMATCH_CLOSE", "55"))
 # "Low recent activity" after LOW_ACTIVITY_DAYS without any recruiter action on the job.
 REVIEWING_DAYS = int(_env("REVIEWING_DAYS", "14"))
 LOW_ACTIVITY_DAYS = int(_env("LOW_ACTIVITY_DAYS", "30"))
+# Closure principle (specs/17 §7): an open application without a stage change for CLOSURE_DAYS becomes a recruiter
+# Tasks item. Nothing is ever sent by itself.
+CLOSURE_DAYS = int(_env("CLOSURE_DAYS", "14"))
 PEER_MIN_RATE = int(_env("PEER_MIN_RATE", "50"))   # a peer signal shows when at least this % of the group has it
 
 # --- Scoring constants (specs/04) -----------------------------------------

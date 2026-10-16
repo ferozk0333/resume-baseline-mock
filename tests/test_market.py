@@ -269,7 +269,7 @@ def test_toggle_scores_with_the_market_baseline_after_a_warning(tmp_path, monkey
     from scoring import benchmarks
     assert benchmarks.baseline_pool(conn, "market-ai_engineer-entry-v1") is not None   # pools are per baseline version
     templates = api.get("/jobs/templates").json()
-    assert any(t["title"] == "AI Engineer (Market v1)" for t in templates)
+    assert any(t["title"] == "AI Engineer (Market v1) · Test version – insufficient data" for t in templates)
 
 
 def test_dry_run_counts_without_a_model(conn, roles):

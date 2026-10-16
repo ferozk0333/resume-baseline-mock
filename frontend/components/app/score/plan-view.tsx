@@ -50,6 +50,12 @@ export function PlanView({ id, onBack }: { id: string; onBack?: () => void }) {
 
   if (!run || !plan) return <Skeleton className="h-96" />;
   const generating = plan.status === "generating" || plan.status === "deferred" || !!regenTask;
+  // Why "What higher scorers have" lines are missing (same reasons as the Score page): too few candidates, or a
+  // scripted test run.
+  const pct = bench?.percentiles;
+  const peerNote = !bench || !pct ? null : !pct.shown ? (pct.reason ?? "Not enough candidates for a comparison yet")
+    : Object.values(bench.peer_signals.dimensions).every((x) => x.suppressed || x.signals.length === 0)
+      ? `Not enough candidates for ${bench.baseline_title ?? "this role"} yet to compare groups.` : null;
   const label = (key: string) => run.subcategories.find((s) => s.key === key)?.label ?? key.replaceAll("_", " ");
 
   return (
@@ -77,12 +83,14 @@ export function PlanView({ id, onBack }: { id: string; onBack?: () => void }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Ranked gaps</CardTitle>
-          <CardDescription>Points the final score could gain if the subcategory reached its maximum.</CardDescription>
+          <CardDescription>Points the final score could gain if this area reached its maximum.</CardDescription>
+          {peerNote && <p className="text-xs text-muted-foreground" data-testid="peer-note">
+            <span className="font-medium text-foreground">What higher scorers have: </span>{peerNote}</p>}
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow><TableHead>Subcategory</TableHead><TableHead>Status</TableHead>
+              <TableRow><TableHead>Area</TableHead><TableHead>Status</TableHead>
                 <TableHead className="text-right">Score</TableHead><TableHead className="text-right">Potential</TableHead></TableRow>
             </TableHeader>
             <TableBody>

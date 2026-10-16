@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarClock, ChevronRight, ClipboardList, Inbox, Mail, MessageSquareReply, Scale, Send } from "lucide-react";
+import { CalendarClock, ChevronRight, ClipboardList, Hourglass, Inbox, Mail, MessageSquareReply, Scale, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,7 +13,7 @@ type Inbox = { enabled: boolean; every_minutes: number; user: string | null;
     error: string | null } | null };
 
 const ICON: Record<string, typeof Mail> = { approve_email: Send, confirm_slot: CalendarClock, enter_feedback: ClipboardList,
-  decide: Scale, reply: Inbox, confirm_withdrawal: MessageSquareReply, choose: Mail };
+  decide: Scale, reply: Inbox, confirm_withdrawal: MessageSquareReply, choose: Mail, closure: Hourglass };
 
 const ago = (iso: string) => {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -46,7 +46,8 @@ export default function TasksPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
-        <p className="text-sm text-muted-foreground">Everything waiting for you, oldest first. Each opens the candidate&apos;s workflow at that step. Nothing is sent until you approve it.</p>
+        <p className="text-sm text-muted-foreground">Everything waiting for you, oldest first. Each opens the candidate&apos;s workflow at that step. Applications that have waited too long for an answer
+          are listed too. Nothing is sent until you approve it.</p>
       </div>
       {inbox?.enabled && (
         <div aria-label="Inbox" className="flex flex-wrap items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
@@ -70,7 +71,8 @@ export default function TasksPage() {
             const Icon = ICON[t.kind] ?? Mail;
             return (
               <li key={`${t.application_id}-${t.kind}`}>
-                <Link href={`/recruiter/applications/${t.application_id}/workflow`}
+                <Link href={t.kind === "closure" ? `/recruiter/jobs/${t.job_id}?app=${t.application_id}`   // answer from the job
+                  : `/recruiter/applications/${t.application_id}/workflow`}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
                   <Icon className="size-4 shrink-0 text-primary" />
                   <div className="min-w-0 flex-1">

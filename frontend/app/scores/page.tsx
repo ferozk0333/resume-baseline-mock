@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EeatTip, RoleScoreCard } from "@/components/app/candidate/score-card";
+import { LoadError } from "@/components/app/candidate/load-error";
 import { ProgressPanel } from "@/components/app/progress-panel";
 import { PlanView } from "@/components/app/score/plan-view";
 import { ScoreView } from "@/components/app/score/score-view";
@@ -32,12 +33,13 @@ function Scores() {
   const [addTask, setAddTask] = useState<string | null>(null);
   const [adding, setAdding] = useState("");
   const [removing, setRemoving] = useState<Target | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const tab = search.get("tab") === "plan" ? "plan" : "score";
 
   const load = useCallback(() => {
     if (!cid) return;
-    get<OnboardingState>(`/candidates/${cid}/onboarding`).then(setState).catch((e) => toast.error(e.message));
-    get<ScoreCard[]>(`/candidates/${cid}/baseline-scores`).then(setCards).catch((e) => toast.error(e.message));
+    get<OnboardingState>(`/candidates/${cid}/onboarding`).then(setState).catch((e) => setError(e.message));
+    get<ScoreCard[]>(`/candidates/${cid}/baseline-scores`).then(setCards).catch((e) => setError(e.message));
   }, [cid]);
   useEffect(() => {
     if (!ready) return;
@@ -54,6 +56,7 @@ function Scores() {
   const nav = (r: string | undefined, t: "score" | "plan") =>
     router.replace(`/scores?${new URLSearchParams({ ...(r ? { role: r } : {}), ...(t === "plan" ? { tab: "plan" } : {}) })}`);
 
+  if (error) return <LoadError what="Your scores" error={error} onRetry={() => { setError(null); load(); }} />;
   if (!ready || !cards || !state) return <Skeleton className="h-96" />;
   if (state.onboarding.step !== "done" && cards.every((c) => c.status !== "scored")) {
     return <Card className="max-w-xl"><CardContent className="space-y-3 py-6">

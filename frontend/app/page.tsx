@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadError } from "@/components/app/candidate/load-error";
 import { PercentileLine } from "@/components/app/candidate/score-card";
 import { JobsBrowser } from "@/components/app/candidate/jobs-browser";
 import { ApiError, get, post, STEP_LABELS, type OnboardingState, type ScoreCard } from "@/lib/api";
@@ -25,13 +26,15 @@ function Home() {
   const [cards, setCards] = useState<ScoreCard[] | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [cardsError, setCardsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ready) return;
     if (!cid) { router.replace("/onboarding"); return; }           // first run
     get<OnboardingState>(`/candidates/${cid}/onboarding`).then((s) => {
       setState(s);
-      if (s.onboarding.step === "done") get<ScoreCard[]>(`/candidates/${cid}/baseline-scores`).then(setCards).catch(() => setCards([]));
+      if (s.onboarding.step === "done") get<ScoreCard[]>(`/candidates/${cid}/baseline-scores`).then(setCards)
+        .catch((e) => setCardsError(e.message));
     }).catch((e) => {
       if (e instanceof ApiError && e.status === 404) setCid(null); else toast.error(e.message);
     });
@@ -52,13 +55,26 @@ function Home() {
     );
   }
   const card = cards?.find((c) => c.baseline_id === role) ?? cards?.[0];
-  const next = card?.actions[0];
+  const next = card?.next_action ?? null;
+  const lastDone = card?.done_actions.at(-1) ?? null;
+  async function markDone(title: string, done: boolean) {
+    if (!card) return;
+    try {
+      const updated = await post<ScoreCard>(`/candidates/${cid}/plan-done`, { baseline_id: card.baseline_id, title, done });
+      setCards((cs) => (cs ?? []).map((c) => (c.baseline_id === updated.baseline_id ? updated : c)));
+      if (done) toast.success("Marked done", { description: "Add the proof to your profile and check again to update your score.",
+        action: { label: "Undo", onClick: () => { void markDone(title, false); } } });
+    } catch (e) { toast.error((e as Error).message); }
+  }
   const finish = !state.details.saved_at && !state.details.dismissed_at && !dismissed;
 
   return (
     <div className="space-y-6">
       <h1 className="sr-only">Home</h1>
-      {!cards ? <Skeleton className="h-28" /> : card && (
+      {cardsError ? <LoadError what="Your baseline score" error={cardsError} onRetry={() => {
+        setCardsError(null);
+        get<ScoreCard[]>(`/candidates/${cid}/baseline-scores`).then(setCards).catch((e) => setCardsError(e.message));
+      }} /> : !cards ? <Skeleton className="h-28" /> : card && (
         <Card>
           <CardContent className="grid gap-5 md:grid-cols-2">
             <div className="space-y-1.5">
@@ -84,13 +100,24 @@ function Home() {
                 <>
                   <p className="font-medium">{next.title}</p>
                   <p className="text-sm text-primary">up to {next.points.toFixed(1)} points</p>
-                  <Link href={`/scores?role=${card.baseline_id}&tab=plan`} className={buttonVariants({ size: "sm" })}>Start</Link>
+                  <div className="flex flex-wrap gap-2">
+                    <Link href={`/scores?role=${card.baseline_id}&tab=plan`} className={buttonVariants({ size: "sm" })}>Start</Link>
+                    <Button size="sm" variant="outline" onClick={() => markDone(next.title, true)}>Mark done</Button>
+                  </div>
                 </>
+              ) : card.done_actions.length > 0 ? (
+                <p className="text-sm text-muted-foreground">You&apos;ve marked every action in your plan done.</p>
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">Open your plan for {card.title} to see what adds the most.</p>
                   <Link href={`/scores?role=${card.baseline_id}&tab=plan`} className={buttonVariants({ size: "sm", variant: "outline" })}>Open the plan</Link>
                 </>
+              )}
+              {lastDone && (
+                <p className="border-t pt-2 text-xs text-muted-foreground" data-testid="done-note">
+                  Done: {lastDone.title}.{" "}
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => markDone(lastDone.title, false)}>Undo</button>
+                  <br />Add the proof to your profile and check again to update your score.</p>
               )}
             </div>
           </CardContent>

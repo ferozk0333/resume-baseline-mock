@@ -160,8 +160,17 @@ def parse_message(raw: bytes) -> Inbound:
         when = parsedate_to_datetime(msg["Date"]).isoformat() if msg["Date"] else None
     except (TypeError, ValueError):
         when = None
-    return Inbound(msg.get("Message-ID"), msg.get("In-Reply-To"), refs, str(msg.get("Subject") or ""),
-                   str(msg.get("From") or ""), strip_quoted(body), when)
+    subject, sender = str(msg.get("Subject") or ""), str(msg.get("From") or "")
+    message_id = msg.get("Message-ID") or fallback_id(sender, str(msg.get("Date") or ""), subject, body)
+    return Inbound(message_id, msg.get("In-Reply-To"), refs, subject, sender, strip_quoted(body), when)
+
+
+def fallback_id(sender: str, date: str, subject: str, body: str) -> str:
+    """A stable key for a message without a Message-ID (sender, date, subject, first 500 characters of the body),
+    so the poll never reads it twice."""
+    import hashlib
+    h = hashlib.sha256("\n".join([sender.strip(), date.strip(), subject.strip(), body[:500]]).encode()).hexdigest()
+    return f"<no-message-id-{h[:32]}@rightstaff.local>"
 
 
 def match(conn, inbound: Inbound) -> str | None:

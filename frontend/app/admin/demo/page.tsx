@@ -68,7 +68,7 @@ export default function DemoTools() {
         await new Promise((r) => setTimeout(r, 1000));
         const t = await get<Task>(`/tasks/${task_id}`);
         if (t.status === "error") throw new Error(t.error ?? "Scoring failed.");
-        if (t.run_id) { router.push(`/runs/${t.run_id}`); return; }
+        if (t.run_id) { router.push(`/runs/${t.run_id}?technical=1`); return; }
       }
     } catch (e) {
       toast.error(e instanceof ApiError && e.status === 409 ? e.message : (e as Error).message);
@@ -149,7 +149,7 @@ export default function DemoTools() {
                     {runs.slice(0, 5).map((r) => (
                       <li key={r.id}>
                         <button type="button" className="flex w-full items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted"
-                          onClick={() => router.push(`/runs/${r.id}`)}>
+                          onClick={() => router.push(`/runs/${r.id}?technical=1`)}>
                           <span>{r.baseline_title}</span>
                           <span className="flex items-center gap-2 text-xs text-muted-foreground">
                             {new Date(r.started_at).toLocaleString()}

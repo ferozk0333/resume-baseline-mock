@@ -6,11 +6,11 @@ import { cn } from "@/lib/utils";
 import type { Judgment, Subcategory } from "@/lib/api";
 
 const STATUS: Record<string, { label: string; className: string }> = {
-  scored: { label: "scored", className: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  scored: { label: "shown", className: "bg-emerald-50 text-emerald-800 border-emerald-200" },
   missing: { label: "missing", className: "bg-amber-50 text-amber-800 border-amber-200" },
   na: { label: "N/A", className: "bg-slate-100 text-slate-600 border-slate-200" },
-  error: { label: "error", className: "bg-red-50 text-red-700 border-red-200" },
-  pending: { label: "judging…", className: "bg-sky-50 text-sky-700 border-sky-200" },
+  error: { label: "couldn't check", className: "bg-red-50 text-red-700 border-red-200" },
+  pending: { label: "checking…", className: "bg-sky-50 text-sky-700 border-sky-200" },
 };
 
 export function StatusBadge({ status }: { status: string }) {
@@ -31,7 +31,9 @@ function show(v: unknown): string {
   return String(v);
 }
 
-export function SubcategoryRow({ sub }: { sub: Subcategory }) {
+/** One area of the score. Candidates see the rule, the guidance and their evidence; `technical` (Admin → Demo
+ * tools) adds the raw breakdown and how each piece of evidence was labelled. */
+export function SubcategoryRow({ sub, technical = false }: { sub: Subcategory; technical?: boolean }) {
   const [open, setOpen] = useState(false);
   const judgments = (sub.details.judgments ?? []) as Judgment[];
   const breakdown = Object.entries(sub.details).filter(([k]) => k !== "judgments" && !/(^|_)ids?$/.test(k));
@@ -54,7 +56,7 @@ export function SubcategoryRow({ sub }: { sub: Subcategory }) {
       {open && (
         <div className="space-y-4 bg-muted/30 px-11 py-4 text-sm">
           {sub.formula && <p><span className="font-medium">How it is scored: </span>{sub.formula}</p>}
-          {breakdown.length > 0 && (
+          {technical && breakdown.length > 0 && (
             <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-[max-content_1fr]">
               {breakdown.map(([k, v]) => (
                 <div key={k} className="contents">
@@ -70,18 +72,20 @@ export function SubcategoryRow({ sub }: { sub: Subcategory }) {
               <ul className="space-y-2">
                 {judgments.map((j, i) => (
                   <li key={i} className="rounded-md border bg-white px-3 py-2">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span>{j.question.replaceAll("_", " ")}</span>
-                      <Badge variant="secondary">{j.label ?? "no label"}</Badge>
-                      <span>{j.method}{j.confidence !== null && j.confidence !== undefined ? ` · confidence ${j.confidence.toFixed(2)}` : ""}</span>
-                    </div>
+                    {technical && (
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span>{j.question.replaceAll("_", " ")}</span>
+                        <Badge variant="secondary">{j.label ?? "no label"}</Badge>
+                        <span>{j.method}{j.confidence !== null && j.confidence !== undefined ? ` · confidence ${j.confidence.toFixed(2)}` : ""}</span>
+                      </div>
+                    )}
                     {j.quote ? <blockquote className="mt-1 border-l-2 pl-2">“{j.quote}”</blockquote> : (
                       <p className="mt-1 text-muted-foreground">
                         {j.subject && <span className="text-foreground">{j.subject}</span>}
-                        {j.method === "jev" && <span className="ml-1 italic">(Jev returns no quote)</span>}
+                        {technical && j.method === "jev" && <span className="ml-1 italic">(Jev returns no quote)</span>}
                       </p>
                     )}
-                    {j.reasoning && j.method !== "rule" && <p className="mt-1 text-xs text-muted-foreground">{j.reasoning}</p>}
+                    {technical && j.reasoning && j.method !== "rule" && <p className="mt-1 text-xs text-muted-foreground">{j.reasoning}</p>}
                   </li>
                 ))}
               </ul>

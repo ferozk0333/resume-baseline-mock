@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, CircleAlert } from "lucide-react";
@@ -9,6 +9,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DetailsForm } from "@/components/app/candidate/details-form";
+import { LoadError } from "@/components/app/candidate/load-error";
 import { get, put, type ApplicationDetails, type OnboardingState, type ProfileResponse } from "@/lib/api";
 import { useCurrentCandidate } from "@/lib/current-candidate";
 
@@ -26,13 +27,17 @@ function Profile() {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [details, setDetails] = useState<ApplicationDetails | null>(null);
 
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    if (!cid) return;
+    get<OnboardingState>(`/candidates/${cid}/onboarding`).then(setState).catch((e) => setError(e.message));
+    get<ProfileResponse>(`/candidates/${cid}/profile`).then(setProfile).catch((e) => setError(e.message));
+    get<ApplicationDetails>(`/candidates/${cid}/application-details`).then(setDetails).catch((e) => setError(e.message));
+  }, [cid]);
   useEffect(() => {
     if (!ready) return;
-    if (!cid) { router.replace("/onboarding"); return; }
-    get<OnboardingState>(`/candidates/${cid}/onboarding`).then(setState).catch((e) => toast.error(e.message));
-    get<ProfileResponse>(`/candidates/${cid}/profile`).then(setProfile).catch((e) => toast.error(e.message));
-    get<ApplicationDetails>(`/candidates/${cid}/application-details`).then(setDetails).catch((e) => toast.error(e.message));
-  }, [ready, cid, router]);
+    if (!cid) router.replace("/onboarding"); else load();
+  }, [ready, cid, router, load]);
   useEffect(() => {                                        // "Add details" on Home links here
     if (details && window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
   }, [details]);
@@ -42,6 +47,7 @@ function Profile() {
     catch (e) { toast.error((e as Error).message); }
   }
 
+  if (error) return <LoadError what="Your profile" error={error} onRetry={() => { setError(null); load(); }} />;
   if (!ready || !cid || !state || !profile || !details) return <Skeleton className="h-96" />;
   const p = profile.profile;
   const c = state.candidate as OnboardingState["candidate"] & { github_username?: string | null; portfolio_url?: string | null };

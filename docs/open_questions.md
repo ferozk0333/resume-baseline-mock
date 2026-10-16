@@ -127,3 +127,5 @@ ask if wanted.
     No scoring change.
 18. **Recruiter access to work authorization/sponsorship answers when assisted apply is built** [OPEN]. For now all
     application details are hidden from recruiters (specs/17 §3.2, confirmed in the Phase A review).
+19. **"Not moving forward" waits for the email (specs/17 §7).** The candidate sees it once the decision email is
+    approved and sent; before that, the stage the application was in. Please confirm.

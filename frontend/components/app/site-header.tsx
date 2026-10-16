@@ -32,8 +32,8 @@ export function SiteHeader() {
       { href: "/recruiter/outbox", label: "Outbox" }]
     : mode === "admin" ? [{ href: "/admin/market", label: "Market baselines" }, { href: "/baselines", label: "Baselines" },
       { href: "/admin/demo", label: "Demo tools" }]
-    : [{ href: "/", label: "Home" }, { href: "/jobs", label: "Jobs" }, { href: "/scores", label: "My scores" },
-      { href: "/profile", label: "Profile" }];
+    : [{ href: "/", label: "Home" }, { href: "/jobs", label: "Jobs" }, { href: "/applications", label: "My applications" },
+      { href: "/scores", label: "My scores" }, { href: "/profile", label: "Profile" }];
   const active = (href: string) => href === "/" ? path === "/" || path === "/onboarding"
     : href === "/scores" ? /^\/(scores|runs|market)(\/|$)/.test(path)
     : href === "/recruiter" ? path.startsWith("/recruiter") && !/^\/recruiter\/(outbox|tasks)/.test(path)

@@ -45,7 +45,7 @@ function Onboard() {
     if (status === "error") { toast.error(last.message); setStep("review"); return; }
     const task = await get<{ result: { run_id: string; paused?: string } }>(`/tasks/${scoreTask}`);
     if (task.result.paused) toast.warning(task.result.paused);
-    router.push(`/runs/${task.result.run_id}`);
+    router.push(`/runs/${task.result.run_id}?technical=1`);
   });
 
   async function confirm() {

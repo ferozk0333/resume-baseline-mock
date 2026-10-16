@@ -108,7 +108,7 @@ export function Review({ data, onChange, onConfirm, confirming, confirmLabel = "
         )}
       </Section>
 
-      <Section title="Source text" description="Each document as the model read it, after clean-up. Quotes are checked against this text.">
+      <Section title="Source text" description="Each document as we read it, after clean-up. Quotes are checked against this text.">
         {data.sources.map((s) => (
           <details key={s.id} className="rounded-lg border bg-white">
             <summary className="cursor-pointer px-3 py-2 text-sm font-medium">

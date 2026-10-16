@@ -142,6 +142,23 @@ carry on), then "Your scores are ready". Both read saved data only (`/candidates
 `/scoring-progress`). A "Good to know" card rotates tips from `config/wait_tips.yaml` (editable); it pauses on hover
 or focus, stops once you use the arrows, and stays still with reduced motion.
 
+### Candidate experience, phase C (specs/17)
+- **My applications** (`/applications`): each application with a status chip and a timeline: Applied → Viewed by
+  recruiter (first applicant panel opened) → Shortlisted → Interview ("Round N") → Offer → Hired / Declined, or Not
+  moving forward with the reasons of the email that was sent, each linked to the matching gap in your plan. A board
+  move to Not moving forward shows only once the email is approved and sent. Never scores, ranks, other candidates,
+  notes, scorecards or internal tasks.
+- **Closure principle:** an open application without a stage change for `CLOSURE_DAYS` (14) appears on the
+  recruiter's Tasks as "<Name> has waited N days for an answer". Nothing is sent; the candidate sees "Waiting for
+  the recruiter. RightStaff reminds recruiters to answer every application."
+- **Mark done** on Home's next best action (stored per candidate, role and action; Undo). It changes no score: "Add
+  the proof to your profile and check again to update your score."
+- **Role family** on Create job step 2 (suggested from the title, editable; "None" = JobMatch starts from 55).
+  Posting a job counts once as recruiter activity; edits don't, only actions on applicants afterwards.
+- **Candidate wording:** no "judgment", internal keys, model or provider names, or raw counts on candidate screens.
+  The Score page's technical detail (labels, methods, raw breakdown) shows only from Admin → Demo tools
+  (`/runs/{id}?technical=1`).
+
 ## Models
 Claude is the default for extraction, fallback judging, complexity and the plan. Any of these can run on
 Groq instead by naming a Groq model with a `groq/` prefix, e.g. `EXTRACT_MODEL=groq/openai/gpt-oss-120b`

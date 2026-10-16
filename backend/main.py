@@ -249,6 +249,12 @@ class RetryRolesIn(BaseModel):
     baseline_ids: list[str] | None = None
 
 
+class PlanDoneIn(BaseModel):
+    baseline_id: str
+    title: str
+    done: bool = True
+
+
 class TargetIn(BaseModel):
     baseline_id: str
 
@@ -752,6 +758,23 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         with conn() as c:
             cand_or_404(c, candidate_id)
             return bad_request(cx.set_primary, c, candidate_id, baseline_id)
+
+    @app.get("/candidates/{candidate_id}/applications", tags=["candidate"])
+    def candidate_applications(candidate_id: str):
+        """My applications: candidate-facing status and timeline. Never scores, ranks, notes or scorecards."""
+        from backend import my_applications as ma
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            return ma.my_applications(c, candidate_id)
+
+    @app.post("/candidates/{candidate_id}/plan-done", tags=["candidate"])
+    def plan_done(candidate_id: str, body: PlanDoneIn):
+        """"Mark done" (or undo) on a plan action. Changes no score."""
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            cx.mark_done(c, candidate_id, body.baseline_id, body.title, body.done)
+            t = next((t for t in cx.targets(c, candidate_id) if t["baseline_id"] == body.baseline_id), None)
+            return cx.score_card(c, candidate_id, t) if t else {}
 
     @app.get("/candidates/{candidate_id}/application-details", tags=["candidate"])
     def get_application_details(candidate_id: str):
@@ -1615,9 +1638,11 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     @app.get("/recruiter/tasks", tags=["hiring"])
     def recruiter_tasks():
-        """Everything waiting for the recruiter across jobs, oldest first."""
+        """Everything waiting for the recruiter across jobs, oldest first, including applications waiting longer than
+        CLOSURE_DAYS for an answer (specs/17 §7: a reminder only; nothing is sent)."""
+        from backend import my_applications as ma
         with conn() as c:
-            return hr.tasks(c)
+            return sorted(hr.tasks(c) + ma.closure_tasks(c), key=lambda t: t["since"] or "")
 
     @app.post("/workflows/tick", tags=["hiring"])
     def workflows_tick():

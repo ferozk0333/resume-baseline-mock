@@ -103,3 +103,8 @@
     100% { transform: scale(1); opacity: 1; }
   }
 }
+
+/* Visible keyboard focus everywhere (specs/17 §10); components with their own focus ring keep it. */
+@layer base {
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}

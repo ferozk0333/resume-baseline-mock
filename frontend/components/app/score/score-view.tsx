@@ -17,8 +17,8 @@ import { DIMENSIONS, get, post, titleCase, type Baseline, type Benchmarks, type 
 import { Badge } from "@/components/ui/badge";
 
 /** The Score page (specs/06), also shown inside My scores (`onOpenPlan` switches to the Plan tab there). */
-export function ScoreView({ id, onOpenPlan, onRescored }: { id: string; onOpenPlan?: () => void;
-  onRescored?: (runId: string) => void }) {
+export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { id: string; onOpenPlan?: () => void;
+  onRescored?: (runId: string) => void; technical?: boolean }) {
   const router = useRouter();
   const [view, setView] = useState<RunView | null>(null);
   const [weights, setWeights] = useState<Weights | null>(null);       // what the sliders show; scores follow
@@ -67,7 +67,9 @@ export function ScoreView({ id, onOpenPlan, onRescored }: { id: string; onOpenPl
           {" · "}you&apos;re higher than <span className="font-medium text-foreground">{p.percentile}%</span> of {p.n} other candidates
         </p>
         {dim && you < median && (
-          <Link href={`/runs/${id}/plan${gap ? `#gap-${gap.subcategory}` : ""}`}
+          onOpenPlan ? <button type="button" onClick={onOpenPlan} className="block text-left text-[11px] leading-tight font-medium text-amber-800 hover:underline">
+            Below the median for this role — see what higher scorers have
+          </button> : <Link href={`/runs/${id}/plan${gap ? `#gap-${gap.subcategory}` : ""}`}
             className="block text-[11px] leading-tight font-medium text-amber-800 hover:underline">
             Below the median for this role — see what higher scorers have
           </Link>
@@ -116,8 +118,7 @@ export function ScoreView({ id, onOpenPlan, onRescored }: { id: string; onOpenPl
       {running && (
         <div role="status" className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
           <Loader2 className="size-4 animate-spin" />
-          Still scoring: {view.progress?.done ?? 0} of {view.progress?.total ?? 19} subcategories done. Scores below are
-          partial and this page updates by itself.
+          Still scoring. Scores below are partial and this page updates by itself.
         </div>
       )}
 
@@ -152,7 +153,7 @@ export function ScoreView({ id, onOpenPlan, onRescored }: { id: string; onOpenPl
             <CardTitle className="text-base">{titleCase(d)}</CardTitle>
           </CardHeader>
           <div>
-            {view.subcategories.filter((s) => s.dimension === d).map((s) => <SubcategoryRow key={s.key} sub={s} />)}
+            {view.subcategories.filter((s) => s.dimension === d).map((s) => <SubcategoryRow key={s.key} sub={s} technical={technical} />)}
           </div>
         </Card>
       ))}
