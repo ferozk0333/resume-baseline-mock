@@ -9,7 +9,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import date
 
-from core import config
+from core import config, timing
 from core.llm import StructuredLLM
 from extraction import store
 from extraction.extract import extract_all
@@ -20,6 +20,7 @@ from extraction.validate import (
     SourceDoc, ValidationReport, merge_profiles, parse_month, repo_profile, validate_extraction,
 )
 from ingest import documents, github, portfolio
+from ingest.http_cache import CachedSession
 
 NO_RESUME_MESSAGE = "Upload a resume to get your score."
 
@@ -76,7 +77,7 @@ def _ingest_document(conn, candidate_id: str, upload: Upload, ev_type: str, labe
     path = documents.save_upload(candidate_id, upload.filename, upload.data)
     sha = documents.sha256(upload.data)
     try:
-        text = documents.extract_text(upload.filename, upload.data)
+        text = documents.extract_text(upload.filename, upload.data, conn)
     except documents.DocumentError as exc:
         store.add_evidence(conn, candidate_id, ev_type, "upload", file_path=str(path), file_sha256=sha,
                            status="failed", error=str(exc))
@@ -104,31 +105,38 @@ def ingest(conn: sqlite3.Connection, inputs: OnboardingInputs, *,
         candidate_id = store.create_candidate(conn, inputs.name, inputs.target_role, username, inputs.portfolio_url)
     docs: list[SourceDoc] = []
 
-    resume = _ingest_document(conn, candidate_id, inputs.resume, "resume", "Resume", warnings)
+    with timing.span(timing.INGEST, "resume"):
+        resume = _ingest_document(conn, candidate_id, inputs.resume, "resume", "Resume", warnings)
     if resume:
         docs.append(resume)
     if inputs.linkedin_pdf:
-        linkedin = _ingest_document(conn, candidate_id, inputs.linkedin_pdf, "linkedin_pdf", "LinkedIn PDF", warnings)
+        with timing.span(timing.INGEST, "linkedin_pdf"):
+            linkedin = _ingest_document(conn, candidate_id, inputs.linkedin_pdf, "linkedin_pdf", "LinkedIn PDF",
+                                        warnings)
         if linkedin:
             docs.append(linkedin)
 
     if inputs.github and not username:
         warnings.append(f"GitHub: '{inputs.github}' is not a valid GitHub username or profile URL.")
     if username:
-        try:
-            repos = (github_client or github.GitHubClient()).fetch_repos(
-                username, include_readme=config.GITHUB_README_EXTRACTION)
-        except github.GitHubError as exc:
-            warnings.append(f"GitHub: {exc}")
-            repos = exc.partial
+        with timing.span(timing.INGEST, "github") as t:
+            try:
+                client = github_client or github.GitHubClient(session=CachedSession(conn))
+                repos = client.fetch_repos(
+                    username, include_readme=config.GITHUB_README_EXTRACTION)
+            except github.GitHubError as exc:
+                warnings.append(f"GitHub: {exc}")
+                repos = exc.partial
+            t["repos"] = len(repos)
         for repo in repos:
             eid = store.add_evidence(conn, candidate_id, "github_repo", "api", raw_text=repo.as_text())
             docs.append(SourceDoc(eid, "github_repo", repo.as_text(), f"GitHub repo {repo.name}", repo=repo))
 
     if inputs.portfolio_text or inputs.portfolio_url:
         try:
-            page = (portfolio.page_from_text(inputs.portfolio_url, inputs.portfolio_text)
-                    if inputs.portfolio_text else portfolio.fetch_portfolio(inputs.portfolio_url, portfolio_session))
+            with timing.span(timing.INGEST, "portfolio"):
+                page = (portfolio.page_from_text(inputs.portfolio_url, inputs.portfolio_text) if inputs.portfolio_text
+                        else portfolio.fetch_portfolio(inputs.portfolio_url, portfolio_session))
         except portfolio.PortfolioError as exc:
             warnings.append(f"Portfolio: {exc}")
             page = None

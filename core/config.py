@@ -28,14 +28,87 @@ UPLOAD_DIR = Path(_env("RIGHTSTAFF_UPLOADS", str(ROOT / "uploads")))
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 JEV_API_KEY = os.getenv("JEV_API_KEY", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+# Groq (OpenAI-compatible, hosted open models). Use a model as "groq/<model id>", e.g. EXTRACT_MODEL=groq/openai/gpt-oss-120b.
+GROQ_API_KEY = _env("GROQ_API_KEY", "")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_CONCURRENCY = int(_env("GROQ_CONCURRENCY", "2"))
+GROQ_TPM = int(_env("GROQ_TPM", "8000"))           # tokens per minute of your Groq tier (free: 8000); caps each request
+GROQ_REASONING_EFFORT = _env("GROQ_REASONING_EFFORT", "low")   # gpt-oss reasoning tokens count toward the limit
 JUDGE = _env("JUDGE", "jev")  # jev | claude
-EXTRACT_MODEL = _env("EXTRACT_MODEL", "claude-haiku-4-5-20251001")
-JUDGE_FALLBACK_MODEL = _env("JUDGE_FALLBACK_MODEL", "claude-haiku-4-5-20251001")
-REASONING_MODEL = _env("REASONING_MODEL", "claude-sonnet-5-5")
+# Provider for the roles Claude had (extraction, fallback judging, complexity, plan): claude | gemini.
+# Jev stays the main judge. Groq stays available per model ("groq/<id>").
+LLM_PROVIDER = _env("LLM_PROVIDER", "claude")
+GEMINI_API_KEY = _env("GEMINI_API_KEY", "")
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+# Free-tier models (pricing page, 2026-10-13). Set LLM_PROVIDER=gemini to use them.
+# Model per role. Fallback judging, unmatched-skill batches and complexity run often: Flash-Lite has the daily
+# limit for them. Extraction and the plan are few calls: Flash.
+GEMINI_MODELS = {
+    "extract": _env("GEMINI_EXTRACT_MODEL", "gemini-3.8-flash"),
+    "judge": _env("GEMINI_JUDGE_MODEL", "gemini-3.5-flash-lite"),
+    "complexity": _env("GEMINI_COMPLEXITY_MODEL", "gemini-3.5-flash-lite"),
+    "plan": _env("GEMINI_PLAN_MODEL", "gemini-3.8-flash"),
+    "email": _env("GEMINI_EMAIL_MODEL", "gemini-3.5-flash-lite"),
+    "reply": _env("GEMINI_REPLY_MODEL", "gemini-3.5-flash-lite"),
+    "feedback": _env("GEMINI_FEEDBACK_MODEL", "gemini-3.5-flash-lite"),
+}
+
+
+def _limits(spec: str) -> dict[str, tuple[int, int, int]]:
+    """"model=RPM/TPM/RPD,model=…" → {model: (rpm, tpm, rpd)}."""
+    out = {}
+    for part in filter(None, (p.strip() for p in spec.split(","))):
+        model, _, nums = part.partition("=")
+        rpm, tpm, rpd = (int(x) for x in nums.split("/"))
+        out[model.strip()] = (rpm, tpm, rpd)
+    return out
+
+
+# Free-tier limits per model, from the project's AI Studio rate-limit page (2026-10-13). Override with
+# GEMINI_LIMITS="model=RPM/TPM/RPD,…". RPD resets at midnight Pacific. A model not listed uses GEMINI_RPM/TPM/RPD.
+GEMINI_LIMITS = {**_limits("gemini-3.8-flash=5/250000/20,gemini-3.5-flash-lite=15/250000/500"),
+                 **_limits(_env("GEMINI_LIMITS", ""))}
+GEMINI_RPM = int(_env("GEMINI_RPM", "5"))
+GEMINI_TPM = int(_env("GEMINI_TPM", "250000"))
+GEMINI_RPD = int(_env("GEMINI_RPD", "20"))
+
+
+def gemini_limits(model: str) -> tuple[int, int, int]:
+    return GEMINI_LIMITS.get(model, (GEMINI_RPM, GEMINI_TPM, GEMINI_RPD))
+GEMINI_CONCURRENCY = int(_env("GEMINI_CONCURRENCY", "4"))
+GEMINI_THINKING_LEVEL = _env("GEMINI_THINKING_LEVEL", "low")
+
+
+def _role_model(env: str, claude_default: str, role: str) -> str:
+    """The model for one role. With LLM_PROVIDER=gemini, Claude IDs in .env are replaced by the Gemini model
+    for the role; an explicit "gemini/…" or "groq/…" setting always wins."""
+    explicit = os.getenv(env, "").split("#", 1)[0].strip()
+    if LLM_PROVIDER == "gemini":
+        return explicit if explicit.startswith(("gemini/", "groq/")) else f"gemini/{GEMINI_MODELS[role]}"
+    return explicit or claude_default
+
+
+EXTRACT_MODEL = _role_model("EXTRACT_MODEL", "claude-haiku-4-5-20251001", "extract")
+JUDGE_FALLBACK_MODEL = _role_model("JUDGE_FALLBACK_MODEL", "claude-haiku-4-5-20251001", "judge")
+REASONING_MODEL = _role_model("REASONING_MODEL", "claude-sonnet-5-5", "plan")
 # Complexity judgments; can be switched to Haiku if labels flip between fresh runs (07 §5).
-COMPLEXITY_MODEL = _env("COMPLEXITY_MODEL", REASONING_MODEL)
+COMPLEXITY_MODEL = _role_model("COMPLEXITY_MODEL", REASONING_MODEL, "complexity")
+# Recruiter emails (specs/13 §2–§4): drafts only; a recruiter sends. Template draft when the model is unavailable.
+EMAIL_MODEL = _role_model("EMAIL_MODEL", "claude-haiku-4-5-20251001", "email")
+# Reading a job description into the create-job form (specs/14 §4): one call per JD; manual form if unavailable.
+JOB_EXTRACT_MODEL = _env("JOB_EXTRACT_MODEL", "gemini/gemini-3.8-flash")
+# Hiring workflow (specs/16): reading candidate replies and summarizing interview feedback. Code rules / a code
+# summary when the model is unavailable; the recruiter always decides.
+REPLY_MODEL = _role_model("REPLY_MODEL", "claude-haiku-4-5-20251001", "reply")
+FEEDBACK_MODEL = _role_model("FEEDBACK_MODEL", "claude-haiku-4-5-20251001", "feedback")
 JEV_MODEL = _env("JEV_MODEL", "jev-1.13.0")   # pinned; saved judgments are matched on this version
 JEV_URL = "https://api.typesafe.ai/v1/systemone"
+# Effort per purpose (low | medium | high; empty = the model's default: high on Sonnet 5.5, medium on
+# Haiku 5.5). Sent only to models that support effort; Haiku 4.5 does not. Thinking tokens bill as output.
+EXTRACT_EFFORT = _env("EXTRACT_EFFORT", "")
+JUDGE_EFFORT = _env("JUDGE_EFFORT", "")
+COMPLEXITY_EFFORT = _env("COMPLEXITY_EFFORT", "")
+PLAN_EFFORT = _env("PLAN_EFFORT", "")
 # Fallback to Claude when Jev's `confidence` is below this (yes/no: |2p - 1|). Starting value; set in phase 8.
 JEV_CONFIDENCE_THRESHOLD = float(_env("JEV_CONFIDENCE_THRESHOLD", "0.6"))
 
@@ -46,13 +119,47 @@ MAX_PORTFOLIO_CHARS = 50_000
 GITHUB_MAX_REPOS = 30           # most recently pushed, non-archived
 GITHUB_README_CHARS = 4_000
 GITHUB_README_EXTRACTION = True  # one LLM call per counted repo README (05 §A)
-EXTRACT_MAX_TOKENS = 16_000
-EXTRACT_CONCURRENCY = 4
-# Concurrency. Subcategories already run in parallel; these caps set how many model calls are in flight.
-# Jev and Claude have separate pools so fast Jev calls never queue the slow reasoning-model calls.
-MAX_PARALLEL_JUDGE_CALLS = int(_env("MAX_PARALLEL_JUDGE_CALLS", "48"))   # judgments in flight, whole graph
+GITHUB_CACHE_HOURS = 24          # GitHub API responses reused for this long (ETag revalidation after)
+GITHUB_CONCURRENCY = 8           # repos whose details are fetched at once
+EXTRACT_MAX_TOKENS = 12_000     # a dense one-page resume needs ~7.3k (phase 9); runaway output is cut earlier
+PLAN_MAX_TOKENS = 16_000
+EXTRACT_CONCURRENCY = 16        # resume, LinkedIn, portfolio and READMEs at once (specs/09 §2.5); Claude cap applies
+# Concurrency. All 19 subcategories run at once; these caps set how many model calls are in flight.
+# JUDGE_CONCURRENCY (specs/09 §2.1): judgments in flight across all four dimension subgraphs, Jev and
+# Claude together. Beneath it, per-provider pools keep fast Jev calls from queueing slow Claude calls.
+# Default 48, not the spec's 8: measured on a real profile, 8 made confirm → score 51.5 s vs 33.4 s (phase 9).
+JUDGE_CONCURRENCY = int(_env("JUDGE_CONCURRENCY", _env("MAX_PARALLEL_JUDGE_CALLS", "48")))
 JEV_MAX_CONCURRENCY = int(_env("JEV_MAX_CONCURRENCY", "32"))             # Jev allows 80 requests/s
 CLAUDE_MAX_CONCURRENCY = int(_env("CLAUDE_MAX_CONCURRENCY", "12"))       # lower it if Anthropic returns 429s
+# Estimated USD per million tokens, for the run cost line only (check https://claude.com/pricing).
+# Checked 2026-10-13. Cache reads cost 0.1× input, 5-minute cache writes 1.25× input.
+MODEL_PRICES = {
+    "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
+    "claude-haiku-5-5": {"input": 0.10, "output": 0.50},  # prompts up to 100k tokens
+    "claude-sonnet-5-5": {"input": 2.0, "output": 10.0},
+    "claude-opus-5-5": {"input": 4.0, "output": 20.0},
+}
+PRINT_TIMINGS = _env("PRINT_TIMINGS", "1") == "1"   # timing table on stdout at the end of each run (specs/09 §1)
+
+# --- Benchmarks (specs/12) -----------------------------------------------------
+# Percentiles need at least MIN_POOL candidates in the pool; any peer statistic needs at least MIN_GROUP
+# people. Lower them in .env only for a local demo: the UI then shows a "demo pool" badge.
+MIN_POOL = int(_env("MIN_POOL", "20"))
+MIN_GROUP = int(_env("MIN_GROUP", "10"))
+
+# Candidate Home (specs/17 §4, §6). JobMatch is a dummy preview for now: a deterministic number, always labelled
+# "Preview", never stored as a score and never shown to recruiters. Groups: Strong >= STRONG, Close >= CLOSE.
+JOBMATCH_PREVIEW = _env("JOBMATCH_PREVIEW", "1") == "1"
+JOBMATCH_STRONG = int(_env("JOBMATCH_STRONG", "75"))
+JOBMATCH_CLOSE = int(_env("JOBMATCH_CLOSE", "55"))
+# Recruiter activity signals (specs/17 §4.1): "Reviewing applications" when a stage moved within REVIEWING_DAYS;
+# "Low recent activity" after LOW_ACTIVITY_DAYS without any recruiter action on the job.
+REVIEWING_DAYS = int(_env("REVIEWING_DAYS", "14"))
+LOW_ACTIVITY_DAYS = int(_env("LOW_ACTIVITY_DAYS", "30"))
+# Closure principle (specs/17 §7): an open application without a stage change for CLOSURE_DAYS becomes a recruiter
+# Tasks item. Nothing is ever sent by itself.
+CLOSURE_DAYS = int(_env("CLOSURE_DAYS", "14"))
+PEER_MIN_RATE = int(_env("PEER_MIN_RATE", "50"))   # a peer signal shows when at least this % of the group has it
 
 # --- Scoring constants (specs/04) -----------------------------------------
 LOGIC_VERSION = "v0.1"
@@ -149,3 +256,48 @@ SUBCATEGORY_LABELS: dict[str, str] = {
 def default_weights() -> dict:
     """A fresh, mutable copy of the default weight table."""
     return copy.deepcopy(_DEFAULT_WEIGHTS)
+
+
+# --- Recruiter email (specs/13 §4) -------------------------------------------------------------
+EMAIL_PROVIDER = _env("EMAIL_PROVIDER", "outbox")        # outbox: stored and shown, nothing leaves the machine | smtp
+SMTP_HOST = _env("SMTP_HOST", "")
+SMTP_PORT = int(_env("SMTP_PORT", "587"))
+SMTP_USER = _env("SMTP_USER", "")
+SMTP_PASSWORD = _env("SMTP_PASSWORD", "")
+EMAIL_FROM = _env("EMAIL_FROM", "")
+# Demo redirect: while set, every email goes to this address only (subject and body name the intended recipient).
+# Set DEMO_EMAIL_TO= (empty) to turn the redirect off.
+DEMO_EMAIL_TO = os.getenv("DEMO_EMAIL_TO", "you@example.com").split("#", 1)[0].strip()
+REJECTION_MAX_WORDS = 150
+SCHEDULING_MAX_WORDS = 120
+
+# --- Hiring workflow (specs/16) ------------------------------------------------------------------------
+NUDGE_DAYS = float(_env("NUDGE_DAYS", "3"))             # no reply after this many days → draft a nudge (not sent)
+REPLY_INBOX = _env("REPLY_INBOX", "none")                # none (paste replies) | imap (poll the demo inbox)
+IMAP_HOST = _env("IMAP_HOST", "imap.gmail.com")
+IMAP_PORT = int(_env("IMAP_PORT", "993"))
+IMAP_USER = _env("IMAP_USER", "") or SMTP_USER           # same Gmail app password as SMTP by default
+IMAP_PASSWORD = _env("IMAP_PASSWORD", "") or SMTP_PASSWORD
+IMAP_POLL_MINUTES = float(_env("IMAP_POLL_MINUTES", "3"))
+WORKFLOW_TICK_SECONDS = int(_env("WORKFLOW_TICK_SECONDS", "60"))   # nudges due, interviews passed, inbox; 0 = off
+MESSAGE_MAX_WORDS = 120                                  # nudge, answer and offer-note drafts
+
+# --- Market baseline (specs/15) ---------------------------------------------------------------------------------
+MARKET_SOURCES = ROOT / "config" / "market_sources.yaml"
+MARKET_SYNONYMS = ROOT / "config" / "market_synonyms.json"     # reviewed synonym map (versioned, not in data/)
+MARKET_FIXTURES = ROOT / "tests" / "fixtures" / "market"        # test mode: hand-labelled postings, no model
+MARKET_EXTRACT_MODEL = _env("MARKET_EXTRACT_MODEL", "gemini/gemini-3.8-flash")   # once per new posting, cached
+MARKET_SUMMARY_MODEL = _env("MARKET_SUMMARY_MODEL", "gemini/gemini-3.8-flash")   # scope/complexity/description per version
+MARKET_MERGE_MODEL = _env("MARKET_MERGE_MODEL", "gemini/gemini-3.5-flash-lite")  # proposes merges for leftover names
+MARKET_MERGE_BATCH = 40
+WINDOW_DAYS = int(_env("WINDOW_DAYS", "90"))           # a posting counts while last_seen is within this window
+RECOMPUTE_DAYS = int(_env("RECOMPUTE_DAYS", "30"))
+FETCH_DAYS = 7                                          # weekly fetch; only updates last_seen for known postings
+REQ_SHARE = float(_env("REQ_SHARE", "0.5"))             # required if listed as required by ≥ this share (proposal)
+PREF_SHARE = float(_env("PREF_SHARE", "0.2"))           # preferred if listed at all by ≥ this share (proposal)
+MARGIN = float(_env("MARGIN", "0.05"))                  # hysteresis: a category changes only past threshold ± margin
+MIN_COMPANIES = int(_env("MIN_COMPANIES", "8"))
+MIN_POSTINGS = int(_env("MIN_POSTINGS", "20"))
+TIER_WEIGHTS = {"large": 1.0, "mid": 1.0, "startup": 1.0}   # equal by default
+DEDUPE_SIMILARITY = 0.92                                # same company + this text similarity = one posting
+MARKET_USER_AGENT = "RightStaff-market-baseline/0.1 (local research mock; weekly)"

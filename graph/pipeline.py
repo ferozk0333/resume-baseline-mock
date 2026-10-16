@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from typing import Annotated, TypedDict
 
@@ -21,10 +22,10 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
-from core import config, db
+from core import config, db, timing
 from core.db import new_id, now_iso
 from extraction import schemas, store
-from extraction.extract import extract_all, output_type
+from extraction.extract import ExtractionCache, extract_all, output_type
 from extraction.onboard import (
     NO_RESUME_MESSAGE, CertificationForm, OnboardingInputs, ReferenceForm, Upload, docs_to_extract,
     finish_onboarding, form_profile, ingest, validate_results,
@@ -82,6 +83,8 @@ class RunState(TypedDict, total=False):
     ranked_gaps: list[dict]
     plan_markdown: str | None
     plan_error: str | None
+    plan_status: str | None                               # generating | ready | failed | deferred
+    skip_plan: bool                                       # leave the plan for later ("deferred", specs/17 §3.1)
 
 
 class ScoreOut(TypedDict, total=False):
@@ -135,7 +138,14 @@ def _ingest(deps: Deps):
 def _extract(deps: Deps):
     def node(state: RunState) -> dict:
         docs = docs_to_extract([doc_from_state(d) for d in state["docs"]])
-        results = extract_all(docs, deps.llm) if docs else {}
+        # A re-run for an existing candidate ("Re-run extraction") always asks the model again.
+        rerun = bool((state.get("inputs") or {}).get("candidate_id"))
+        conn = db.connect(deps.db_path) if deps.extraction_cache and not rerun else None
+        try:
+            results = extract_all(docs, deps.llm, ExtractionCache(conn) if conn else None) if docs else {}
+        finally:
+            if conn is not None:
+                conn.close()
         return {"extractions": {eid: ({"error": str(r)} if isinstance(r, Exception) else {"ok": r.model_dump()})
                                 for eid, r in results.items()}}
     return node
@@ -192,12 +202,18 @@ def _prepare(deps: Deps):
             if blocker:
                 return {"blocked": blocker, "weights": weights}
             run_id = db.create_run(ctx.conn, ctx.candidate_id, ctx.baseline.id, weights,
-                                   baseline_hash=ctx.baseline.content_hash(), models=judge_models())
+                                   baseline_hash=ctx.baseline.content_hash(),
+                                   models={**judge_models(), "judge_kind": judge_kind(deps.judge)})
             ctx.svc.run_id = run_id
             resolve(ctx, relevance_asks(ctx), call=True)
             errors = [f"prepare_match: {e}" for e in ctx.svc.errors]
         return {"run_id": run_id, "weights": weights, "blocked": None, "errors": errors}
     return node
+
+
+def judge_kind(judge) -> str:
+    """"scripted" for a test judge (FakeJudge), else "real". Recorded on every run."""
+    return "scripted" if getattr(judge, "scripted", False) else "real"
 
 
 def _fan_out(state: RunState):
@@ -259,11 +275,32 @@ def subcategory_graph(deps: Deps, sub: Subcategory):
     return g.compile(name=sub.name)
 
 
+# Subcategories that ask several questions about the same subjects: their questions go to the judge
+# together, one call per subject, before the subcategories run (specs/09 §2.3).
+GROUPED = {"authority": ("outcomes", "impact", "ownership", "scope_of_impact")}
+
+
+def group_judge_node(deps: Deps, subs: list[Subcategory]):
+    def group_judge(state: RunState) -> dict:
+        # A question that fails here is not saved, so its subcategory asks again and reports the error.
+        try:
+            with open_ctx(deps, state) as ctx:
+                resolve(ctx, [a for sub in subs for a in sub.plan(ctx)], call=True)
+        except Exception:
+            log.exception("grouped judging failed")
+        return {}
+    return group_judge
+
+
 def dimension_graph(deps: Deps, name: str):
     g = StateGraph(RunState, output_schema=ScoreOut)
+    grouped = [s for s in DIMENSIONS[name] if s.name in GROUPED.get(name, ())]
+    if grouped:
+        g.add_node("group_judge", group_judge_node(deps, grouped))
+        g.add_edge(START, "group_judge")
     for sub in DIMENSIONS[name]:
         g.add_node(sub.name, subcategory_graph(deps, sub))
-        g.add_edge(START, sub.name)
+        g.add_edge("group_judge" if sub in grouped else START, sub.name)
         g.add_edge(sub.name, END)
     return g.compile(name=name)
 
@@ -280,25 +317,82 @@ def _aggregate(deps: Deps):
     return node
 
 
+# Background work (specs/09 §2.6): job-independent judgments during review, and the improvement plan
+# after the score is returned. PLAN_JOBS lets callers wait for a run's plan (tests, timing script).
+BACKGROUND = ThreadPoolExecutor(max_workers=4, thread_name_prefix="rightstaff-bg")
+PLAN_JOBS: dict[str, Future] = {}
+
+
+def write_plan(deps: Deps, run_id: str, candidate_id: str, baseline_id: str, subscores: dict, weights: dict):
+    """Generate and store the improvement plan, set runs.plan_status, and refresh the run's timings."""
+    from scoring.plan import generate_plan
+    conn = db.connect(deps.db_path)
+    try:
+        baseline = db.get_baseline(conn, baseline_id)
+        from scoring.benchmarks import plan_lines
+        with timing.span(timing.PLAN, "improvement_plan"):
+            plan = generate_plan(conn, run_id, subscores, weights, baseline,
+                                 store.load_profile(conn, candidate_id), deps.planner,
+                                 peer_lines=plan_lines(conn, run_id))
+        db.set_plan_status(conn, run_id, "failed" if plan.error else "ready")
+        return plan
+    except Exception:
+        log.exception("plan generation failed")
+        db.set_plan_status(conn, run_id, "failed")
+        raise
+    finally:
+        rec = timing.active()
+        if rec is not None:
+            db.save_run_timings(conn, run_id, rec.summary())
+        conn.close()
+
+
 def _gap_analysis(deps: Deps):
     def node(state: RunState) -> dict:
         from scoring.gaps import rank_gaps
-        from scoring.plan import generate_plan
-        subscores = state.get("subcategory_scores", {})
+        subscores, run_id = state.get("subcategory_scores", {}), state["run_id"]
         conn = db.connect(deps.db_path)
         try:
-            baseline = db.get_baseline(conn, state["baseline_id"])
-            ranked = rank_gaps(subscores, state["weights"], baseline)
-            plan = generate_plan(conn, state["run_id"], subscores, state["weights"], baseline,
-                                 store.load_profile(conn, state["candidate_id"]), deps.planner)
+            ranked = [g.as_dict() for g in rank_gaps(subscores, state["weights"],
+                                                     db.get_baseline(conn, state["baseline_id"]))]
+            args = (deps, run_id, state["candidate_id"], state["baseline_id"], subscores, state["weights"])
+            if state.get("skip_plan"):              # written on first open of this role's plan (specs/17 §3.1)
+                db.set_plan_status(conn, run_id, "deferred")
+                return {"ranked_gaps": ranked, "plan_markdown": None, "plan_error": None, "plan_status": "deferred"}
+            if deps.planner is not None and deps.plan_in_background:
+                db.set_plan_status(conn, run_id, "generating")     # finish late: the score is shown first
+                PLAN_JOBS[run_id] = BACKGROUND.submit(timing.bind(write_plan), *args)
+                return {"ranked_gaps": ranked, "plan_markdown": None, "plan_error": None,
+                        "plan_status": "generating"}
+            plan = write_plan(*args)
         except Exception as exc:  # the scores are saved; a plan problem must not fail the run
             log.exception("gap analysis failed")
-            return {"plan_error": f"{exc.__class__.__name__}: {exc}", "ranked_gaps": []}
+            return {"plan_error": f"{exc.__class__.__name__}: {exc}", "ranked_gaps": [], "plan_status": "failed"}
         finally:
             conn.close()
-        return {"ranked_gaps": [g.as_dict() for g in ranked], "plan_markdown": plan.markdown,
-                "plan_error": plan.error}
+        return {"ranked_gaps": ranked, "plan_markdown": plan.markdown, "plan_error": plan.error,
+                "plan_status": "failed" if plan.error else "ready"}
     return node
+
+
+# Subcategories whose job-independent judgments start while the candidate reviews (specs/09 §2.6).
+EARLY_SUBCATEGORIES = ("progression", "outcomes", "impact", "ownership", "scope_of_impact", "proof_density",
+                       "consistency", "evidence_quality")
+
+
+def early_judgments(deps: Deps, candidate_id: str, baseline_id: str) -> int:
+    """Ask the job-independent questions of EARLY_SUBCATEGORIES now; scoring later finds them saved
+    (or waits for ones still in flight). Edited items have new text, so scoring judges them again."""
+    from judges.questions import QUESTIONS
+    with timing.span(timing.EARLY, "job_independent") as t:
+        with open_ctx(deps, {"candidate_id": candidate_id, "baseline_id": baseline_id}, with_relevance=False) as ctx:
+            if scoring_blocker(ctx.profile):
+                return 0
+            subs = [s for group in DIMENSIONS.values() for s in group if s.name in EARLY_SUBCATEGORIES]
+            asks = [a for s in subs for a in s.plan(ctx) if not QUESTIONS[a.key].job_dependent]
+            resolve(ctx, asks, call=True)
+            t.update(asks=len(asks), calls=ctx.svc.calls)
+            return len(asks)
 
 
 def build_graph(deps: Deps) -> StateGraph:
@@ -376,9 +470,12 @@ class Pipeline:
     `on_progress(line)` receives a short line each time a step finishes (for the UI's progress log).
     """
 
-    def __init__(self, deps: Deps, checkpointer=None):
+    def __init__(self, deps: Deps, checkpointer=None, print_timings: bool | None = None):
         self.deps = deps
         self.graph = build_graph(deps).compile(checkpointer=checkpointer or InMemorySaver())
+        self.print_timings = config.PRINT_TIMINGS if print_timings is None else print_timings
+        self.recorders: dict[str, timing.Recorder] = {}     # thread_id → timings (onboarding + scoring)
+        self.early: dict[str, Future] = {}                   # thread_id → job-independent judgments job
 
     @staticmethod
     def _cfg(thread_id: str) -> dict:
@@ -391,34 +488,91 @@ class Pipeline:
         on_event(event):   every node start/end, including inside subgraphs (live graph view).
         """
         cfg = self._cfg(thread_id)
-        for namespace, _mode, chunk in self.graph.stream(payload, cfg, stream_mode=["tasks"], subgraphs=True):
-            event = task_event(namespace, chunk)
-            if on_event is not None:
-                on_event(event)
-            if on_progress is not None and event.kind == "end" and not event.error:
-                line = describe(namespace, event.node)
-                if line:
-                    on_progress(line)
+        rec = self.recorders.setdefault(thread_id, timing.Recorder())
+        started: dict[str, float] = {}
+        with timing.recording(rec):
+            for namespace, _mode, chunk in self.graph.stream(payload, cfg, stream_mode=["tasks"], subgraphs=True):
+                event = task_event(namespace, chunk)
+                self._time(rec, started, event, chunk)
+                if on_event is not None:
+                    on_event(event)
+                if on_progress is not None and event.kind == "end" and not event.error:
+                    line = describe(namespace, event.node)
+                    if line:
+                        on_progress(line)
         snapshot = self.graph.get_state(cfg)
         pending = snapshot.interrupts
-        return {**snapshot.values, "thread_id": thread_id, "awaiting_review": pending[0].value if pending else None}
+        values = snapshot.values
+        if values.get("run_id") and values.get("final") is not None and not pending:
+            self._save_timings(values["run_id"], rec)
+        # A free-tier daily quota stopped some calls: say so plainly (saved work is reused on the next run).
+        stopped = next((m for m in [*(values.get("errors") or []), *(values.get("warnings") or [])]
+                        if "Daily free-tier limit" in m), None)
+        paused = stopped[stopped.index("Daily free-tier limit"):] if stopped else None
+        return {**values, "thread_id": thread_id, "awaiting_review": pending[0].value if pending else None,
+                "paused": paused}
+
+    @staticmethod
+    def _time(rec: timing.Recorder, started: dict, event: TaskEvent, chunk: dict) -> None:
+        """Wall-clock time of every graph node, from the task stream (specs/09 §1)."""
+        task_id = chunk.get("id")
+        if event.kind == "start":
+            started[task_id] = rec.now()
+            return
+        start = started.pop(task_id, None)
+        if start is None:
+            return
+        attrs = {"error": event.error} if event.error else {}
+        if event.path:
+            rec.add(timing.NODE, event.node, start, rec.now() - start, path=list(event.path), **attrs)
+        else:
+            rec.add(timing.STEP, event.node, start, rec.now() - start, **attrs)
+
+    def _save_timings(self, run_id: str, rec: timing.Recorder) -> None:
+        summary = rec.summary()
+        conn = db.connect(self.deps.db_path)
+        try:
+            db.save_run_timings(conn, run_id, summary)
+        finally:
+            conn.close()
+        if self.print_timings:
+            print(f"\nTimings for run {run_id}:\n{timing.table(summary)}", flush=True)
 
     def start_onboarding(self, inputs: OnboardingInputs, baseline_id: str, weights: dict | None = None,
-                         on_progress=None, on_event=None) -> dict:
-        """Ingest, extract, validate; stops at review (result["awaiting_review"])."""
+                         on_progress=None, on_event=None, early: bool = True) -> dict:
+        """Ingest, extract, validate; stops at review (result["awaiting_review"]).
+
+        early: start the job-independent judgments in the background while the candidate reviews.
+        """
         tid = str(uuid.uuid4())
-        return self._run({"inputs": inputs_to_state(inputs), "baseline_id": baseline_id,
-                          "weights": weights or config.default_weights()}, tid, on_progress, on_event)
+        res = self._run({"inputs": inputs_to_state(inputs), "baseline_id": baseline_id,
+                         "weights": weights or config.default_weights()}, tid, on_progress, on_event)
+        if early and res.get("awaiting_review") and res.get("candidate_id") and not res.get("blocked"):
+            with timing.recording(self.recorders[tid]):
+                self.early[tid] = BACKGROUND.submit(timing.bind(early_judgments), self.deps, res["candidate_id"],
+                                                    baseline_id)
+        return res
+
+    def wait_for_early(self, thread_id: str, timeout: float = 300) -> int | None:
+        job = self.early.get(thread_id)
+        return job.result(timeout) if job is not None else None
+
+    @staticmethod
+    def wait_for_plan(run_id: str, timeout: float = 300):
+        """The run's plan once written in the background (None if it was not started in the background)."""
+        job = PLAN_JOBS.get(run_id)
+        return job.result(timeout) if job is not None else None
 
     def confirm_review(self, thread_id: str, answer: dict | None = None, on_progress=None, on_event=None) -> dict:
         """Resume after the user reviewed the profile; runs scoring unless still blocked or cancelled."""
         return self._run(Command(resume=answer or {"confirmed": True}), thread_id, on_progress, on_event)
 
     def score(self, candidate_id: str, baseline_id: str, weights: dict | None = None, on_progress=None,
-              on_event=None) -> dict:
-        """Score a confirmed profile against a baseline, without re-extracting (01 step 9)."""
+              on_event=None, plan: bool = True) -> dict:
+        """Score a confirmed profile against a baseline, without re-extracting (01 step 9).
+        plan=False leaves the improvement plan "deferred" (written when it is first opened)."""
         tid = str(uuid.uuid4())
-        return self._run({"candidate_id": candidate_id, "baseline_id": baseline_id,
+        return self._run({"candidate_id": candidate_id, "baseline_id": baseline_id, "skip_plan": not plan,
                           "weights": weights or config.default_weights()}, tid, on_progress, on_event)
 
 
@@ -462,8 +616,10 @@ def regenerate_plan(conn, run_id: str, planner, weights: dict | None = None):
     """'Regenerate plan' (specs/06): ask the model again for the current weights."""
     from scoring.plan import generate_plan
     run, weights, baseline = _run_inputs(conn, run_id, weights)
+    from scoring.benchmarks import plan_lines
     return generate_plan(conn, run_id, run_scores(conn, run_id), weights, baseline,
-                         store.load_profile(conn, run["candidate_id"]), planner, regenerate=True)
+                         store.load_profile(conn, run["candidate_id"]), planner, regenerate=True,
+                         peer_lines=plan_lines(conn, run_id))
 
 
 def save_run_weights(conn, run_id: str, weights: dict) -> None:

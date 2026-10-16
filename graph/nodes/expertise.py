@@ -5,6 +5,7 @@ from core.models import BaselineCriterion
 from core.text import contains_phrase
 from graph.context import Ask, Ctx, Labels, project_text, role_text
 from graph.nodes.base import Subcategory
+from judges.questions import QUESTIONS
 from scoring import formulas as f
 
 
@@ -49,8 +50,19 @@ def criterion_text(c: BaselineCriterion) -> str:
 
 
 # --- Skills ------------------------------------------------------------------------------
-# Alias match → judge (may be Jev) with the matched lines. No alias match → Claude with ALL lines, and the
-# label must carry a quote found in the input (else retry once, then missing). Nothing at all → missing by rule.
+# Alias match in a bullet → judge (may be Jev) with the matched lines. Matched only in the skills list → that same
+# judge with the list (the "alias route"), AND the all-bullets judge as a second judgment on subject
+# "<criterion id>#all" (specs/13 §0.4): a bullet with a near variant ("6 A/B tests" for "A/B testing") can earn
+# credit, and the final label is the better of the two, so the all-bullets route only ever adds credit.
+# No match anywhere → the all-bullets route alone (model; the label must carry a quote found in the input, else
+# retry once, then missing). Nothing at all → missing by rule.
+
+ALL_BULLETS = "#all"
+
+
+def _all_bullets(key: str, c: BaselineCriterion, context: dict, subject_id: str | None = None) -> Ask:
+    return Ask(key, "criterion", subject_id or c.id, context, route="claude", require_quote=True)
+
 
 def _skill_asks(ctx: Ctx, key: str, none_label: str, list_counts: bool) -> list[Ask]:
     asks = []
@@ -58,22 +70,34 @@ def _skill_asks(ctx: Ctx, key: str, none_label: str, list_counts: bool) -> list[
     for c in ctx.baseline.items("skill"):
         hits = [ln for ln in lines if mentions(ln, c)]
         in_list = list_counts and any(mentions(s, c) for s in skills)
+        everything = {"criterion": criterion_text(c), "bullets": lines, "skills_list": skills}
         if hits or in_list:
             asks.append(Ask(key, "criterion", c.id,
                             {"criterion": criterion_text(c), "bullets": hits, "skills_list": skills}))
+            if not hits and lines:
+                asks.append(_all_bullets(key, c, everything, c.id + ALL_BULLETS))
         elif lines or skills:
-            asks.append(Ask(key, "criterion", c.id,
-                            {"criterion": criterion_text(c), "bullets": lines, "skills_list": skills},
-                            route="claude", require_quote=True))
+            asks.append(_all_bullets(key, c, everything))
         else:
             asks.append(Ask(key, "criterion", c.id, {"criterion": criterion_text(c)}, rule_label=none_label,
                             rule_reason="The profile has no bullets and no skills list."))
     return asks
 
 
+def best_label(key: str, *labels: str | None) -> str | None:
+    """The better of several labels for one criterion (options are listed best first); None if all failed."""
+    order = list(QUESTIONS[key].options)
+    found = [label for label in labels if label is not None]
+    return min(found, key=order.index) if found else None
+
+
+def criterion_label(labels: Labels, key: str, c: BaselineCriterion) -> str | None:
+    return best_label(key, labels.get(key, c.id), labels.get(key, c.id + ALL_BULLETS))
+
+
 def _by_priority(ctx: Ctx, labels: Labels, kind: str, key: str) -> tuple[dict, dict]:
-    req = {c.name: labels.get(key, c.id) for c in ctx.baseline.items(kind, "required")}
-    pref = {c.name: labels.get(key, c.id) for c in ctx.baseline.items(kind, "preferred")}
+    req = {c.name: criterion_label(labels, key, c) for c in ctx.baseline.items(kind, "required")}
+    pref = {c.name: criterion_label(labels, key, c) for c in ctx.baseline.items(kind, "preferred")}
     return req, pref
 
 
@@ -86,7 +110,7 @@ def skills_compute(ctx: Ctx, labels: Labels) -> f.SubScore:
 
 
 def applied_plan(ctx: Ctx) -> list[Ask]:
-    # Applying a skill needs a bullet; a skills-list match alone does not route to the matched-lines judge.
+    # Applying a skill needs a bullet: a skills-list match alone does not count, so no alias-route ask.
     return _skill_asks(ctx, "applied_level", "mention_or_missing", list_counts=False)
 
 
@@ -112,8 +136,11 @@ def tools_plan(ctx: Ctx) -> list[Ask]:
                       "certifications": certs, "skills_list": skills}
         if any(context[k] for k in ("bullets", "repositories", "certifications", "skills_list")):
             asks.append(Ask("tool_evidence", "criterion", c.id, context))
+            # Matched only in the skills list: also the all-bullets judge; the better label counts (§0.4).
+            if not any(context[k] for k in ("bullets", "repositories", "certifications")) and (lines or repos):
+                asks.append(_all_bullets("tool_evidence", c, everything, c.id + ALL_BULLETS))
         elif lines or repos or certs or skills:
-            asks.append(Ask("tool_evidence", "criterion", c.id, everything, route="claude", require_quote=True))
+            asks.append(_all_bullets("tool_evidence", c, everything))
         else:
             asks.append(Ask("tool_evidence", "criterion", c.id, {"criterion": criterion_text(c)},
                             rule_label="missing", rule_reason="The profile has no bullets, repositories, "
@@ -129,22 +156,26 @@ def tools_compute(ctx: Ctx, labels: Labels) -> f.SubScore:
 
 def _relevant_items(ctx: Ctx):
     for r in ctx.profile.roles:
-        yield "role", r.id, role_text(r)
+        yield "role", r.id, role_text(r), bool(r.bullets)
     for p in ctx.counted_projects():
-        yield "project", p.id, project_text(p)
+        yield "project", p.id, project_text(p), bool(p.bullets or (p.description or "").strip())
 
 
 def complexity_plan(ctx: Ctx) -> list[Ask]:
+    """An item with no bullets and no description has nothing to judge: it gets "no" by rule, no model call.
+    Complexity takes the best item, so this never lowers a score that a judged item sets."""
     rubric = f"Target role: {ctx.baseline.title} ({ctx.baseline.level}). " \
              f"Desired complexity: {ctx.baseline.complexity_criteria or ''}"
-    return [Ask("complexity", kind, item_id, {"baseline": rubric, "item": text})
-            for kind, item_id, text in _relevant_items(ctx)
+    return [Ask("complexity", kind, item_id, {"baseline": rubric, "item": text},
+                rule_label=None if has_content else "no",
+                rule_reason=None if has_content else "Nothing to judge: no bullets or description.")
+            for kind, item_id, text, has_content in _relevant_items(ctx)
             if (f.RELEVANCE.get(ctx.relevance.get(item_id)) or 0) > 0]
 
 
 def complexity_compute(ctx: Ctx, labels: Labels) -> f.SubScore:
     items = [f.GradedItem(item_id, ctx.relevance.get(item_id), labels.get("complexity", item_id))
-             for _, item_id, _ in _relevant_items(ctx)]
+             for _, item_id, _, _ in _relevant_items(ctx)]
     return f.complexity(items)
 
 

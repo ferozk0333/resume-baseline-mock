@@ -1,0 +1,273 @@
+You are an experienced hiring manager filling the entry-level role described below. You will see the application materials of five candidates (resume and, where provided, LinkedIn profile, GitHub, portfolio, certifications and references). Names have been removed; candidates are labelled A to E. The order of the candidates means nothing.
+
+Task: rank the candidates by whom you would most want to interview for this role.
+- Judge what each candidate has actually done and can show that is relevant to this role.
+- Do not give credit for length, formatting or wording style on their own.
+- If two candidates are genuinely equal, you may tie them with "=".
+- Use only the information given. Do not search the web.
+
+Answer in exactly this format:
+
+RANKING: X > X > X > X > X
+GAPS: X-X clear|slight, X-X clear|slight, X-X clear|slight, X-X clear|slight
+DECIDING FACTOR: X-X experience|skills|results|proof|other, (one per adjacent pair, same order as GAPS)
+REASONS:
+A: one sentence
+B: one sentence
+C: one sentence
+D: one sentence
+E: one sentence
+
+=== THE ROLE: AI Engineer (entry level, about 1 year of experience expected) ===
+About the role: Early-career AI Engineer who builds and ships applications on top of machine learning and large language models: prompt and retrieval pipelines, evaluation, APIs and basic deployment. Works in Python with modern ML tooling and collaborates with product and data teams.
+What you will do: Owns well-defined features or components end to end (e.g. a retrieval pipeline, an evaluation harness, a model-serving endpoint) within a team; works with a senior engineer on design; ships to staging or production.
+Required: Machine learning fundamentals, LLM application development, Retrieval-augmented generation, Model evaluation, API development, Data preprocessing, Python, PyTorch, Git
+Nice to have: Fine-tuning, MLOps basics, Hugging Face, LangChain or LangGraph, Docker, Cloud platform, Cloud ML certification
+
+=== CANDIDATE A ===
+
+--- Resume ---
+**Candidate A**
+New-grad AI/ML engineer · candidate@example.com · San Jose, CA · github.com/candidate
+
+**Education**
+B.S. Computer Science (AI track), Bayview State University · May 2026 · GPA 3.6
+Coursework: Machine Learning, Deep Learning, NLP, Distributed Systems, Databases
+
+**Projects**
+
+**ReviewBot — LLM code-review assistant** · Jan 2026 – May 2026 · (github.com/candidate/reviewbot)
+- GitHub app that comments on pull requests using an LLM with retrieval over the repo's style guide and past reviews; served with FastAPI in Docker.
+- Built an evaluation set of 300 real pull-request comments; precision of useful comments went from 41% to 68% after adding retrieval and a self-check step.
+- Used by 4 student project teams (about 25 developers) during the spring term.
+
+**Fine-tuned legal-clause classifier** · Sep 2025 – Dec 2025 · (github.com/candidate/clause-classifier)
+- LoRA fine-tune of a 1B-parameter model with PyTorch and Hugging Face on a public contract dataset; macro-F1 0.81 vs 0.72 for a prompted baseline, at one-tenth the inference cost.
+
+**Course-notes RAG assistant** · Mar 2025 – May 2025 · (github.com/candidate/notes-rag)
+- Embeddings and vector search over 900 pages of lecture notes; measured retrieval hit-rate@5 (0.84) and documented failure cases on tables and formulas.
+
+**Bay Area AI Hackathon 2025** — 1st place, "Best use of retrieval" · Nov 2025
+- Team of 4; built a voice assistant that answers questions about city permits from public documents.
+
+**Skills**
+Python, PyTorch, Hugging Face, FastAPI, Docker, Git, LangGraph, PostgreSQL, RAG, LLM evaluation, fine-tuning
+
+--- LinkedIn profile ---
+Candidate A
+CS (AI) graduate, Bayview State University
+San Jose, California
+
+Education
+- Bayview State University, B.S. Computer Science, 2022 – 2026
+
+Projects
+- ReviewBot — LLM code-review assistant (2026)
+- Fine-tuned legal-clause classifier (2025)
+
+Honors & awards
+- 1st place, "Best use of retrieval", Bay Area AI Hackathon 2025
+
+Skills: Python, PyTorch, LLMs, RAG, FastAPI
+
+--- GitHub (public repositories) ---
+- reviewbot: LLM code-review assistant with retrieval over style guides (Python, Dockerfile; own repository; commits by candidate: 141; last updated 2026-05)
+  README: GitHub app that reviews pull requests. Retrieves relevant style-guide sections and past review comments, drafts comments, then runs a self-check. Includes an evaluation set of 300 labeled comments and a script that reports precision of useful comments.
+- clause-classifier: LoRA fine-tune for contract clause classification (Python, Jupyter Notebook; own repository; commits by candidate: 38; last updated 2025-12)
+  README: Fine-tunes a 1B-parameter model with LoRA. Compares macro-F1 and cost with a prompted baseline.
+- notes-rag: RAG over course notes with retrieval metrics (Python; own repository; commits by candidate: 27; last updated 2025-05)
+  README: Chunking, embeddings and vector search over lecture notes. Reports hit-rate@5 and lists failure cases.
+- permit-voice-assistant: Hackathon winner: voice Q&A over city permit documents (Python, TypeScript; own repository; commits by candidate: 22; last updated 2025-11)
+  README: Bay Area AI Hackathon 2025, team of 4. Speech-to-text, retrieval over permit PDFs, spoken answers with citations.
+
+--- References submitted ---
+- Relationship: supervisor. Statement: "I supervised the candidate's senior project, ReviewBot. He built the evaluation set himself and used it to decide every design change."
+
+=== CANDIDATE B ===
+
+--- Resume ---
+**Candidate B**
+AI Engineer · candidate@example.com · Seattle, WA · github.com/candidate
+
+**Experience**
+
+**AI Engineer** — Quillstack, Seattle, WA · Mar 2024 – Present
+- Built and own the retrieval-augmented support assistant (embeddings, pgvector, reranker, Claude and open-weight models via a FastAPI service); it now resolves 38% of support tickets without a human, up from 0 at launch.
+- Designed the evaluation harness: 600 labeled question–answer pairs, automated groundedness and correctness checks, run on every prompt or model change in CI; caught 3 regressions before release.
+- Cut median response latency from 4.1 s to 1.6 s and model cost per answer by 45% by caching embeddings, batching retrieval and routing easy questions to a smaller model.
+- Fine-tuned a small classifier (LoRA on a 1B-parameter model, PyTorch + Hugging Face) for ticket routing; 92% accuracy vs 81% for the keyword rules it replaced.
+- Containerized the services with Docker and deploy to AWS (ECS); added latency and failure-rate monitoring.
+
+**Software Engineering Intern** — Pinecrest Software, Portland, OR · Jun 2023 – Sep 2023
+- Built REST endpoints in Python (Flask) for an internal reporting tool; wrote unit tests that raised coverage from 40% to 75%.
+
+**Projects**
+
+**rag-eval-kit** (github.com/candidate/rag-eval-kit)
+- Open-source toolkit for testing retrieval pipelines: test-set builder, retrieval hit-rate and answer groundedness metrics, CLI reports.
+
+**Education**
+B.S. Computer Science, Cascade Pacific University · 2023
+
+**Skills**
+Python, PyTorch, Hugging Face, LangGraph, FastAPI, Flask, Docker, AWS, PostgreSQL/pgvector, Git, RAG, LLM evaluation, fine-tuning
+
+**Certifications**
+Google Cloud Professional Machine Learning Engineer · 2025 · Credential ID GCP-PMLE-TEST-3391
+
+--- LinkedIn profile ---
+Candidate B
+AI Engineer at Quillstack
+Seattle, Washington
+
+Experience
+- AI Engineer, Quillstack · Mar 2024 – Present · Retrieval-augmented support assistant, evaluation and model serving.
+- Software Engineering Intern, Pinecrest Software · Jun 2023 – Sep 2023
+
+Education
+- Cascade Pacific University, B.S. Computer Science, 2019 – 2023
+
+Skills: Python, PyTorch, LLMs, RAG, Docker, AWS
+
+Licenses & certifications
+- Google Cloud Professional Machine Learning Engineer · Issued 2025 · Credential ID GCP-PMLE-TEST-3391
+
+--- GitHub (public repositories) ---
+- rag-eval-kit: Toolkit for testing retrieval-augmented generation pipelines (Python; own repository; commits by candidate: 112; last updated 2026-09)
+  README: Build a test set from your documents, measure retrieval hit-rate@k and answer groundedness, and get a CLI report you can run in CI. Works with any retriever that returns ranked chunks.
+- lora-ticket-router: LoRA fine-tuning example for text classification (Python, Jupyter Notebook; own repository; commits by candidate: 31; last updated 2025-08)
+  README: Fine-tunes a 1B-parameter model with LoRA for multi-class ticket routing on a public dataset. Reports accuracy, per-class F1 and inference cost.
+- dotfiles: Personal configuration (Shell; own repository; commits by candidate: 15; last updated 2026-01)
+
+--- Certifications submitted ---
+- Google Cloud Professional Machine Learning Engineer (Google Cloud, 2025-02; credential ID provided)
+
+--- References submitted ---
+- Relationship: manager. Statement: "the candidate is the engineer behind our support assistant. She designed the evaluation harness we now use for every AI feature, and she owns the service in production."
+
+=== CANDIDATE C ===
+
+--- Resume ---
+**Candidate C**
+candidate@example.com · Orlando, FL
+
+**Objective**
+Motivated IT professional seeking an AI engineer role.
+
+**Experience**
+
+**IT Support Technician** — Sunshine County Schools, Orlando, FL · Aug 2023 – Present
+- Reset passwords, set up laptops and fix printer issues for staff.
+- Keep the equipment inventory spreadsheet up to date.
+
+**Education**
+Online course: "Intro to Python and ChatGPT", 2025
+High school diploma, 2022
+
+**Projects**
+- Chatbot using the OpenAI API (tutorial).
+
+**Skills**
+Python (beginner), ChatGPT, Windows, Office 365, customer service
+
+(No LinkedIn, GitHub, portfolio, certifications or references provided.)
+
+=== CANDIDATE D ===
+
+--- Resume ---
+**Candidate D**
+AI Engineer | GenAI | LLM | Agentic AI Specialist · candidate@example.com · Austin, TX · github.com/candidate
+
+**Summary**
+Visionary AI engineer leveraging cutting-edge generative AI, large language models, autonomous agents and RAG to deliver transformative business solutions. Passionate about the future of AI.
+
+**Experience**
+
+**AI Developer (Freelance)** — Self-employed, Austin, TX · Feb 2024 – Present
+- Leveraged GenAI, LLMs, agents and RAG to deliver innovative AI solutions for clients.
+- Built AI chatbots and automation workflows using state-of-the-art frameworks.
+- Worked with prompt engineering, vector databases and fine-tuning.
+- Delivered end-to-end AI projects in an agile environment.
+
+**Customer Support Specialist** — Lonestar Telecom, Austin, TX · Mar 2022 – Jan 2024
+- Answered customer calls and emails about billing and service issues.
+
+**Education**
+Associate of Applied Science, Information Technology, Hill Country Community College · 2021
+
+**Skills**
+Generative AI, LLMs, GPT, Claude, Gemini, Llama, Mistral, LangChain, LangGraph, LlamaIndex, AutoGen, CrewAI, RAG, Agents, Prompt Engineering, Fine-tuning, LoRA, RLHF, Vector Databases, Pinecone, Weaviate, Chroma, FAISS, PyTorch, TensorFlow, Hugging Face, Transformers, Python, JavaScript, FastAPI, Docker, Kubernetes, AWS, Azure, GCP, MLOps, Computer Vision, NLP, Deep Learning
+
+--- LinkedIn profile ---
+Candidate D
+AI Engineer | GenAI | LLM | Agentic AI Specialist
+Austin, Texas
+
+Experience
+- AI Developer (Freelance) · Feb 2024 – Present
+- Customer Support Specialist, Lonestar Telecom · Mar 2022 – Jan 2024
+
+Education
+- Hill Country Community College, A.A.S. Information Technology, 2019 – 2021
+
+Skills: Generative AI, LLMs, Prompt Engineering, LangChain
+
+--- GitHub (public repositories) ---
+- langchain: Fork of LangChain (Python; fork of another project; commits by candidate: 0; last updated 2024-06)
+- llama_index: Fork of LlamaIndex (Python; fork of another project; commits by candidate: 0; last updated 2024-07)
+- awesome-llm-apps: Fork of a curated list (Python; fork of another project; commits by candidate: 0; last updated 2024-09)
+- pdf-chatbot: Chat with your PDF (Python; own repository; commits by candidate: 4; last updated 2024-04)
+  README: Chat with a PDF using LangChain and OpenAI. Based on a YouTube tutorial. Run: pip install -r requirements.txt, then streamlit run app.py.
+
+=== CANDIDATE E ===
+
+--- Resume ---
+**Candidate E**
+Backend Software Engineer → AI Engineer · candidate@example.com · Atlanta, GA · github.com/candidate
+
+**Experience**
+
+**Software Engineer II** — Harbor Payments, Atlanta, GA · Jan 2023 – Present
+- Own the payout-scheduling service (Python, FastAPI, PostgreSQL) handling 1.5M payouts a day; led its redesign that reduced failed payouts by 30%.
+- Built an internal prototype that uses an LLM to classify and route merchant support tickets; tested on 2,000 past tickets it matched the human routing 84% of the time. Presented it to the support leadership team; it is now in a pilot.
+- Run the team's on-call rotation and incident reviews; reduced p95 API latency from 420 ms to 180 ms.
+- Containerized services with Docker and moved them to Kubernetes on AWS.
+
+**Software Engineer I** — Harbor Payments, Atlanta, GA · Jul 2021 – Dec 2022
+- Built REST APIs for merchant onboarding; wrote integration tests and CI pipelines.
+
+**Education**
+B.S. Computer Engineering, Peachtree Technical University · 2021
+
+**Projects**
+
+**Local LLM document Q&A** · Jun 2026 – Aug 2026 · (github.com/candidate/doc-qa)
+- Retrieval over a folder of PDFs with a locally hosted open-weight model; compared two chunking strategies on 50 hand-written questions.
+
+**Skills**
+Python, FastAPI, PostgreSQL, Docker, Kubernetes, AWS, Git, REST APIs, CI/CD, LLM APIs, RAG (learning), PyTorch (learning)
+
+--- LinkedIn profile ---
+Candidate E
+Software Engineer II at Harbor Payments
+Atlanta, Georgia
+
+Experience
+- Software Engineer II, Harbor Payments · Jan 2023 – Present · Payout scheduling, LLM ticket-routing prototype.
+- Software Engineer I, Harbor Payments · Jul 2021 – Dec 2022
+
+Education
+- Peachtree Technical University, B.S. Computer Engineering, 2017 – 2021
+
+Skills: Python, Distributed Systems, AWS, Kubernetes, LLMs
+
+--- GitHub (public repositories) ---
+- doc-qa: Document Q&A with a local open-weight model (Python; own repository; commits by candidate: 19; last updated 2026-08)
+  README: Indexes a folder of PDFs, retrieves chunks and answers with a locally hosted model. Compares fixed-size and heading-based chunking on 50 hand-written questions (answer accuracy 62% vs 74%).
+- rate-limiter: Token-bucket rate limiter for FastAPI (Python; own repository; commits by candidate: 23; last updated 2024-03)
+  README: Middleware with Redis-backed token buckets. Benchmarks included.
+
+--- References submitted ---
+- Relationship: manager. Statement: "the candidate is one of our strongest backend engineers. She built the LLM ticket-routing prototype on her own initiative, and it is now in a pilot with our support team."
+
+Now give your answer in the required format.

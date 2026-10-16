@@ -1,0 +1,25 @@
+# Junior Data Scientist
+Quillmetrics · Full-time
+
+What you'll do
+
+- Own product analytics for our onboarding funnel.
+- Run experiments with the growth team.
+
+Requirements
+
+- 0-2 years of experience; strong projects count.
+- SQL.
+- Python.
+- Experimentation and A/B testing.
+
+Nice to have
+
+- Experience with Amplitude or Mixpanel.
+
+What we offer
+
+- Salary range $100,000–$130,000 plus equity.
+- Health, dental and vision coverage.
+
+Quillmetrics is an equal opportunity employer. Fictional posting for RightStaff tests.

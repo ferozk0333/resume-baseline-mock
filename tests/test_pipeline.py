@@ -188,9 +188,9 @@ def test_failing_judgment_makes_subcategory_error_and_run_continues(db_path):
 def test_one_failed_bullet_keeps_subcategory_scored(db_path):
     failed = []
 
-    def script(q, c):
-        if q == "ownership" and not failed:
-            failed.append(c["_subject_id"])
+    def script(q, c):                       # one bullet's ownership always fails (grouped call and solo ask)
+        if q == "ownership" and (not failed or c["_subject_id"] == failed[0]):
+            failed[:1] = [c["_subject_id"]]
             return RuntimeError("one bullet failed")
         return best(q, c)
 

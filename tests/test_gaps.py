@@ -267,7 +267,11 @@ def test_pipeline_ranks_gaps_and_writes_plan(tmp_path):
     planner = ScriptedPlanner(plan(act(addresses=["applied_knowledge"])), plan(act(title="Again",
                                                                                     addresses=["applied_knowledge"])))
     res = Pipeline(Deps(path, judge, today=TODAY, planner=planner)).score(cid, DS)
-    assert res["plan_error"] is None and "Churn experiment project" in res["plan_markdown"]
+    # Finish late (specs/09 §2.6): the score comes back first; the plan is written in the background.
+    assert res["final"] is not None and res["plan_status"] == "generating" and res["plan_markdown"] is None
+    written = Pipeline.wait_for_plan(res["run_id"])
+    assert written.error is None and "Churn experiment project" in written.markdown
+    assert c.execute("SELECT plan_status FROM runs WHERE id = ?", (res["run_id"],)).fetchone()[0] == "ready"
     assert res["ranked_gaps"] and all(g["gain_text"].startswith("up to ") for g in res["ranked_gaps"])
     w = config.default_weights()
     w["dimensions"]["authority"] = 0

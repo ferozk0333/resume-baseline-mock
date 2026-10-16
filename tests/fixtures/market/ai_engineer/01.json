@@ -1,0 +1,99 @@
+{
+ "company": "Lumenfield",
+ "tier": "large",
+ "title": "Machine Learning Engineer I",
+ "posted_at": "2026-09-02",
+ "labelled_by": "hand",
+ "extraction": {
+  "status": "ok",
+  "model": "hand-labelled",
+  "details": {
+   "title": "Machine Learning Engineer I",
+   "company": "Lumenfield",
+   "level": "entry",
+   "min_years": 1.0
+  },
+  "detail_quotes": {
+   "min_years": "1+ years of experience writing production Python."
+  },
+  "requirements": [
+   {
+    "name": "Python",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "1+ years of experience writing production Python."
+   },
+   {
+    "name": "LLM application development",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experience building applications on large language models."
+   },
+   {
+    "name": "Retrieval-augmented generation",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experience with retrieval-augmented generation and vector search."
+   },
+   {
+    "name": "Model evaluation",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Solid understanding of model evaluation metrics."
+   },
+   {
+    "name": "Git",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Comfortable with Git and code review."
+   },
+   {
+    "name": "PyTorch",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Experience with PyTorch."
+   },
+   {
+    "name": "Docker",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Familiarity with Docker and Kubernetes."
+   },
+   {
+    "name": "Kubernetes",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Familiarity with Docker and Kubernetes."
+   }
+  ],
+  "responsibilities": [
+   {
+    "text": "Ship LLM-backed features for our search product.",
+    "quote": "Ship LLM-backed features for our search product."
+   },
+   {
+    "text": "Work with product and design to define evaluation criteria.",
+    "quote": "Work with product and design to define evaluation criteria."
+   },
+   {
+    "text": "Own a retrieval service end to end.",
+    "quote": "Own a retrieval service end to end."
+   }
+  ],
+  "good": {
+   "expected_reach": 3
+  },
+  "good_quotes": {
+   "expected_reach": "Own a retrieval service end to end."
+  },
+  "dropped": []
+ }
+}

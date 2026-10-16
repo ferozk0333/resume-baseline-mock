@@ -1,0 +1,88 @@
+{
+ "company": "Lumenfield",
+ "tier": "large",
+ "title": "Data Scientist, Product",
+ "posted_at": "2026-08-28",
+ "labelled_by": "hand",
+ "extraction": {
+  "status": "ok",
+  "model": "hand-labelled",
+  "details": {
+   "title": "Data Scientist, Product",
+   "company": "Lumenfield",
+   "level": "entry",
+   "min_years": 1.0
+  },
+  "detail_quotes": {
+   "min_years": "1+ years of experience in analytics or data science."
+  },
+  "requirements": [
+   {
+    "name": "SQL",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Advanced SQL."
+   },
+   {
+    "name": "Python",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Proficiency in Python with pandas."
+   },
+   {
+    "name": "pandas",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Proficiency in Python with pandas."
+   },
+   {
+    "name": "Experimentation / A/B testing",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experience designing and analyzing A/B tests."
+   },
+   {
+    "name": "Statistical analysis",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Strong statistics: hypothesis testing and regression."
+   },
+   {
+    "name": "Causal inference",
+    "kind": "skill",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Experience with causal inference methods."
+   },
+   {
+    "name": "BI tool",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Tableau or Looker."
+   }
+  ],
+  "responsibilities": [
+   {
+    "text": "Design and analyze A/B tests for consumer features.",
+    "quote": "Design and analyze A/B tests for consumer features."
+   },
+   {
+    "text": "Partner with product and engineering on metrics.",
+    "quote": "Partner with product and engineering on metrics."
+   }
+  ],
+  "good": {
+   "expected_reach": 3
+  },
+  "good_quotes": {
+   "expected_reach": "Partner with product and engineering on metrics."
+  },
+  "dropped": []
+ }
+}

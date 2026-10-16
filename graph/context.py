@@ -13,11 +13,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
 
-from core import config, db
+from core import config, db, timing
 from core.models import Baseline
 from extraction import store
 from extraction.records import Profile, ProjectRec, RoleRec
-from judges.base import Judge, Judgment
+from judges.base import Judge, Judgment, render_context
 from judges.questions import QUESTIONS
 from judges.service import JudgmentService
 from scoring import formulas as f
@@ -32,9 +32,13 @@ class Deps:
     github_client: object | None = None
     portfolio_session: object | None = None
     today: date | None = None
-    max_parallel_calls: int = config.MAX_PARALLEL_JUDGE_CALLS
+    max_parallel_calls: int = config.JUDGE_CONCURRENCY    # shared by every subgraph of a run
     claude_judge: Judge | None = None         # for asks that need a quote; default: the judge's Claude fallback
     planner: object | None = None             # StructuredLLM for the improvement plan; None = ranked gaps only
+    writer: object | None = None              # StructuredLLM for recruiter email drafts; None = code templates
+    job_llm: object | None = None             # StructuredLLM for reading job descriptions; None = manual form
+    plan_in_background: bool = True           # return the score first, write the plan after (specs/09 §2.6)
+    extraction_cache: bool = False            # reuse saved extraction outputs for identical documents (app: on)
     _sem: threading.BoundedSemaphore = field(init=False, repr=False)
 
     def __post_init__(self):
@@ -205,8 +209,73 @@ def open_ctx(deps: Deps, state: dict, *, with_relevance: bool = True):
         conn.close()
 
 
+# Question families whose unmatched criteria go to Claude in one call per candidate and baseline (specs/09 §2.2).
+BATCH_KEYS = {"skill_evidence", "applied_level", "tool_evidence"}
+
+
+def _batched(ctx: Ctx, asks: list[Ask]) -> dict[tuple[str, str], Judgment | None]:
+    """Judge the not-yet-saved Claude-routed criteria of each batchable question in one call."""
+    groups: dict[str, list[Ask]] = {}
+    for a in asks:
+        if a.key in BATCH_KEYS and a.route == "claude" and a.require_quote and a.rule_label is None:
+            groups.setdefault(a.key, []).append(a)
+    found: dict[tuple[str, str], Judgment | None] = {}
+    judge = ctx.deps.claude_judge
+    if not hasattr(judge, "batch"):
+        return found
+    for key, group in groups.items():
+        baseline = ctx.baseline if QUESTIONS[key].job_dependent else None
+        misses = [a for a in group if ctx.svc.cached(a.key, a.subject_id, a.context, baseline, judge) is None]
+        if len(misses) < 2:
+            continue
+        with ctx.deps._sem:
+            got = ctx.svc.ask_batch(key, misses[0].subject_type, [(a.subject_id, a.context) for a in misses],
+                                    baseline, judge)
+        found.update({(key, sid): j for sid, j in got.items()})
+    return found
+
+
+def _grouped(ctx: Ctx, asks: list[Ask]) -> dict[tuple[str, str], Judgment | None]:
+    """Questions about the same subject with the same context, asked in one judge call (specs/09 §2.3)."""
+    judge = ctx.deps.judge
+    if not hasattr(judge, "group"):
+        return {}
+    only = getattr(judge, "CLAUDE_ONLY", set())
+    groups: dict[tuple[str, str], list[Ask]] = {}
+    for a in asks:
+        if a.rule_label is None and a.route is None and a.key not in only:
+            groups.setdefault((a.subject_id, render_context(a.context)), []).append(a)
+    work = []
+    for group in groups.values():
+        misses = []
+        for a in group:
+            baseline = ctx.baseline if QUESTIONS[a.key].job_dependent else None
+            if ctx.svc.cached(a.key, a.subject_id, a.context, baseline) is None:
+                misses.append(a)
+        if len(misses) >= 2 and len({QUESTIONS[a.key].job_dependent for a in misses}) == 1:
+            work.append(misses)
+
+    def run(misses: list[Ask]) -> dict:
+        a = misses[0]
+        baseline = ctx.baseline if QUESTIONS[a.key].job_dependent else None
+        with ctx.deps._sem:
+            got = ctx.svc.ask_group([m.key for m in misses], a.subject_type, a.subject_id, a.context, baseline)
+        return {(k, a.subject_id): j for k, j in got.items()}
+
+    found: dict[tuple[str, str], Judgment | None] = {}
+    if len(work) > 1:
+        with ThreadPoolExecutor(max_workers=ctx.deps.max_parallel_calls) as pool:
+            for part in pool.map(timing.bind(run), work):
+                found.update(part)
+    else:
+        for misses in work:
+            found.update(run(misses))
+    return found
+
+
 def resolve(ctx: Ctx, asks: list[Ask], *, call: bool) -> Labels:
     """call=True: judge (cache first, parallel, bounded). call=False: read saved judgments only, never a model."""
+    batched = {**_batched(ctx, asks), **_grouped(ctx, asks)} if call else {}
 
     def one(a: Ask) -> tuple[tuple[str, str], Judgment | None]:
         baseline = ctx.baseline if QUESTIONS[a.key].job_dependent else None
@@ -216,6 +285,8 @@ def resolve(ctx: Ctx, asks: list[Ask], *, call: bool) -> Labels:
                                                            a.context, baseline, a.rule_reason)
             return (a.key, a.subject_id), Judgment(label=a.rule_label, reasoning=a.rule_reason, method="rule",
                                                    model_version="rule")
+        if (a.key, a.subject_id) in batched:
+            return (a.key, a.subject_id), batched[(a.key, a.subject_id)]
         judge = ctx.deps.claude_judge if a.route == "claude" else None
         if not call:
             return (a.key, a.subject_id), ctx.svc.cached(a.key, a.subject_id, a.context, baseline, judge)
@@ -225,7 +296,7 @@ def resolve(ctx: Ctx, asks: list[Ask], *, call: bool) -> Labels:
 
     if call and len(asks) > 1:
         with ThreadPoolExecutor(max_workers=ctx.deps.max_parallel_calls) as pool:
-            found = dict(pool.map(one, asks))
+            found = dict(pool.map(timing.bind(one), asks))
     else:
         found = dict(map(one, asks))
     return Labels(found, asks)

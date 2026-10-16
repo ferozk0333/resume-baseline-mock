@@ -17,7 +17,7 @@ import logging
 import sqlite3
 import threading
 
-from core import config
+from core import config, timing
 from core.db import new_id, now_iso
 from core.models import Baseline
 from judges.base import Judge, Judgment, JudgeError, ask, question, render_context
@@ -25,6 +25,13 @@ from judges.base import Judge, Judgment, JudgeError, ask, question, render_conte
 log = logging.getLogger(__name__)
 
 RULE_MODEL = f"rule-{config.LOGIC_VERSION}"
+
+
+# Single flight (specs/09 §2.6): a judgment being asked right now (e.g. by the early-start job during
+# review) is awaited rather than asked again, so overlapping work never pays twice.
+_INFLIGHT: dict[tuple, threading.Event] = {}
+_INFLIGHT_LOCK = threading.Lock()
+INFLIGHT_WAIT_SECONDS = 180
 
 
 def input_hash(key: str, context: dict) -> str:
@@ -70,6 +77,25 @@ class JudgmentService:
             confidence=row["confidence"], score=row["score"],
         )
 
+    def _flight(self, key: str, subject_id: str, context: dict, baseline: Baseline | None) -> tuple:
+        return (self.candidate_id, subject_id, key, *self._scope(key, baseline), input_hash(key, context))
+
+    @staticmethod
+    def claim(flight: tuple) -> threading.Event | None:
+        """None: the caller now owns this judgment and must release() it. An Event: another thread is asking."""
+        with _INFLIGHT_LOCK:
+            event = _INFLIGHT.get(flight)
+            if event is None:
+                _INFLIGHT[flight] = threading.Event()
+            return event
+
+    @staticmethod
+    def release(flight: tuple) -> None:
+        with _INFLIGHT_LOCK:
+            event = _INFLIGHT.pop(flight, None)
+        if event is not None:
+            event.set()
+
     def cached(self, key: str, subject_id: str, context: dict, baseline: Baseline | None = None,
                judge: Judge | None = None) -> Judgment | None:
         """Saved judgment for exactly this input, from a model the judge would use (or a rule). No model call."""
@@ -78,7 +104,11 @@ class JudgmentService:
     def _call(self, judge: Judge, key: str, subject_id: str, context: dict) -> Judgment:
         with self._lock:
             self.calls += 1
-        return ask(judge, question(key), {**context, "_subject_id": subject_id})
+        with timing.span(timing.JUDGE, key) as t:
+            judgment = ask(judge, question(key), {**context, "_subject_id": subject_id})
+            t.update(method=judgment.method, model=judgment.model_version,
+                     fallback=judgment.fallback_from is not None)
+        return judgment
 
     def ask(self, key: str, subject_type: str, subject_id: str, context: dict,
             baseline: Baseline | None = None, *, judge: Judge | None = None,
@@ -95,6 +125,23 @@ class JudgmentService:
             with self._lock:
                 self.cache_hits += 1
             return hit
+        flight = self._flight(key, subject_id, context, baseline)
+        busy = self.claim(flight)
+        if busy is not None:                      # someone is asking this right now: use their answer
+            busy.wait(INFLIGHT_WAIT_SECONDS)
+            hit = self.cached(key, subject_id, context, baseline, judge)
+            if hit is not None:
+                with self._lock:
+                    self.cache_hits += 1
+                return hit
+            return self._ask(key, subject_type, subject_id, context, baseline, judge, require_quote)
+        try:
+            return self._ask(key, subject_type, subject_id, context, baseline, judge, require_quote)
+        finally:
+            self.release(flight)
+
+    def _ask(self, key: str, subject_type: str, subject_id: str, context: dict, baseline: Baseline | None,
+             judge: Judge, require_quote: bool) -> Judgment | None:
         q = question(key)
         try:
             judgment = self._call(judge, key, subject_id, context)
@@ -122,6 +169,108 @@ class JudgmentService:
             return None
         if judgment.fallback_from is not None:
             self._save(key, subject_type, subject_id, judgment.fallback_from, context, baseline, used=False)
+        self._save(key, subject_type, subject_id, judgment, context, baseline, used=True)
+        return judgment
+
+    def ask_group(self, keys: list[str], subject_type: str, subject_id: str, context: dict,
+                  baseline: Baseline | None) -> dict[str, Judgment | None]:
+        """Several questions about one subject in one judge call (specs/09 §2.3). Each answer is saved as
+        its own row with the same cache key as a single ask; fallbacks and failures are per question."""
+        flights = {k: self._flight(k, subject_id, context, baseline) for k in keys}
+        keys = [k for k in keys if self.claim(flights[k]) is None]     # the rest are being asked elsewhere
+        if not keys:
+            return {}
+        try:
+            return self._ask_group(keys, subject_type, subject_id, context, baseline)
+        finally:
+            for k in keys:
+                self.release(flights[k])
+
+    def _ask_group(self, keys: list[str], subject_type: str, subject_id: str, context: dict,
+                   baseline: Baseline | None) -> dict[str, Judgment | None]:
+        with self._lock:
+            self.calls += 1
+        with timing.span(timing.JUDGE, "+".join(keys), group=len(keys)) as t:
+            answers = self.judge.group(keys, {**context, "_subject_id": subject_id})
+            t.update(method="group", fallbacks=sum(1 for a in answers.values()
+                                                   if isinstance(a, Judgment) and a.fallback_from is not None))
+        out: dict[str, Judgment | None] = {}
+        for key in keys:
+            j = answers.get(key)
+            if isinstance(j, Judgment):
+                if j.fallback_from is not None:
+                    self._save(key, subject_type, subject_id, j.fallback_from, context, baseline, used=False)
+                self._save(key, subject_type, subject_id, j, context, baseline, used=True)
+                out[key] = j
+                continue
+            exc = j if isinstance(j, JudgeError) else JudgeError("no answer in the grouped call")
+            msg = f"{key} for {subject_type} {subject_id}: {exc}"
+            log.warning("judgment failed: %s", msg)
+            with self._lock:
+                self.errors.append(msg)
+            if exc.discarded is not None:
+                self._save(key, subject_type, subject_id, exc.discarded, context, baseline, used=False)
+            out[key] = None
+        return out
+
+    def ask_batch(self, key: str, subject_type: str, items: list[tuple[str, dict]], baseline: Baseline | None,
+                  judge: Judge) -> dict[str, Judgment | None]:
+        """Several criteria in one call (specs/09 §2.2), each saved as its own row with its own cache key.
+
+        Same rules as ask(require_quote=True): a label above the none-option needs a quote found in the
+        input. A criterion that fails the check (or that the batch left out) is retried alone once; if it
+        still fails, it is recorded as the none-option by rule. Failed answers are kept as not used.
+        """
+        flights = {sid: self._flight(key, sid, ctx, baseline) for sid, ctx in items}
+        items = [(sid, ctx) for sid, ctx in items if self.claim(flights[sid]) is None]
+        if not items:
+            return {}
+        try:
+            return self._ask_batch(key, subject_type, items, baseline, judge)
+        finally:
+            for sid, _ in items:
+                self.release(flights[sid])
+
+    def _ask_batch(self, key: str, subject_type: str, items: list[tuple[str, dict]], baseline: Baseline | None,
+                   judge: Judge) -> dict[str, Judgment | None]:
+        q = question(key)
+        with self._lock:
+            self.calls += 1
+        try:
+            with timing.span(timing.JUDGE, key, batch=len(items)) as t:
+                answers = judge.batch(key, [{**ctx, "_subject_id": sid} for sid, ctx in items])
+                t.update(method="batch", model=next((a.model_version for a in answers if a), None))
+        except JudgeError as exc:
+            log.warning("batched %s failed, asking each criterion alone: %s", key, exc)
+            answers = [None] * len(items)
+        out: dict[str, Judgment | None] = {}
+        for (sid, ctx), j in zip(items, answers):
+            if j is not None and (j.label == q.none_option or j.quote):
+                self._save(key, subject_type, sid, j, ctx, baseline, used=True)
+                out[sid] = j
+            else:
+                out[sid] = self._solo_retry(key, subject_type, sid, ctx, baseline, judge, [j] if j else [])
+        return out
+
+    def _solo_retry(self, key: str, subject_type: str, subject_id: str, context: dict, baseline: Baseline | None,
+                    judge: Judge, unsupported: list[Judgment]) -> Judgment | None:
+        q = question(key)
+        try:
+            judgment = self._call(judge, key, subject_id, context)
+        except JudgeError as exc:
+            for u in unsupported:
+                self._save(key, subject_type, subject_id, u, context, baseline, used=False)
+            with self._lock:
+                self.errors.append(f"{key} for {subject_type} {subject_id}: {exc}")
+            return None
+        if judgment.label != q.none_option and not judgment.quote:
+            unsupported.append(judgment)
+            judgment = Judgment(label=q.none_option, method="rule", model_version=RULE_MODEL,
+                                reasoning=f"{unsupported[-1].method} labelled it '{unsupported[-1].label}' without a "
+                                          f"quote found in the input, in the batch and alone, so it counts as "
+                                          f"{q.none_option}.")
+        for u in unsupported:
+            self._save(key, subject_type, subject_id, u, context, baseline, used=False)
         self._save(key, subject_type, subject_id, judgment, context, baseline, used=True)
         return judgment
 
@@ -172,12 +321,14 @@ def clear_judgments(conn: sqlite3.Connection, candidate_id: str, baseline_id: st
 def judge_models() -> dict:
     """Model settings recorded on every run."""
     return {
+        "llm_provider": config.LLM_PROVIDER,          # provider for the roles below that are not Jev
         "judge": config.JUDGE,
         "jev_model": config.JEV_MODEL if config.JUDGE == "jev" else None,
         "jev_confidence_threshold": config.JEV_CONFIDENCE_THRESHOLD if config.JUDGE == "jev" else None,
         "judge_fallback_model": config.JUDGE_FALLBACK_MODEL,
         "complexity_model": config.COMPLEXITY_MODEL,
         "extract_model": config.EXTRACT_MODEL,
+        "plan_model": config.REASONING_MODEL,
     }
 
 

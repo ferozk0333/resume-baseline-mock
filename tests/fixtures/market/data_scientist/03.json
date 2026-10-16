@@ -1,0 +1,67 @@
+{
+ "company": "Quillmetrics",
+ "tier": "startup",
+ "title": "Junior Data Scientist",
+ "posted_at": "2026-10-03",
+ "labelled_by": "hand",
+ "extraction": {
+  "status": "ok",
+  "model": "hand-labelled",
+  "details": {
+   "title": "Junior Data Scientist",
+   "company": "Quillmetrics",
+   "level": "entry",
+   "min_years": 0.0
+  },
+  "detail_quotes": {
+   "min_years": "0-2 years of experience; strong projects count."
+  },
+  "requirements": [
+   {
+    "name": "SQL",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "SQL."
+   },
+   {
+    "name": "Python",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Python."
+   },
+   {
+    "name": "Experimentation / A/B testing",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experimentation and A/B testing."
+   },
+   {
+    "name": "Product analytics tool",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Experience with Amplitude or Mixpanel."
+   }
+  ],
+  "responsibilities": [
+   {
+    "text": "Own product analytics for our onboarding funnel.",
+    "quote": "Own product analytics for our onboarding funnel."
+   },
+   {
+    "text": "Run experiments with the growth team.",
+    "quote": "Run experiments with the growth team."
+   }
+  ],
+  "good": {
+   "expected_reach": 2
+  },
+  "good_quotes": {
+   "expected_reach": "Run experiments with the growth team."
+  },
+  "dropped": []
+ }
+}
