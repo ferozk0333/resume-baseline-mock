@@ -236,7 +236,7 @@ class GroqLLM:
         return min(current_budget(self.max_tokens), tpm - est_input)
 
     def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
-        from core.routing import LIMITER, Overloaded, Throttled, Unusable, parse_duration
+        from core.routing import LIMITER, Overloaded, Throttled, Unusable, current_timeout, parse_duration
         if self._real:
             require_live("Groq")
         if not self.api_key:
@@ -253,7 +253,8 @@ class GroqLLM:
             body["reasoning_effort"] = self.effort
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         try:
-            resp = self.session.post(config.GROQ_URL, json=body, headers=headers, timeout=config.GROQ_TIMEOUT_S)
+            resp = self.session.post(config.GROQ_URL, json=body, headers=headers,
+                                     timeout=current_timeout(config.GROQ_TIMEOUT_S))
         except requests.RequestException as exc:
             raise Overloaded(f"{model}: no answer ({exc.__class__.__name__})") from exc
         LIMITER.observe_headers(model, resp.headers or {})
@@ -376,7 +377,7 @@ class GeminiLLM:
         return "PerDay" in text or "per day" in text.lower()
 
     def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
-        from core.routing import Overloaded, Throttled, Unusable, current_budget
+        from core.routing import Overloaded, Throttled, Unusable, current_budget, current_timeout
         if self._real:
             require_live("Gemini")
         if not self.api_key:
@@ -391,7 +392,8 @@ class GeminiLLM:
                 "contents": [{"role": "user", "parts": [{"text": user}]}], "generationConfig": gen}
         try:
             resp = self.session.post(config.GEMINI_URL.format(model=name), json=body,
-                                     headers={"x-goog-api-key": self.api_key}, timeout=(10, config.GEMINI_TIMEOUT_S))
+                                     headers={"x-goog-api-key": self.api_key},
+                                     timeout=(10, current_timeout(config.GEMINI_TIMEOUT_S)))
             data = resp.json() if resp.text else {}
         except requests.RequestException as exc:          # timeouts on a busy free tier: the next model takes it
             timing.count("gemini_overloaded")

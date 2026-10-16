@@ -299,7 +299,7 @@ def test_answer_budget_per_task(env, monkeypatch):
     assert config.grouped_budget(40) == 4096                                       # capped
 
 
-def test_web_pages_get_a_smaller_budget_than_documents(env, monkeypatch):
+def test_web_pages_and_documents_use_their_task_budgets(env, monkeypatch):
     from extraction import extract as ex
     from extraction.validate import SourceDoc
     from tests.test_gemini import ok
@@ -309,7 +309,8 @@ def test_web_pages_get_a_smaller_budget_than_documents(env, monkeypatch):
     monkeypatch.setattr(config, "EXTRACT_MODEL", A)
     ex.extract_document(SourceDoc("e1", "github_repo", "readme text", "README"), llm)
     ex.extract_document(SourceDoc("e2", "resume", "resume text", "Resume"), llm)
-    assert [b["generationConfig"]["maxOutputTokens"] for b in session.bodies] == [4096, config.EXTRACT_MAX_TOKENS]
+    assert [b["generationConfig"]["maxOutputTokens"] for b in session.bodies] == [
+        config.TASK_MAX_TOKENS["extract_web"], config.EXTRACT_MAX_TOKENS]
 
 
 def test_groq_budget_is_the_task_budget_within_its_token_limit():
@@ -338,3 +339,46 @@ def test_a_routed_call_makes_one_attempt_per_model(env):
     with pytest.raises(LLMError, match="no valid answer from two models"):
         llm.parse(model="route:judge_single", system="S", user="U", output_type=Out)
     assert len(session.bodies) == 2                                               # A once, B once (no same-model retry)
+
+
+# --- Fixes after live run 1 -----------------------------------------------------------------------------------------
+
+def test_document_reading_gets_a_longer_timeout_than_a_question(env, monkeypatch):
+    from core.llm import GeminiLLM
+    from tests.test_gemini import Session, ok
+    session = Session(ok({"label": "x"}), ok({"label": "y"}))
+    client = GeminiLLM(session=session, api_key="k")
+    r = Router(lambda m: client, limiter=env.lim, sleep=env.sleep, clock=env.clock)
+    monkeypatch.setitem(config.ROUTES, "extract_document", [A])
+    r.parse(model="route:extract_document", system="S", user="U", output_type=Out)
+    r.parse(model="route:judge_single", system="S", user="U", output_type=Out)
+    assert session.timeouts == [(10, 180.0), (10, config.GEMINI_TIMEOUT_S)]
+    assert "gemini/gemini-2.5-flash" not in config.ROUTES["extract_document"]
+
+
+def test_a_model_that_rejects_the_request_rests_instead_of_costing_every_call_an_attempt(env):
+    s = Script(**{A: [Unusable("HTTP 400: Thinking level is not supported for this model."), Out(label=A)]})
+    r = router(env, s)
+    assert ask(r).label == B and ask(r).label == B
+    assert s.calls.count(A) == 1                                       # not asked again for an hour
+    env.clock.t += config.UNUSABLE_REST_S + 1
+    assert ask(r).label == A                                           # rested: back in use
+
+
+def test_gemini_usage_rows_keep_the_bare_model_name(env):
+    s = Script()
+    ask(router(env, s))
+    conn = db.connect(env.path)
+    assert conn.execute("SELECT model FROM provider_usage").fetchone()[0] == "gemini-3.5-flash-lite"
+
+
+def test_candidates_never_see_model_or_provider_details():
+    from backend.candidate import BUSY_TEXT, public_error
+    assert public_error("extract_document: no model could answer after 4 attempt(s): gemini/gemini-3-flash-preview: "
+                        "HTTP 503") == BUSY_TEXT
+    assert public_error("extract_web: no valid answer from two models (gemini/gemini-3.5-flash-lite output was cut "
+                        "off at max_tokens)") == BUSY_TEXT
+    scanned = "This PDF has no text layer (it looks like a scan). Upload a text PDF or a DOCX."
+    assert public_error(scanned) == scanned
+    daily = "Daily free-tier limit reached for every model that can do this step (reading documents). Try later."
+    assert public_error(daily) == daily

@@ -533,6 +533,14 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         tasks.submit(task_id, work)
         return {"task_id": task_id}
 
+    def public_warning(e: dict) -> str:
+        """A failed source as the candidate sees it on Review: never model or provider details."""
+        from backend import candidate as cx
+        label = {"resume": "Resume", "linkedin_pdf": "LinkedIn PDF", "portfolio": "Portfolio",
+                 "github_repo": "GitHub repo"}.get(e["type"], e["type"])
+        text = cx.public_error(e["error"])
+        return text if text.lower().startswith(label.lower()) else f"{label}: {text}"
+
     @app.get("/candidates/{candidate_id}/profile", tags=["candidates"])
     def get_profile(candidate_id: str):
         with conn() as c:
@@ -548,7 +556,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 "candidate": cand,
                 "profile": data,
                 "dropped": store.list_dropped(c, candidate_id),
-                "warnings": [e["error"] for e in evidence if e["status"] == "failed" and e["error"]],
+                "warnings": [public_warning(e) for e in evidence if e["status"] == "failed" and e["error"]],
                 "sources": [{"id": e["id"], "type": e["type"], "status": e["status"], "text": e["raw_text"]}
                             for e in evidence if e["type"] in ("resume", "linkedin_pdf", "portfolio")],
                 "media_links": media.list_links(c, candidate_id),
@@ -665,6 +673,9 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         with conn() as c:
             if cx.onboarding(c, candidate_id)["step"] not in ("roles", "review"):
                 return []
+            if c.execute("SELECT 1 FROM evidence_items WHERE candidate_id = ? AND type = 'resume' AND status = 'failed'",
+                         (candidate_id,)).fetchone():
+                return []                                       # the resume will be uploaded again: don't spend calls
             bids = [resolve_baseline(c, t["baseline_id"]) for t in cx.targets(c, candidate_id)]
         return state.pipeline.prejudge(candidate_id, bids) if bids else []
 

@@ -346,3 +346,22 @@ def scoring_progress(progress, title: str, index: int, total: int):
             done["n"] += 1
             progress.say("score", f"Scoring your {title} profile", 5 + span * index + span * done["n"] / SUBCATEGORY_COUNT)
     return on_event
+
+
+# --- Errors people see ---------------------------------------------------------------------------------------------
+
+import re as _re
+
+_TECHNICAL = _re.compile(r"gemini|groq|claude|jev|gpt|gemma|qwen|llama|HTTP \d|extract_|judge_|route|"
+                         r"no model could|no valid answer|attempt\(s\)|timeout|overloaded", _re.I)
+BUSY_TEXT = "We couldn't read this right now: the reading service was busy. Upload it again in a few minutes."
+
+
+def public_error(text: str | None) -> str | None:
+    """What a candidate sees for a failed source: the reader's own message (e.g. a scanned PDF), the daily-limit
+    message (it names the step, never a model), or a plain "busy" line. Model and provider details stay in the log."""
+    if not text:
+        return text
+    if text.startswith("Daily free-tier limit reached"):
+        return text
+    return BUSY_TEXT if _TECHNICAL.search(text) else text

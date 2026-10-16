@@ -87,8 +87,9 @@ LIVE = _env("LIVE", "0") == "1"
 # take over only when it is exhausted, busy or overloaded. Override one list with ROUTE_<TASK>="model,model,…"
 # (a "claude-…" id at the top works with no code change).
 _ROUTE_DEFAULTS = {
+    # gemini-2.5-flash is not offered to new users any more (HTTP 404 in the first live run).
     "extract_document": "gemini/gemini-3.8-flash,gemini/gemini-3.7-flash,gemini/gemini-3.6-flash,"
-                        "gemini/gemini-3-flash-preview,gemini/gemini-2.5-flash",
+                        "gemini/gemini-3-flash-preview",
     "extract_web": "gemini/gemini-3.5-flash-lite,gemini/gemini-3.1-flash-lite,gemini/gemma-4-31b-it,"
                    "groq/openai/gpt-oss-120b",
     "judge_single": "gemini/gemini-3.5-flash-lite,gemini/gemini-3.1-flash-lite,groq/openai/gpt-oss-120b,"
@@ -161,7 +162,7 @@ def model_concurrency(model: str) -> int:
 # complexity (it reasons first), per item for grouped questions. Thinking/reasoning tokens count toward it. Smaller
 # budgets reserve less of Groq's 8K and Gemma's 16K tokens per minute. Override with TASK_MAX_TOKENS="key=n,…".
 _TASK_TOKENS = {"judge_single": 1024, "complexity": 2048, "judge_grouped_base": 512, "judge_grouped_item": 192,
-                "judge_grouped_max": 4096, "extract_web": 4096}
+                "judge_grouped_max": 4096, "extract_web": 12000}   # 4096 cut portfolio pages off (live run 1)
 TASK_MAX_TOKENS = {**_TASK_TOKENS, **{k.strip(): int(v) for k, _, v in (x.partition("=") for x in
                                                                       _env("TASK_MAX_TOKENS", "").split(",") if "=" in x)}}
 
@@ -173,6 +174,12 @@ def grouped_budget(items: int) -> int:
 
 GEMINI_TIMEOUT_S = float(_env("GEMINI_TIMEOUT_S", "45"))
 GROQ_TIMEOUT_S = float(_env("GROQ_TIMEOUT_S", "20"))
+# Reading a whole résumé or LinkedIn export takes longer than one question: 45 s timed out on Gemini 3.8 and 3.7
+# Flash in the first live run (earlier real extractions took 60-90 s). Per task, in seconds; TASK_TIMEOUT_S overrides.
+TASK_TIMEOUT_S = {"extract_document": 180.0, "extract_web": 90.0, "plan": 120.0,
+                  **{k.strip(): float(v) for k, _, v in (x.partition("=") for x in _env("TASK_TIMEOUT_S", "").split(",")
+                                                         if "=" in x)}}
+UNUSABLE_REST_S = float(_env("UNUSABLE_REST_S", "3600"))  # a model that rejects our request (400/404) rests this long
 ROUTE_MAX_ATTEMPTS = int(_env("ROUTE_MAX_ATTEMPTS", "4"))      # model calls per request, across the list
 ROUTE_MAX_WAIT_S = float(_env("ROUTE_MAX_WAIT_S", "5"))        # one wait when every model is busy
 ROUTE_BUSY_BUDGET_S = float(_env("ROUTE_BUSY_BUDGET_S", "60"))  # longer than this is "exhausted", not "busy"

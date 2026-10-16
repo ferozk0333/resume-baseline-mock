@@ -78,6 +78,12 @@ def task_of(model: str) -> str:
 
 _budget: contextvars.ContextVar[int | None] = contextvars.ContextVar("answer_budget", default=None)
 _routed: contextvars.ContextVar[bool] = contextvars.ContextVar("routed", default=False)
+_timeout: contextvars.ContextVar[float | None] = contextvars.ContextVar("call_timeout", default=None)
+
+
+def current_timeout(default: float) -> float:
+    """The read timeout for this call: the task's (TASK_TIMEOUT_S) when it has one, else the provider's."""
+    return _timeout.get() or default
 
 
 @contextmanager
@@ -154,11 +160,16 @@ class ModelLimiter:
     def _st(self, model: str) -> _State:
         return self._state.setdefault(model, _State())
 
+    @staticmethod
+    def _key(model: str) -> str:
+        """Usage rows: Gemini models by bare name, as before routing, so the day's counts carry over."""
+        return model.removeprefix("gemini/")
+
     def used_today(self, model: str) -> tuple[int, int]:
         conn = self._conn()
         try:
             row = conn.execute("SELECT requests, tokens FROM provider_usage WHERE provider = ? AND model = ? AND day = ?",
-                               (provider_of(model), model, pacific_day(self.clock()))).fetchone()
+                               (provider_of(model), self._key(model), pacific_day(self.clock()))).fetchone()
             return (row[0], row[1] or 0) if row else (0, 0)
         finally:
             conn.close()
@@ -170,12 +181,12 @@ class ModelLimiter:
                 if at_least:                                 # the provider said the day is used up
                     conn.execute("INSERT INTO provider_usage (provider, model, day, requests, tokens) VALUES (?, ?, ?, ?, 0) "
                                  "ON CONFLICT(provider, model, day) DO UPDATE SET requests = MAX(requests, excluded.requests)",
-                                 (provider_of(model), model, pacific_day(self.clock()), requests))
+                                 (provider_of(model), self._key(model), pacific_day(self.clock()), requests))
                 else:
                     conn.execute("INSERT INTO provider_usage (provider, model, day, requests, tokens) VALUES (?, ?, ?, ?, ?) "
                                  "ON CONFLICT(provider, model, day) DO UPDATE SET requests = MAX(requests + excluded.requests, 0), "
                                  "tokens = MAX(tokens + excluded.tokens, 0)",
-                                 (provider_of(model), model, pacific_day(self.clock()), max(requests, 0), max(tokens, 0)))
+                                 (provider_of(model), self._key(model), pacific_day(self.clock()), max(requests, 0), max(tokens, 0)))
         finally:
             conn.close()
 
@@ -226,7 +237,7 @@ class ModelLimiter:
             with conn:
                 conn.execute("UPDATE provider_usage SET requests = MAX(requests - 1, 0), tokens = MAX(tokens - ?, 0) "
                              "WHERE provider = ? AND model = ? AND day = ?",
-                             (tokens, provider_of(model), model, pacific_day(self.clock())))
+                             (tokens, provider_of(model), self._key(model), pacific_day(self.clock())))
         finally:
             conn.close()
 
@@ -366,10 +377,11 @@ class Router:
                 self.limiter.refund(m, tokens)
                 self.limiter.exhaust(m, config.OVERLOAD_COOLDOWN_S, str(exc))
                 why = f"overloaded ({exc})"
-            except Unusable as exc:
+            except Unusable as exc:                            # e.g. unknown model id, rejected request format
                 last_error = exc
                 self.limiter.refund(m, tokens)
-                why = f"unusable ({exc})"
+                self.limiter.exhaust(m, config.UNUSABLE_REST_S, str(exc)[:200])
+                why = f"unusable ({str(exc)[:160]})"
             except DailyLimitReached:
                 raise
             except (LLMError, ValidationError) as exc:         # invalid or cut-off answer, refused
@@ -396,10 +408,12 @@ class Router:
     def _attempt(self, task: str, model: str, system: str, user: str, output_type, tokens: int):
         client = self.client_for(model)
         token = _routed.set(True)
+        ttoken = _timeout.set(config.TASK_TIMEOUT_S.get(task))
         try:
             with timing.span(timing.MODEL, provider_of(model), model=model, method=task):
                 return client.parse(model=model, system=system, user=user, output_type=output_type)
         finally:
+            _timeout.reset(ttoken)
             _routed.reset(token)
 
     def _hedged(self, task: str, models: list[str], system: str, user: str, output_type):

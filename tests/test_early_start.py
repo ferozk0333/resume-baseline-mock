@@ -62,3 +62,14 @@ def test_roles_picked_after_reading_start_at_once(env):  # noqa: F811
     assert pipe.wait_for_prejudge(cid) == {}
     api.put(f"/candidates/{cid}/targets", json={"baseline_ids": [DS]})
     assert set(pipe.wait_for_prejudge(cid)) == {DS}
+
+
+def test_no_early_start_when_the_resume_could_not_be_read(env):  # noqa: F811
+    env.llm.fail = {"resume"}
+    api = env.api
+    cid, read = new_profile(api)
+    api.put(f"/candidates/{cid}/targets", json={"baseline_ids": [DS]})
+    api.tasks.wait(read)
+    assert api.app.state.rs.pipeline.wait_for_prejudge(cid) == {}
+    warnings = api.get(f"/candidates/{cid}/profile").json()["warnings"]
+    assert warnings and all("scripted failure" not in w or w.startswith("Resume") for w in warnings)

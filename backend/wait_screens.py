@@ -79,11 +79,12 @@ def reading_view(conn, candidate_id: str, task: dict | None) -> dict:
         source = {"type": t, "label": SOURCES[t], "status": "waiting", "error": None, "counts": None}
         doc_failed = t != "github" and any(x["status"] == "failed" for x in r)
         if doc_failed:
-            source.update(status="failed", error=next(x["error"] for x in r if x["status"] == "failed"))
+            source.update(status="failed", error=cx.public_error(next(x["error"] for x in r if x["status"] == "failed")))
         elif finished and r:
             source.update(status="done", counts=_counts(conn, candidate_id, EVIDENCE_TYPES[t]))
         elif finished or errored:
-            source.update(status="failed", error=warn or (task.get("error") if errored else "Nothing could be read."))
+            source.update(status="failed", error=cx.public_error(warn or (task.get("error") if errored
+                                                                          else "Nothing could be read.")))
         elif r or step in ("extract", "validate"):
             source["status"] = "reading"
         elif step in ("queued", "ingest") and ingesting is None:
@@ -107,7 +108,7 @@ def reading_view(conn, candidate_id: str, task: dict | None) -> dict:
                                          "status = 'done' ORDER BY created_at DESC LIMIT 20")
                  if (d := _seconds(r[0], r[1])) is not None]
     return {"sources": out, "stage": stage, "stage_label": label, "percent": round(pct), "done": finished,
-            "error": task.get("error") if errored else None,
+            "error": cx.public_error(task.get("error")) if errored else None,
             "typical_minutes": None if finished else _typical_minutes(durations)}
 
 
