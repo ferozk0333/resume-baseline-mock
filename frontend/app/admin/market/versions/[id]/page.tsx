@@ -38,7 +38,7 @@ function Insights() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
-          <Link href="/recruiter/market" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> Market baselines</Link>
+          <Link href="/admin/market" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> Market baselines</Link>
           <h1 className="text-2xl font-semibold tracking-tight">Market insights · {v.role_title} · version {v.version}</h1>
           <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <Badge variant={v.status === "published" ? "default" : "secondary"} className="capitalize">{v.status === "published" ? "active" : v.status}</Badge>

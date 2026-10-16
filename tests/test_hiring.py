@@ -490,7 +490,11 @@ class FakeImap:
 
     def fetch(self, num, what):
         assert "PEEK" in what                                                 # never marks a message read
-        return "OK", [(b"1 (BODY[] {n})", self.messages[int(num) - 1]), b")"]
+        raw = self.messages[int(num) - 1]
+        self.log.append(what)
+        if "HEADER.FIELDS" in what:                                           # headers first
+            return "OK", [(b"1 (BODY[HEADER.FIELDS] {n})", raw.split(b"\r\n\r\n", 1)[0] + b"\r\n\r\n"), b")"]
+        return "OK", [(b"1 (BODY[] {n})", raw), b")"]
 
     def logout(self):
         self.log.append("logout")
@@ -510,13 +514,19 @@ def test_imap_replies_are_matched_by_token_and_read(seeded, monkeypatch):
     our_b = hr.last_out(conn, b)
     box = FakeImap([
         raw_mail(ours["subject"], "copy of our own email", ours["message_id"]),            # ours: skipped
+        raw_mail(ours["subject"], "our copy, Message-ID rewritten", "<rewritten@gmail>"),   # ours by subject
         raw_mail(f"Re: {ours['subject']}", "Tuesday 11:00 works for me.\r\n\r\nOn Thu, Oct 15, 2026 at 9:00 AM "
-                 "Hiring team wrote:\r\n> Hi Maya", "<r1@mail.example>", ours["message_id"]),
+                 "Hiring team <demo@example.org>\r\nwrote:\r\n> Hi Maya", "<r1@mail.example>", ours["message_id"]),
         raw_mail("Re: no token here", "Will it be on video?", "<r2@mail.example>", our_b["message_id"]),  # by header
         raw_mail("Unrelated newsletter [RS-ffffff]", "Hello", "<n1@mail.example>"),          # unknown token
+        raw_mail("A newsletter", "Not for us", "<n2@mail.example>"),                        # headers only: not read
     ])
     out = api.app.state.rs.hiring.poll_inbox(replies.ImapInbox(lambda: box))
-    assert out == {"matched": [a, b], "skipped": 2}
+    assert [x["application_id"] for x in out["matched"]] == [a, b] and out["fetched"] == 5 and out["error"] is None
+    assert sorted(x["why"] for x in out["skipped"]) == ["already stored", "no workflow with this token", "our own sent copy"]
+    assert ("SINCE",) == box.log[2][:1]                                       # searched by date only
+    status = api.get("/workflows/inbox").json()
+    assert status["last_poll"]["fetched"] == 5
     va = api.get(f"/applications/{a}/workflow").json()
     assert va["step"]["step"] == "confirm_slot" and va["thread"][-1]["body"] == "Tuesday 11:00 works for me."
     assert va["thread"][-1]["source"] == "imap"
@@ -570,3 +580,30 @@ def test_workflows_do_not_need_the_judge(seeded, monkeypatch):
     job, rows = ds(api)
     r = api.post(f"/applications/{rows[0]['application_id']}/workflow", json={"confirm_move": True})
     assert r.status_code == 200 and r.json()["step"]["email"]["template"]
+
+
+def test_a_reply_that_arrives_at_another_step_shows_in_tasks(seeded, monkeypatch):
+    """IMAP replies that come while the workflow waits for something else are kept and listed in Tasks."""
+    monkeypatch.setattr(config, "IMAP_USER", "demo@example.org")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "x")
+    api = client(seeded, Model())
+    _, a, _ = started(api, seeded)                                          # waiting for the invite's approval
+    token = hr.token_for(a)
+    box = FakeImap([raw_mail(f"Re: Next step [RS-{token}]", "Can we talk tomorrow?", "<r9@mail.example>")])
+    out = api.app.state.rs.hiring.poll_inbox(replies.ImapInbox(lambda: box))
+    assert [x["application_id"] for x in out["matched"]] == [a]
+    titles = [t["title"] for t in api.get("/recruiter/tasks").json()]
+    assert any(t.startswith("Reply received") for t in titles)
+    v = api.get(f"/applications/{a}/workflow").json()
+    assert v["step"]["unread"] == 1 and v["thread"][-1]["source"] == "imap"
+
+
+def test_imap_errors_are_reported_not_raised(seeded, monkeypatch):
+    monkeypatch.setattr(config, "IMAP_USER", "demo@example.org")
+    monkeypatch.setattr(config, "IMAP_PASSWORD", "x")
+    api = client(seeded, Model())
+
+    def broken():
+        raise OSError("login failed")
+    out = api.app.state.rs.hiring.poll_inbox(replies.ImapInbox(broken))
+    assert out["error"] == "OSError: login failed" and api.get("/workflows/inbox").json()["last_poll"]["error"]

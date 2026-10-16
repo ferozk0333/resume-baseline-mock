@@ -68,7 +68,7 @@ export default function MarketPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Baseline source</CardTitle>
-            <CardDescription>What candidates for {r.title} are scored against. Jobs created by recruiters keep their own.</CardDescription>
+            <CardDescription>The default for new {r.title} scores. Candidates can switch on their Score page; jobs created by recruiters keep their own baseline.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             <div role="radiogroup" aria-label="Baseline source" className="flex rounded-lg border bg-muted p-0.5 text-sm">
@@ -86,7 +86,8 @@ export default function MarketPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Postings</CardTitle>
-            <CardDescription>{r.postings} in the window from {r.companies} companies. {r.configured.placeholders} of {r.configured.companies} configured
+            <CardDescription>{r.postings} in the window from {r.companies} companies
+              {Object.keys(r.levels ?? {}).length > 0 && ` (${Object.entries(r.levels).map(([l, n]) => `${n} ${l}`).join(", ")}; only entry builds the baseline for now)`}. {r.configured.placeholders} of {r.configured.companies} configured
               companies are placeholders (config/market_sources.yaml).</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
@@ -143,7 +144,7 @@ function Versions({ role }: { role: string }) {
         <ul className="divide-y text-sm">
           {vs.map((v) => (
             <li key={v.id} className="flex flex-wrap items-center gap-2 py-2">
-              <Link href={`/recruiter/market/versions/${v.id}`} className="font-medium hover:underline">Version {v.version}</Link>
+              <Link href={`/admin/market/versions/${v.id}`} className="font-medium hover:underline">Version {v.version}</Link>
               <Badge variant={v.status === "published" ? "default" : "secondary"} className="capitalize">{v.status === "published" ? "active" : v.status}</Badge>
               {v.insufficient && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Insufficient data</Badge>}
               {v.test_version && <Badge variant="outline">test version</Badge>}

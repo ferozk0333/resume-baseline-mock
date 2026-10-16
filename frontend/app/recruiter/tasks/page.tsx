@@ -5,7 +5,12 @@ import { CalendarClock, ChevronRight, ClipboardList, Inbox, Mail, MessageSquareR
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { get, type RecruiterTask } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { get, post, type RecruiterTask } from "@/lib/api";
+
+type Inbox = { enabled: boolean; every_minutes: number; user: string | null;
+  last_poll: { at: string; fetched: number; matched: { subject: string }[]; skipped: { subject: string; why: string }[];
+    error: string | null } | null };
 
 const ICON: Record<string, typeof Mail> = { approve_email: Send, confirm_slot: CalendarClock, enter_feedback: ClipboardList,
   decide: Scale, reply: Inbox, confirm_withdrawal: MessageSquareReply, choose: Mail };
@@ -18,8 +23,21 @@ const ago = (iso: string) => {
 /** Everything waiting for the recruiter across jobs, oldest first (specs/16 §1). */
 export default function TasksPage() {
   const [tasks, setTasks] = useState<RecruiterTask[] | null>(null);
+  const [inbox, setInbox] = useState<Inbox | null>(null);
+  const [checking, setChecking] = useState(false);
+  async function checkNow() {
+    setChecking(true);
+    try {
+      await post("/workflows/tick");
+      setTasks(await get<RecruiterTask[]>("/recruiter/tasks"));
+      setInbox(await get<Inbox>("/workflows/inbox"));
+    } catch (e) { toast.error((e as Error).message); } finally { setChecking(false); }
+  }
   useEffect(() => {
-    const load = () => get<RecruiterTask[]>("/recruiter/tasks").then(setTasks).catch((e) => toast.error(e.message));
+    const load = () => {
+      get<RecruiterTask[]>("/recruiter/tasks").then(setTasks).catch((e) => toast.error(e.message));
+      get<Inbox>("/workflows/inbox").then(setInbox).catch(() => {});
+    };
     load();
     const t = setInterval(load, 30_000);
     return () => clearInterval(t);
@@ -30,6 +48,19 @@ export default function TasksPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
         <p className="text-sm text-muted-foreground">Everything waiting for you, oldest first. Each opens the candidate&apos;s workflow at that step. Nothing is sent until you approve it.</p>
       </div>
+      {inbox?.enabled && (
+        <div aria-label="Inbox" className="flex flex-wrap items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
+          <Inbox className="size-4 text-primary" />
+          <span>Replies are read from {inbox.user ?? "the demo inbox"} every {inbox.every_minutes} min.</span>
+          <span className="text-muted-foreground">
+            {inbox.last_poll ? inbox.last_poll.error ? `Last check failed: ${inbox.last_poll.error}`
+              : `Last check ${new Date(inbox.last_poll.at).toLocaleTimeString()}: ${inbox.last_poll.matched.length} matched, ${inbox.last_poll.skipped.length} skipped.`
+              : "Not checked yet since the server started."}
+          </span>
+          <Button size="xs" variant="outline" className="ml-auto" disabled={checking} onClick={checkNow}>
+            {checking ? "Checking…" : "Check inbox now"}</Button>
+        </div>
+      )}
       {tasks === null ? <Skeleton className="h-48" /> : tasks.length === 0 ? (
         <p className="rounded-xl border border-dashed bg-white px-4 py-8 text-center text-sm text-muted-foreground">
           Nothing waiting. Start an interview loop from a job to see steps here.</p>

@@ -137,7 +137,9 @@ class Inbound:
     date: str | None
 
 
-_QUOTE_START = re.compile(r"^(On .{5,200}wrote:\s*$|-{2,}\s*Original Message\s*-{2,}|From: .+|>)", re.I | re.M)
+# Gmail wraps "On Fri, Oct 16, 2026 at 9:00 AM Name <a@b.c> wrote:" over two lines; Outlook uses "From:" headers.
+_QUOTE_START = re.compile(r"^(On [^\n]{5,250}(?:\n[^\n]{0,120})?wrote:\s*$|-{2,}\s*Original Message\s*-{2,}|From: .+|>)",
+                          re.I | re.M)
 
 
 def strip_quoted(text: str) -> str:
@@ -183,13 +185,33 @@ def known(conn, message_id: str | None) -> bool:
                                              (message_id.strip(),)).fetchone() is not None
 
 
+def our_copy(conn, inbound: Inbound) -> bool:
+    """Our own sent email arriving in the demo inbox (it is sent to the same address). Matched by Message-ID, or by
+    the exact subject of a message we sent (a reply's subject starts with "Re:")."""
+    if known(conn, inbound.message_id):
+        return True
+    return conn.execute("SELECT 1 FROM messages WHERE direction = 'out' AND subject = ?",
+                        (inbound.subject.strip(),)).fetchone() is not None
+
+
+def header_wanted(conn, raw_headers: bytes) -> bool:
+    """Cheap first pass on headers only: a subject token or a reference to a message we sent."""
+    msg = email.message_from_bytes(raw_headers, policy=email.policy.default)
+    if TOKEN_RE.search(str(msg.get("Subject") or "")):
+        return True
+    refs = [*(str(msg.get("In-Reply-To") or "").split()), *(str(msg.get("References") or "").split())]
+    return any(conn.execute("SELECT 1 FROM messages WHERE direction = 'out' AND message_id = ?", (r,)).fetchone()
+               for r in refs)
+
+
 class ImapInbox:
-    """Read-only polling of the demo inbox (BODY.PEEK: nothing is marked read, moved or deleted)."""
+    """Read-only polling of the demo inbox (BODY.PEEK: nothing is marked read, moved or deleted). Searches by date
+    only (Gmail's SUBJECT search tokenizes "[RS-…]"), reads headers first, then the full text of candidates."""
 
     def __init__(self, factory=None):
         self.factory = factory or (lambda: imaplib.IMAP4_SSL(config.IMAP_HOST, config.IMAP_PORT, timeout=30))
 
-    def fetch(self, since_days: int = 7) -> list[bytes]:
+    def fetch(self, since_days: int = 7, wanted=lambda headers: True) -> list[bytes]:
         if not (config.IMAP_USER and config.IMAP_PASSWORD):
             raise RuntimeError("IMAP is not configured: set IMAP_USER/IMAP_PASSWORD (or SMTP_USER/SMTP_PASSWORD).")
         box = self.factory()
@@ -197,9 +219,13 @@ class ImapInbox:
             box.login(config.IMAP_USER, config.IMAP_PASSWORD)
             box.select("INBOX", readonly=True)
             since = (sch.now() - timedelta(days=since_days)).strftime("%d-%b-%Y")
-            typ, data = box.search(None, "SINCE", since, "SUBJECT", '"[RS-"')
+            typ, data = box.search(None, "SINCE", since)
             out = []
             for num in (data[0] or b"").split():
+                typ, parts = box.fetch(num, "(BODY.PEEK[HEADER.FIELDS (SUBJECT MESSAGE-ID IN-REPLY-TO REFERENCES)])")
+                head = next((p[1] for p in parts if isinstance(p, tuple)), b"")
+                if not wanted(head):
+                    continue
                 typ, parts = box.fetch(num, "(BODY.PEEK[])")
                 out += [p[1] for p in parts if isinstance(p, tuple)]
             return out

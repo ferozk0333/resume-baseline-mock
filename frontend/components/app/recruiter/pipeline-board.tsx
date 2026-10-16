@@ -52,6 +52,7 @@ export function PipelineBoard({ jobId }: { jobId: string }) {
                     <span className="font-semibold tabular-nums text-primary">{c.match === null ? "—" : Math.round(c.match)}</span>
                   </div>
                   <div className="line-clamp-1 text-xs text-muted-foreground">{c.current_role ?? "—"}</div>
+                  {c.workflow?.round && <div className="mt-0.5 text-[11px] font-medium text-foreground/80">{c.workflow.round}</div>}
                   {c.workflow && (
                     <span className={cn("mt-1 inline-block rounded px-1.5 py-px text-[11px] font-medium", BADGE[c.workflow.status])}>
                       {c.workflow.label}

@@ -155,7 +155,7 @@ export type PipelineBoard = { stages: (Stage & { cards: BoardCard[] })[]; unstag
 export const topShare = (p: number) => Math.max(5, 5 * Math.round((100 - p) / 5));
 
 // --- Hiring workflow (specs/16) ---------------------------------------------------------------------------
-export type WorkflowBadge = { status: string; label: string } | null;
+export type WorkflowBadge = { status: string; label: string; round?: string | null } | null;
 export type Slot = { start: string; end: string; timezone: string; label: string; source: "availability" | "candidate";
   fits: boolean; note: string | null };
 export type Reading = { label: "slot_chosen" | "times_proposed" | "question" | "decline" | "unclear"; quote: string;
@@ -236,7 +236,14 @@ export type MarketVersion = { id: string; role: string; level: string; version: 
     thresholds: Record<string, unknown> } };
 export type MarketRole = { key: string; title: string; manual_baseline: string; source: "manual" | "market";
   active: MarketVersion | null; latest: MarketVersion | null; postings: number; companies: number;
-  configured: { companies: number; placeholders: number } };
+  configured: { companies: number; placeholders: number }; levels: Record<string, number> };
+export type MarketLabel = { version: number; date: string; baseline_id: string; test: boolean; label: string };
+export type RunBaselines = { role: string | null; role_title?: string; current: "standard" | "market";
+  current_version?: number | null; standard: { baseline_id: string; label: string } | null; market: MarketLabel | null };
+export type MarketView = MarketLabel & { role: string; title: string; postings: number; companies: number;
+  window: [string, string]; required_years: number | null; expected_reach: string | null;
+  criteria: { name: string; kind: string; category: "required" | "preferred"; company_share: number; share: number;
+    postings: number; companies: number }[] };
 export type MarketPosting = { id: string; company: string; tier: string; source: string; title: string; level: string | null;
   level_method: string | null; source_url: string | null; first_seen: string; last_seen: string; extracted: boolean };
 export type SideBySide = { manual: { required_years: number; expected_reach: string; scope_expectation: string | null;

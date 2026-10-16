@@ -526,7 +526,20 @@ def draft_confirmation(conn, app: dict, job: dict, iv: dict, token: str) -> dict
 
 # --- Tasks and board badges ----------------------------------------------------------------------------------------
 
+def round_label(conn, row: dict) -> str | None:
+    """"Round 2 · Interview" while a candidate is in an interview round (the board reuses one Scheduling column)."""
+    if row["phase"] in ("shortlisted", "offer", "hired", "closed") or row["round"] is None:
+        return None
+    rs = rounds(conn, row["job_id"])
+    return f"Round {row['round'] + 1} · {rs[row['round']]['name']}" if row["round"] < len(rs) else None
+
+
 def card_status(conn, row: dict | None) -> dict | None:
+    out = _card_status(conn, row)
+    return out | {"round": round_label(conn, row)} if out else None
+
+
+def _card_status(conn, row: dict | None) -> dict | None:
     if row is None or row["status"] == "closed":
         return None
     if row["status"] == "scheduled":

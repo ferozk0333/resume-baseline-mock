@@ -579,20 +579,45 @@ class HiringFlow:
         return touched
 
     def poll_inbox(self, inbox: replies.ImapInbox | None = None) -> dict:
-        """REPLY_INBOX=imap: read new replies from the demo inbox (read-only) and hand them to their workflow."""
+        """REPLY_INBOX=imap: read new replies from the demo inbox (read-only) and hand them to their workflow.
+        Every decision is logged (logger "rightstaff.inbox") and the last result is kept for GET /workflows/inbox."""
+        import logging
+        from core.db import now_iso
+        log = logging.getLogger("rightstaff.inbox")
         conn = self._conn()
         inbox = inbox or replies.ImapInbox()
-        matched, skipped = [], 0
-        for raw in inbox.fetch():
+        out = {"at": now_iso(), "fetched": 0, "matched": [], "skipped": [], "error": None}
+        try:
+            raws = inbox.fetch(wanted=lambda h: replies.header_wanted(conn, h))
+        except Exception as exc:                            # noqa: BLE001 - shown on Tasks and in the log
+            out["error"] = f"{type(exc).__name__}: {exc}"
+            log.warning("inbox poll failed: %s", out["error"])
+            self.last_poll = out
+            return out
+        out["fetched"] = len(raws)
+        for raw in raws:
             m = replies.parse_message(raw)
-            if replies.known(conn, m.message_id):
-                skipped += 1
+            if replies.our_copy(conn, m):
+                why = "already stored" if replies.known(conn, m.message_id) else "our own sent copy"
+                out["skipped"].append({"subject": m.subject, "why": why})
                 continue
             app_id = replies.match(conn, m)
-            if app_id is None or not m.body:
-                skipped += 1
-                continue
-            self.reply(app_id, m.body, source="imap", subject=m.subject, message_id=m.message_id,
-                       in_reply_to=m.in_reply_to, from_addr=m.from_addr)
-            matched.append(app_id)
-        return {"matched": matched, "skipped": skipped}
+            if app_id is None:
+                out["skipped"].append({"subject": m.subject, "why": "no workflow with this token"})
+            elif not m.body:
+                out["skipped"].append({"subject": m.subject, "why": "empty after removing the quoted text"})
+            else:
+                try:
+                    self.reply(app_id, m.body, source="imap", subject=m.subject, message_id=m.message_id,
+                               in_reply_to=m.in_reply_to, from_addr=m.from_addr)
+                    out["matched"].append({"subject": m.subject, "application_id": app_id})
+                except ValueError as exc:
+                    out["skipped"].append({"subject": m.subject, "why": str(exc)})
+        for x in out["matched"]:
+            log.warning("inbox: matched reply %r → application %s", x["subject"], x["application_id"])
+        for x in out["skipped"]:
+            log.warning("inbox: skipped %r (%s)", x["subject"], x["why"])
+        log.warning("inbox poll: %d fetched, %d matched, %d skipped", out["fetched"], len(out["matched"]),
+                    len(out["skipped"]))
+        self.last_poll = out
+        return out

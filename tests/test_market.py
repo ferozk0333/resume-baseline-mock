@@ -282,3 +282,65 @@ def test_dry_run_counts_without_a_model(conn, roles):
     assert ds["model_calls"]["extraction"] == 1 and ds["model_calls"]["summary"] == 1
     assert ds["sources"]["manual"]["placeholders"] == 5 and out["days_at_limit"] == 1
     assert out["roles"]["product_manager"]["model_calls"]["total"] == 0               # no postings, no summary
+
+
+def test_every_posting_keeps_its_level_and_only_entry_builds_the_baseline(conn, roles):
+    """No posting is forced to entry: senior and unknown postings are kept but left out of the entry baseline."""
+    from extraction import job_reader as jr
+    from tests.helpers import brightwater_extract
+    pipeline.load_fixtures(conn, roles["ai_engineer"])
+    senior = JD.replace("# AI Engineer", "# Senior AI Engineer")
+    ms.add_posting(conn, role="ai_engineer", company="Senior Co", tier="mid", source="manual", title="Senior AI Engineer",
+                   text=senior, seen_at=NOW.isoformat())
+    vague = "We are hiring an AI Engineer to build retrieval features with Python and evaluate LLM outputs. " * 4
+    ms.add_posting(conn, role="ai_engineer", company="Vague Co", tier="startup", source="manual", title="AI Engineer",
+                   text=vague, seen_at=NOW.isoformat())
+    ms.save_extraction(conn, ms.text_hash(senior), "test", {"status": "ok", **jr.check(brightwater_extract(), JD)})
+    unstated = {"status": "ok", "details": {"level": "entry", "min_years": None}, "detail_quotes": {},
+                "requirements": [], "responsibilities": [], "good": {}}       # the reader's default, nothing stated
+    ms.save_extraction(conn, ms.text_hash(vague), "test", unstated)
+    v = mb.recompute(conn, roles["ai_engineer"], test=True, at=NOW)
+    levels = ms.level_counts(conn, "ai_engineer")
+    assert levels == {"entry": 3, "senior": 1, "unknown": 1}
+    assert v["postings"] == 3 and v["companies"] == 3                      # only entry postings build the entry baseline
+
+
+def test_score_page_switch_and_the_candidate_market_view(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "MARKET_SYNONYMS", tmp_path / "synonyms.json")
+    from tests.helpers import SAMPLE_RESUME_LINES, FakeLLM, make_pdf, sample_resume_extract
+    path = str(tmp_path / "s.db")
+    normalize.save_map(normalize.seed_map(db.init_app_db(path)))
+    app = create_app(Deps(path, FakeJudge(script=ui_fakes.best), llm=FakeLLM({"resume": sample_resume_extract()}),
+                          planner=ui_fakes.AlwaysPlanner()))
+    api, tasks = TestClient(app), app.state.tasks
+    cid = api.post("/candidates", json={"name": "Jane Doe"}).json()["id"]
+    r = api.post(f"/candidates/{cid}/onboard", data={"baseline_id": "baseline-ai-engineer-entry"},
+                 files={"resume": ("cv.pdf", make_pdf(SAMPLE_RESUME_LINES), "application/pdf")})
+    tasks.wait(r.json()["task_id"])
+    run = tasks.wait(api.post(f"/candidates/{cid}/score", json={"baseline_id": "baseline-ai-engineer-entry"}).json()["task_id"])
+    rid = run["result"]["run_id"]
+    opts = api.get(f"/runs/{rid}/baselines").json()
+    assert opts["current"] == "standard" and opts["market"] is None              # no published version: no Market option
+    assert api.get("/market-view/ai_engineer").status_code == 404
+    api.post("/market/ai_engineer/fixtures")
+    v = api.post("/market/ai_engineer/recompute", json={"test": True}).json()
+    api.put("/market/settings", json={"allow_test_versions": True})
+    api.post(f"/market/versions/{v['id']}/publish")
+    opts = api.get(f"/runs/{rid}/baselines").json()
+    assert opts["market"]["version"] == 1 and "Test version – insufficient data" in opts["market"]["label"]
+    r = api.post(f"/runs/{rid}/switch-baseline", json={"source": "market"})
+    assert r.status_code == 409 and r.json()["detail"]["calls"] > 0                 # the re-score notice first
+    t = tasks.wait(api.post(f"/runs/{rid}/switch-baseline", json={"source": "market", "confirm": True}).json()["task_id"])
+    new = api.get(f"/runs/{t['result']['run_id']}").json()["run"]
+    assert new["baseline_id"] == "market-ai_engineer-entry-v1" and new["baseline_source"] == "market v1"
+    back = api.get(f"/runs/{new['id']}/baselines").json()
+    assert back["current"] == "market" and back["current_version"] == 1
+    r = api.post(f"/runs/{new['id']}/switch-baseline", json={"source": "standard"})
+    assert r.json()["detail"]["reused"] is True and r.json()["detail"]["calls"] == 0  # standard judgments are saved
+    view = api.get("/market-view/ai_engineer").json()
+    assert view["test"] and view["companies"] == 3
+    py = next(c for c in view["criteria"] if c["name"] == "Python")
+    assert py == {"name": "Python", "kind": "tool", "category": "required", "company_share": 1.0, "share": 1.0,
+                  "postings": 3, "companies": 3}
+    blob = json.dumps(view)
+    assert "Lumenfield" not in blob and "Tidewell" not in blob and "quote" not in blob   # counts only

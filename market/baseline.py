@@ -388,3 +388,64 @@ def side_by_side(conn, role: sources.Role, vid: str | None = None) -> dict:
                                               "scope_expectation": v["content"].get("scope_expectation"),
                                               "complexity_criteria": v["content"].get("complexity_criteria")},
             "rows": rows}
+
+
+# --- Candidate side ---------------------------------------------------------------------------------------------------
+
+def role_of_baseline(conn, baseline_id: str) -> sources.Role | None:
+    """The role a run's baseline belongs to: a manual role baseline or one of its Market versions."""
+    roles = sources.load()
+    r = sources.role_for_baseline(roles, baseline_id)
+    if r:
+        return r
+    row = conn.execute("SELECT v.role FROM baselines b JOIN market_versions v ON v.id = b.market_version_id "
+                       "WHERE b.id = ?", (baseline_id,)).fetchone()
+    return roles.get(row[0]) if row else None
+
+
+def label_of(v: dict) -> dict:
+    return {"version": v["version"], "date": (v["published_at"] or v["created_at"])[:10], "baseline_id": v["baseline_id"],
+            "test": v["test_version"], "label": f"Market baseline (v{v['version']}, {(v['published_at'] or v['created_at'])[:10]})"
+            + (" · Test version – insufficient data" if v["test_version"] else "")}
+
+
+def run_options(conn, run: dict) -> dict:
+    """What the Score page's "Scored against" switch offers for this run's role."""
+    role = role_of_baseline(conn, run["baseline_id"])
+    if role is None:
+        return {"role": None, "current": "standard", "standard": None, "market": None}
+    v = active(conn, role.key)
+    current = "standard" if run["baseline_id"] == role.manual_baseline else "market"
+    return {"role": role.key, "role_title": role.title, "current": current,
+            "current_version": None if current == "standard" else
+            conn.execute("SELECT v.version FROM baselines b JOIN market_versions v ON v.id = b.market_version_id "
+                         "WHERE b.id = ?", (run["baseline_id"],)).fetchone()[0],
+            "standard": {"baseline_id": role.manual_baseline, "label": "Standard baseline"},
+            "market": label_of(v) if v else None}
+
+
+def candidate_switch_estimate(conn, candidate_id: str, from_baseline: str, to_baseline: str) -> dict:
+    """Scoring against another baseline redoes the judgments that depend on it; saved ones are reused."""
+    target = db.get_baseline(conn, to_baseline)
+    cached = conn.execute("SELECT COUNT(*) FROM judgments WHERE candidate_id = ? AND baseline_id = ? AND baseline_hash = ? "
+                          "AND used = 1", (candidate_id, to_baseline, target.content_hash())).fetchone()[0]
+    b = db.get_baseline(conn, from_baseline)
+    calls = 0 if cached else conn.execute(
+        "SELECT COUNT(*) FROM judgments WHERE candidate_id = ? AND baseline_id = ? AND baseline_hash = ? AND used = 1",
+        (candidate_id, from_baseline, b.content_hash() if b else "")).fetchone()[0]
+    return {"calls": calls, "reused": bool(cached)}
+
+
+def market_view(conn, role: sources.Role) -> dict | None:
+    """Candidate-facing "What the market asks for": counts and shares only, never company names or posting text."""
+    v = active(conn, role.key)
+    if v is None:
+        return None
+    c = v["content"]
+    rows = [{"name": x["name"], "kind": x["kind"], "category": x["category"],
+             "company_share": round(x["companies"] / v["companies"], 4) if v["companies"] else 0.0,
+             "share": x["share"], "postings": x["postings"], "companies": x["companies"]}
+            for x in c["criteria"] if x["category"] != "dropped"]
+    return {"role": role.key, "title": role.title, **label_of(v), "postings": v["postings"], "companies": v["companies"],
+            "window": [v["window_start"], v["window_end"]], "required_years": c.get("required_years"),
+            "expected_reach": REACH_LABELS.get(c.get("expected_reach")), "criteria": rows}

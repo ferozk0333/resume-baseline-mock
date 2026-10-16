@@ -235,6 +235,11 @@ class SourceIn(BaseModel):
     confirm: bool = False
 
 
+class SwitchBaselineIn(BaseModel):
+    source: Literal["standard", "market"]
+    confirm: bool = False                # the re-score notice was confirmed
+
+
 class MarketSettingsIn(BaseModel):
     allow_test_versions: bool
 
@@ -308,11 +313,14 @@ def start_ticker(state: State) -> None:
         last_poll = 0.0
         while True:
             time.sleep(config.WORKFLOW_TICK_SECONDS)
+            if config.REPLY_INBOX == "imap" and time.time() - last_poll >= config.IMAP_POLL_MINUTES * 60:
+                last_poll = time.time()
+                try:
+                    state.hiring.poll_inbox()           # logs each decision ("inbox: …")
+                except Exception:                       # noqa: BLE001 - logged; the next poll tries again
+                    log.exception("inbox poll failed")
             try:
                 state.hiring.tick()
-                if config.REPLY_INBOX == "imap" and time.time() - last_poll >= config.IMAP_POLL_MINUTES * 60:
-                    last_poll = time.time()
-                    log.info("inbox poll: %s", state.hiring.poll_inbox())
             except Exception:                           # noqa: BLE001 - logged; the next tick tries again
                 log.exception("workflow tick failed")
     threading.Thread(target=loop, name="workflow-tick", daemon=True).start()
@@ -924,6 +932,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 out.append({"key": key, "title": r.title, "manual_baseline": r.manual_baseline,
                             "source": mb.source_of(c, key), "active": next((v for v in vs if v["status"] == "published"), None),
                             "latest": vs[0] if vs else None, "postings": len(rows),
+                            "levels": mstore.level_counts(c, key),
                             "companies": len({p["company"] for p in rows}),
                             "configured": {"companies": len(r.companies),
                                            "placeholders": sum(c2.placeholder for c2 in r.companies)}})
@@ -1037,6 +1046,42 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         with conn() as c:
             mb.set_setting(c, "allow_test_versions", "1" if body.allow_test_versions else "0")
             return {"allow_test_versions": body.allow_test_versions}
+
+    @app.get("/runs/{run_id}/baselines", tags=["market"])
+    def run_baselines(run_id: str):
+        """The Score page's "Scored against: Standard | Market (vN, date)" switch."""
+        with conn() as c:
+            return mb.run_options(c, run_row(c, run_id))
+
+    @app.post("/runs/{run_id}/switch-baseline", tags=["market"])
+    def switch_baseline(run_id: str, body: SwitchBaselineIn):
+        """Re-score this candidate against the other baseline. 409 with the re-score notice unless confirmed."""
+        with conn() as c:
+            run = run_row(c, run_id)
+            opts = mb.run_options(c, run)
+            target = (opts.get(body.source) or {}).get("baseline_id")
+            if target is None:
+                raise HTTPException(422, "No published Market baseline for this role yet.")
+            if target == run["baseline_id"]:
+                raise HTTPException(422, "This score already uses that baseline.")
+            est = mb.candidate_switch_estimate(c, run["candidate_id"], run["baseline_id"], target)
+            if not body.confirm:
+                label = "the Standard baseline" if body.source == "standard" else opts["market"]["label"]
+                raise HTTPException(409, {"target": label, **est})
+        task_id = start_scoring(run["candidate_id"], target, json.loads(run["weights_json"]), kind="rescore")
+        return {"task_id": task_id}
+
+    @app.get("/market-view", tags=["market"])
+    def market_view_roles():
+        """Candidate side: roles with a published Market version (counts only)."""
+        with conn() as c:
+            return [{"role": k, "title": r.title, "available": mb.active(c, k) is not None} for k, r in msrc.load().items()]
+
+    @app.get("/market-view/{role}", tags=["market"])
+    def market_view(role: str):
+        r = role_or_404(role)
+        with conn() as c:
+            return mb.market_view(c, r) or not_found("Published Market version")
 
     @app.get("/market/dry-run", tags=["market"])
     def market_dry_run():
@@ -1253,6 +1298,13 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                     ratings=[r.model_dump() for r in body.ratings], notes=body.notes,
                     recommendation=body.recommendation)
             return hr.view(c, app_id)
+
+    @app.get("/workflows/inbox", tags=["hiring"])
+    def inbox_status():
+        """Whether replies are read from the demo inbox, and the last poll (also in the API log: "inbox:")."""
+        last = getattr(state._hiring, "last_poll", None) if state._hiring else None
+        return {"enabled": config.REPLY_INBOX == "imap", "every_minutes": config.IMAP_POLL_MINUTES,
+                "user": config.IMAP_USER or None, "last_poll": last}
 
     @app.get("/recruiter/tasks", tags=["hiring"])
     def recruiter_tasks():

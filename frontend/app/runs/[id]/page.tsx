@@ -1,6 +1,7 @@
 "use client";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { BaselineSwitch } from "@/components/app/score/baseline-switch";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
@@ -111,6 +112,7 @@ function ScorePageInner() {
           <Link href={`/runs/${id}/plan`} className={buttonVariants()}>Gaps and plan</Link>
         </div>
       </div>
+      <BaselineSwitch runId={id} />
 
       {running && (
         <div role="status" className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">

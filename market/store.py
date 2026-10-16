@@ -128,10 +128,22 @@ def extract(conn, posting: dict, llm) -> dict | None:
 
 
 def set_level(conn, posting: dict, extraction: dict | None) -> str | None:
-    """Code first; the extraction's level only when code could not decide (no extra call)."""
+    """Every posting gets a level: code first; then the extraction, but only when the posting states a level or
+    years (the reader's own default of "entry" is never used here). Otherwise the level stays unknown and the
+    posting counts toward no level baseline. Only the entry baseline is built for now; mid/senior/lead postings are
+    kept for later level baselines."""
     if posting["level"] or not extraction:
         return posting["level"]
-    level = extraction["details"].get("level")
+    quotes = extraction.get("detail_quotes") or {}
+    stated = bool(quotes.get("level") or quotes.get("min_years"))
+    level = extraction["details"].get("level") if stated else None
     with conn:
-        conn.execute("UPDATE market_postings SET level = ?, level_method = 'extraction' WHERE id = ?", (level, posting["id"]))
+        conn.execute("UPDATE market_postings SET level = ?, level_method = ? WHERE id = ?",
+                     (level, "extraction" if stated else "unknown", posting["id"]))
     return level
+
+
+def level_counts(conn, role: str) -> dict[str, int]:
+    rows = conn.execute("SELECT COALESCE(level, 'unknown'), COUNT(*) FROM market_postings WHERE role = ? AND "
+                        "status = 'active' GROUP BY 1", (role,)).fetchall()
+    return {r[0]: r[1] for r in rows}
