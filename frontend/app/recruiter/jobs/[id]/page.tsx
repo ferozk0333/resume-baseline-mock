@@ -14,7 +14,7 @@ import { useStartLoop } from "@/components/app/recruiter/start-loop";
 import { PipelineBoard } from "@/components/app/recruiter/pipeline-board";
 import { JobDescription } from "@/components/app/jobs/job-description";
 import { ProfilePanel, TABS, type Tab } from "@/components/app/recruiter/profile-panel";
-import { get, patch, type ApplicantRow, type Job, type Panel, type Stage } from "@/lib/api";
+import { get, patch, post, type ApplicantRow, type Job, type Panel, type Stage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const selectClass = "h-8 rounded-lg border border-input bg-white px-2 text-sm";
@@ -81,6 +81,9 @@ function Workspace() {
     if (selected) get<Panel>(`/applications/${selected}`).then(setPanel).catch((e) => toast.error(e.message));
   }, [selected]);
   useEffect(() => { loadPanel(); }, [loadPanel]);
+  useEffect(() => {                    // "Recruiter active" signal for candidates (specs/17 §4.1), once per opened panel
+    if (selected) post(`/applications/${selected}/opened`).catch(() => {});
+  }, [selected]);
 
   const refresh = useCallback(() => { loadRows(); loadPanel(); setActivityKey((k) => k + 1); }, [loadRows, loadPanel]);
   const select = useCallback((appId: string) => setUrl({ app: appId }), [setUrl]);

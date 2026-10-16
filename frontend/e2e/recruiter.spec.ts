@@ -14,7 +14,7 @@ test("open job → select applicant → panel → compare 2 → shortlist", asyn
   page.on("pageerror", (e) => problems.push(e.message));
 
   await page.goto("/recruiter");
-  await page.getByRole("link", { name: /Data Scientist/ }).click();
+  await page.getByRole("link", { name: "Data Scientist", exact: true }).click();
   const list = page.getByRole("list", { name: "Applicants" });
   await expect(list.getByRole("listitem").first()).toContainText("Strong early-career DS", { timeout: 20_000 });
 

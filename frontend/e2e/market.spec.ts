@@ -22,8 +22,12 @@ test("market baseline from the test fixtures", async ({ page }) => {
   await page.screenshot({ path: "e2e/.tmp/market-2-insights-fixtures.png", fullPage: true });
   await page.getByRole("main").getByRole("link", { name: "Market baselines" }).click();
   await expect(page.getByRole("navigation", { name: "Main" })).not.toContainText("Jobs");     // Admin mode
-  // No AI Engineer candidate is scored in the e2e demo, so the switch needs no confirmation (tests cover the warning)
+  // The jobs test scores AI Engineer candidates first: the switch then asks to confirm the re-score
   await page.getByRole("radio", { name: /Market v1/ }).click();
+  const confirm = page.getByRole("dialog", { name: "Switch the baseline source?" });
+  if (await confirm.isVisible().catch(() => false) || await confirm.waitFor({ timeout: 1500 }).then(() => true, () => false)) {
+    await confirm.getByRole("button", { name: "Switch" }).click();
+  }
   await expect(page.getByRole("radio", { name: /Market v1/ })).toHaveAttribute("aria-checked", "true");
   await page.screenshot({ path: "e2e/.tmp/market-3-toggle.png" });
   await page.getByRole("radio", { name: "Manual" }).click();

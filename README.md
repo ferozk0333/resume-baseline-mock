@@ -112,6 +112,29 @@ the browser ("Demo: viewing as … · Switch profile" in the header). With no pr
 - The old "Score a profile against a role" page is now **Admin → Demo tools** (`/admin/demo`); role baselines are
   under Admin too.
 
+### Candidate Home and job detail (specs/17, phase B)
+- **Home** (`/`, and **Jobs** at `/jobs`): the baseline score strip, then *Jobs for you*: open recruiter jobs on
+  RightStaff (never market postings), list on the left and the job on the right (a phone opens the job as its own
+  page, `/jobs/{id}`). Jobs for your target roles come first, grouped by JobMatch: **Strong** ≥ `JOBMATCH_STRONG` (75),
+  **Close** ≥ `JOBMATCH_CLOSE` (55), **Stretch** below; other roles' jobs sit under "Other jobs" (collapsed). Filters
+  (role, work mode, location, salary listed, saved; work mode pre-filled from application details), Save, and
+  Not interested (optional reason; hides the job, changes no score; "Show again" undoes it).
+- **JobMatch is a dummy preview** (`JOBMATCH_PREVIEW=1`): your baseline score for the job's role plus a stable
+  offset in [−12, +8] (55 ± 15 without one), clamped to 5–98. Always shown with a "Preview" badge; never stored,
+  never shown to recruiters, never in pools or percentiles.
+- **Job detail:** JobMatch (Preview) with "Your baseline score for <role>" right below it; requirements with "Your
+  closest evidence" only when the name or an alias exactly matches a criterion of your same-role baseline score
+  (else "Checked when JobMatch launches"); "What would raise your match" from your plan; the posting; and Apply,
+  which opens "What the recruiter will see" and then runs the existing apply.
+- **Recruiter activity:** the last recruiter action on the job (applicant panel opened, stage moves, approved
+  emails, workflow decisions, posting or editing the job): "Recruiter active today / N days ago"; "Reviewing
+  applications" when a stage moved within `REVIEWING_DAYS` (14); "Low recent activity" after `LOW_ACTIVITY_DAYS` (30).
+- **Demo jobs:** `seed/demo_jobs.json` (9 fictional jobs, 3 per role; job baselines written from the role baselines
+  with small differences, no model calls). `scripts/seed_demo_jobs.py --db data/demo.db` adds them (idempotent);
+  `scripts/seed_recruiter_demo.py` includes them. All demo jobs are marked as demo data.
+
+Home, job detail and the apply sheet make no model calls.
+
 ## Models
 Claude is the default for extraction, fallback judging, complexity and the plan. Any of these can run on
 Groq instead by naming a Groq model with a `groq/` prefix, e.g. `EXTRACT_MODEL=groq/openai/gpt-oss-120b`

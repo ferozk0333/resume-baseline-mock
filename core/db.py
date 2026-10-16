@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -174,7 +174,9 @@ CREATE TABLE IF NOT EXISTS jobs (           -- recruiter view (phase 11): one jo
   details_json TEXT,              -- department, location, workplace, employment type, level, years, short description
   jd_text TEXT, jd_file TEXT,     -- the original job description (normalized text, saved file)
   draft_json TEXT,                -- the create/edit form while it is being worked on (autosaved)
-  updated_at TEXT
+  updated_at TEXT,
+  data_source TEXT,               -- 'demo' for seeded demo jobs (specs/17 §9), null otherwise
+  role_baseline_id TEXT           -- the role baseline this job's own baseline was written from, when known
 );
 
 CREATE TABLE IF NOT EXISTS applications (
@@ -394,6 +396,15 @@ CREATE TABLE IF NOT EXISTS candidate_onboarding ( -- first-run progress, so ever
   step TEXT,                      -- proof | roles | review | scores | details | done
   read_task_id TEXT, score_task_id TEXT, confirmed_at TEXT, finished_at TEXT, updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS job_events (           -- recruiter activity on a job (specs/17 §4.1)
+  id TEXT PRIMARY KEY, job_id TEXT, application_id TEXT,
+  kind TEXT,                      -- panel_opened | stage_moved (seeded demo activity uses both)
+  demo INTEGER DEFAULT 0, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS candidate_job_prefs (  -- Save / Not interested on the candidate Home (no score effect)
+  candidate_id TEXT, job_id TEXT, saved INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, reason TEXT, updated_at TEXT,
+  PRIMARY KEY (candidate_id, job_id)
+);
 CREATE TABLE IF NOT EXISTS candidate_application_details (  -- "fill once": never sent to a model, never shown
   candidate_id TEXT PRIMARY KEY,                            -- to recruiters, never used in scoring or pools
   work_auth_json TEXT, questions_json TEXT, eeo_json TEXT, saved_at TEXT, dismissed_at TEXT, updated_at TEXT
@@ -566,6 +577,11 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
                                                               "updated_at"))]),
     (20, ["ALTER TABLE baselines ADD COLUMN market_version_id TEXT", *MARKET_TABLES]),
     (21, CANDIDATE_TABLES),
+    (22, ["ALTER TABLE jobs ADD COLUMN data_source TEXT", "ALTER TABLE jobs ADD COLUMN role_baseline_id TEXT",
+          "CREATE TABLE IF NOT EXISTS job_events (id TEXT PRIMARY KEY, job_id TEXT, application_id TEXT, kind TEXT, "
+          "demo INTEGER DEFAULT 0, created_at TEXT)",
+          "CREATE TABLE IF NOT EXISTS candidate_job_prefs (candidate_id TEXT, job_id TEXT, saved INTEGER DEFAULT 0, "
+          "hidden INTEGER DEFAULT 0, reason TEXT, updated_at TEXT, PRIMARY KEY (candidate_id, job_id))"]),
 ]
 
 

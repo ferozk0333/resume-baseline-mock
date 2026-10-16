@@ -1,24 +1,23 @@
 "use client";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PercentileLine } from "@/components/app/candidate/score-card";
-import { PostingPreview } from "@/components/app/jobs/posting-preview";
-import { ApiError, get, post, STEP_LABELS, WORKPLACE, type OnboardingState, type Posting, type ScoreCard } from "@/lib/api";
+import { JobsBrowser } from "@/components/app/candidate/jobs-browser";
+import { ApiError, get, post, STEP_LABELS, type OnboardingState, type ScoreCard } from "@/lib/api";
 import { useCurrentCandidate } from "@/lib/current-candidate";
 
 export default function HomePage() {
   return <Suspense fallback={<Skeleton className="h-96" />}><Home /></Suspense>;
 }
 
-/** Candidate Home (specs/17 §4). Phase A: the baseline score strip, "Finish your profile", and open jobs to apply to;
- * the ranked "Jobs for you" list with job detail comes in phase B. */
+/** Candidate Home (specs/17 §4): the baseline score strip with one next best action, "Finish your profile", and the
+ * ranked "Jobs for you" list with the job detail on the right. */
 function Home() {
   const router = useRouter();
   const [cid, ready, setCid] = useCurrentCandidate();
@@ -116,58 +115,7 @@ function Home() {
         </Card>
       )}
 
-      <OpenJobs cid={cid} />
+      <JobsBrowser cid={cid} />
     </div>
-  );
-}
-
-/** Open recruiter jobs. Applying uses the confirmed profile; the candidate never sees the recruiter's job score. */
-function OpenJobs({ cid }: { cid: string }) {
-  const [jobs, setJobs] = useState<Posting[] | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [applied, setApplied] = useState<Set<string>>(new Set());
-  useEffect(() => { get<Posting[]>("/open-jobs").then(setJobs).catch(() => setJobs([])); }, []);
-  const apply = useCallback(async (jobId: string) => {
-    setBusy(jobId);
-    try {
-      await post(`/candidates/${cid}/apply`, { job_id: jobId });
-      setApplied((s) => new Set(s).add(jobId));
-      toast.success("Applied. The recruiter can see your application now.");
-    } catch (e) { toast.error((e as Error).message); }
-    finally { setBusy(null); }
-  }, [cid]);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Open jobs</CardTitle>
-        <CardDescription>Jobs posted by recruiters on RightStaff.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {jobs === null ? <Skeleton className="h-24" /> : jobs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No open jobs right now.</p>
-        ) : (
-          <ul aria-label="Open jobs" className="divide-y">
-            {jobs.map((j) => (
-              <li key={j.id} className="py-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpen(open === j.id ? null : j.id)}
-                    aria-expanded={open === j.id}>
-                    <div className="font-medium hover:underline">{j.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {[j.company, j.location, j.workplace ? WORKPLACE[j.workplace] : null].filter(Boolean).join(" · ")}</div>
-                  </button>
-                  {applied.has(j.id) ? <Badge variant="secondary">Applied</Badge> : (
-                    <Button size="sm" disabled={busy !== null} onClick={() => apply(j.id)}>{busy === j.id ? "Applying…" : "Apply"}</Button>
-                  )}
-                </div>
-                {open === j.id && <div className="mt-3 rounded-lg border bg-muted/30 p-4"><PostingPreview p={j} /></div>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
   );
 }

@@ -9,7 +9,7 @@ test("hiring workflow: invite → reply → slot → feedback → advance", asyn
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.goto("/recruiter");
-  await page.getByRole("link", { name: /Product Manager/ }).click();
+  await page.getByRole("link", { name: "Associate Product Manager", exact: true }).click();
   const list = page.getByRole("list", { name: "Applicants" });
   await expect(list.getByRole("listitem").first()).toBeVisible({ timeout: 20_000 });
   const first = list.getByRole("listitem").first();

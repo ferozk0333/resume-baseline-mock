@@ -279,3 +279,36 @@ export type ApplicationDetails = {
 export const STEP_LABELS: { key: Exclude<OnboardingStep, "done">; label: string }[] = [
   { key: "proof", label: "Add your proof" }, { key: "roles", label: "Target roles" }, { key: "review", label: "Review" },
   { key: "scores", label: "Your baseline scores" }, { key: "details", label: "Finish your profile" }];
+export type JobActivity = { last_at: string | null; days: number | null; label: string; low: boolean; reviewing: boolean };
+export type JobMatch = { value: number; must_haves_met: number; must_haves_total: number; preview: true } | null;
+export type Salary = { min: number | null; max: number | null; currency: string } | null;
+export type HomeJob = { id: string; title: string; company: string; location: string; workplace: string | null;
+  salary: Salary; posted_at: string; activity: JobActivity; jobmatch: JobMatch; group: "strong" | "close" | "stretch" | null;
+  role_baseline_id: string | null; target: boolean; saved: boolean; hidden: boolean;
+  applied: { status: string; applied_at: string } | null; demo: boolean };
+export type HomeJobs = { jobs: HomeJob[]; hidden: number; hidden_jobs: { id: string; title: string; company: string;
+    reason: string | null }[]; total_open: number; preview: boolean; profile_confirmed: boolean;
+  thresholds: { strong: number; close: number }; targets: Target[]; defaults: { workplace: string | null } };
+export type JobRequirement = { name: string; kind: string; priority: "required" | "preferred"; must_have: boolean;
+  evidence: { text: string; quote: string | null; source: string | null; matched: string; caption: string } | null };
+export type JobDetail = { job: Posting & { salary: Salary; status: string; demo: boolean }; activity: JobActivity;
+  jobmatch: JobMatch; role: { baseline_id: string | null; title: string | null; baseline_score: number | null; run_id: string | null };
+  requirements: JobRequirement[]; evidence_matches: number;
+  raise: { title: string; what_to_do: string; points: number; covers: string[] }[]; raise_fallback: boolean;
+  plan_status: string | null; applied: { status: string; applied_at: string } | null; profile_confirmed: boolean;
+  saved: boolean; recruiter_view: { name: string | null; sources: string[]; roles: string[]; projects: string[];
+    top_evidence: { name: string; quote: string | null; source: string | null }[] } };
+export const HIDE_REASONS: [string, string][] = [["location", "Location"], ["salary", "Salary"], ["role", "Not my kind of role"],
+  ["seniority", "Seniority"], ["other", "Other"]];
+
+export function salaryText(s: Salary): string | null {
+  if (!s) return null;
+  const k = (n: number | null) => (n === null ? "" : n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`);
+  const sym = s.currency === "USD" ? "$" : `${s.currency} `;
+  return s.min && s.max ? `${sym}${k(s.min)}–${k(s.max)}` : `${sym}${k(s.min ?? s.max)}`;
+}
+
+export function postedAgo(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  return days <= 0 ? "Posted today" : days === 1 ? "Posted yesterday" : `Posted ${days} days ago`;
+}

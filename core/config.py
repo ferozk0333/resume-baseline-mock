@@ -146,6 +146,16 @@ PRINT_TIMINGS = _env("PRINT_TIMINGS", "1") == "1"   # timing table on stdout at 
 # people. Lower them in .env only for a local demo: the UI then shows a "demo pool" badge.
 MIN_POOL = int(_env("MIN_POOL", "20"))
 MIN_GROUP = int(_env("MIN_GROUP", "10"))
+
+# Candidate Home (specs/17 §4, §6). JobMatch is a dummy preview for now: a deterministic number, always labelled
+# "Preview", never stored as a score and never shown to recruiters. Groups: Strong >= STRONG, Close >= CLOSE.
+JOBMATCH_PREVIEW = _env("JOBMATCH_PREVIEW", "1") == "1"
+JOBMATCH_STRONG = int(_env("JOBMATCH_STRONG", "75"))
+JOBMATCH_CLOSE = int(_env("JOBMATCH_CLOSE", "55"))
+# Recruiter activity signals (specs/17 §4.1): "Reviewing applications" when a stage moved within REVIEWING_DAYS;
+# "Low recent activity" after LOW_ACTIVITY_DAYS without any recruiter action on the job.
+REVIEWING_DAYS = int(_env("REVIEWING_DAYS", "14"))
+LOW_ACTIVITY_DAYS = int(_env("LOW_ACTIVITY_DAYS", "30"))
 PEER_MIN_RATE = int(_env("PEER_MIN_RATE", "50"))   # a peer signal shows when at least this % of the group has it
 
 # --- Scoring constants (specs/04) -----------------------------------------

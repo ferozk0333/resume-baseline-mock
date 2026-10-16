@@ -253,6 +253,14 @@ class OnboardingStepIn(BaseModel):
     step: Literal["proof", "roles", "review", "scores", "details", "done"]
 
 
+class SaveJobPrefIn(BaseModel):
+    saved: bool
+
+
+class HideJobIn(BaseModel):
+    reason: Literal["location", "salary", "role", "seniority", "other"] | None = None
+
+
 class MarketSettingsIn(BaseModel):
     allow_test_versions: bool
 
@@ -708,6 +716,47 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         with conn() as c:
             cand_or_404(c, candidate_id)
             return bad_request(cx.save_application_details, c, candidate_id, body)
+
+    # --- Candidate Home and job detail (specs/17 §4–§6): code only, no model calls ---------------------------------
+    from backend import candidate_jobs as cj
+
+    @app.get("/candidates/{candidate_id}/jobs", tags=["candidate"])
+    def candidate_jobs(candidate_id: str):
+        """Open recruiter jobs ranked for this candidate, with the JobMatch preview (dummy, never stored)."""
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            out = cj.home_jobs(c, candidate_id)
+        out["profile_confirmed"] = out["profile_confirmed"] and candidate_id not in state.review_threads
+        return out
+
+    @app.get("/candidates/{candidate_id}/jobs/{job_id}", tags=["candidate"])
+    def candidate_job(candidate_id: str, job_id: str):
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            out = cj.job_detail(c, candidate_id, job_id) or not_found("Job")
+        out["profile_confirmed"] = out["profile_confirmed"] and candidate_id not in state.review_threads
+        return out
+
+    @app.post("/candidates/{candidate_id}/jobs/{job_id}/save", tags=["candidate"])
+    def save_job(candidate_id: str, job_id: str, body: SaveJobPrefIn):
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            jb.get(c, job_id) or not_found("Job")
+            return cj.save(c, candidate_id, job_id, body.saved)
+
+    @app.post("/candidates/{candidate_id}/jobs/{job_id}/hide", tags=["candidate"])
+    def hide_job(candidate_id: str, job_id: str, body: HideJobIn):
+        """Not interested (optional reason). Hides the job for this candidate; changes no score."""
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            jb.get(c, job_id) or not_found("Job")
+            return cj.hide(c, candidate_id, job_id, body.reason)
+
+    @app.post("/candidates/{candidate_id}/jobs/{job_id}/unhide", tags=["candidate"])
+    def unhide_job(candidate_id: str, job_id: str):
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            return cj.unhide(c, candidate_id, job_id)
 
     @app.post("/candidates/{candidate_id}/application-details/dismiss", tags=["candidate"])
     def dismiss_application_details(candidate_id: str):
@@ -1315,6 +1364,14 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
             return {"weights": j["weights"], "preset": j["preset"], "applicants": rows}
+
+    @app.post("/applications/{app_id}/opened", status_code=204, tags=["recruiter"])
+    def panel_opened(app_id: str):
+        """The recruiter opened this applicant's panel: an activity signal for the job (specs/17 §4.1)."""
+        from backend import candidate_jobs as cj
+        with conn() as c:
+            app_or_404(c, app_id)
+            cj.record_panel_opened(c, app_id)
 
     @app.get("/applications/{app_id}", tags=["recruiter"])
     def application(app_id: str):

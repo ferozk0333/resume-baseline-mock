@@ -81,8 +81,10 @@ def seed(db_path: str, reset: bool = False) -> dict:
             conn.execute("UPDATE candidates SET data_source = 'archetype' WHERE id = ?", (cid,))
         res = Pipeline(Deps(db_path, judge, today=TODAY), print_timings=False).score(cid, ds)
         rc.add_application(conn, jobs[ds], cid, res["run_id"])
+    from backend import demo_jobs                      # the candidate Home's demo jobs (specs/17 §9)
+    seeded = demo_jobs.seed(conn)
     conn.close()
-    return {"jobs": len(jobs), "parsed_profiles": sum(1 for p in ids if not is_variant(p)),
+    return {"jobs": len(jobs), "demo_jobs": seeded["added"], "parsed_profiles": sum(1 for p in ids if not is_variant(p)),
             "test_variants": sum(1 for p in ids if is_variant(p)), "archetypes": len(archetypes)}
 
 

@@ -54,8 +54,9 @@ def test_certification_must_have_follows_matching():
 # --- List: ranking, tags, sorting, filters, re-ranking ---------------------------------------------------
 
 def test_jobs_seeded_with_all_applicants(api):
-    jobs = {j["baseline_id"]: j for j in api.get("/jobs").json()}
-    assert sum(j["applicants"] for j in jobs.values()) == 15 + 7          # DS4_padded is not an applicant
+    jobs = {j["baseline_id"]: j for j in api.get("/jobs").json() if j["baseline_id"].startswith("baseline-")
+            and not j["baseline_id"].startswith("baseline-demo-")}    # the 3 first demo jobs (not the Home's 9)
+    assert len(jobs) == 3 and sum(j["applicants"] for j in jobs.values()) == 15 + 7          # DS4_padded is not an applicant
     assert all(len(j["must_haves"]) == 4 for j in jobs.values())
 
 
