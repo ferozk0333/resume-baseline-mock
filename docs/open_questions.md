@@ -125,3 +125,5 @@ ask if wanted.
     candidate applies only with Apply. Demo tools keep the old behaviour. Please confirm.
 17. **Thin profiles (score < 10).** Shown as-is with "Most of your score is missing evidence, not weak evidence."
     No scoring change.
+18. **Recruiter access to work authorization/sponsorship answers when assisted apply is built** [OPEN]. For now all
+    application details are hidden from recruiters (specs/17 §3.2, confirmed in the Phase A review).
