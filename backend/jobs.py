@@ -128,7 +128,11 @@ def templates(conn) -> list[dict]:
             for j in listing(conn) if j["status"] != "draft"]
     roles = [{"kind": "template", "id": b.id, "title": b.title, "company": "Role template", "status": None,
               "level": b.level} for b in db.list_baselines(conn)]
-    return jobs + roles
+    market = [{"kind": "template", "id": r["baseline_id"], "title": f"{r['title']} (Market v{r['version']})",
+               "company": "Market template", "status": None, "level": r["level"]}
+              for r in conn.execute("SELECT v.baseline_id, v.version, v.level, b.title FROM market_versions v JOIN "
+                                    "baselines b ON b.id = v.baseline_id WHERE v.status = 'published'")]
+    return jobs + roles + market
 
 
 def _draft_from(conn, baseline: Baseline, job: dict | None, source: str) -> dict:

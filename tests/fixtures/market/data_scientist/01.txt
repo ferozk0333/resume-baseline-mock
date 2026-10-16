@@ -1,0 +1,27 @@
+# Data Scientist, Product
+Lumenfield · Full-time
+
+What you'll do
+
+- Design and analyze A/B tests for consumer features.
+- Partner with product and engineering on metrics.
+
+Requirements
+
+- 1+ years of experience in analytics or data science.
+- Advanced SQL.
+- Proficiency in Python with pandas.
+- Experience designing and analyzing A/B tests.
+- Strong statistics: hypothesis testing and regression.
+
+Nice to have
+
+- Experience with causal inference methods.
+- Tableau or Looker.
+
+What we offer
+
+- Salary range $100,000–$130,000 plus equity.
+- Health, dental and vision coverage.
+
+Lumenfield is an equal opportunity employer. Fictional posting for RightStaff tests.

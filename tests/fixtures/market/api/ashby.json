@@ -1,0 +1,22 @@
+{
+ "jobs": [
+  {
+   "id": "z9",
+   "title": "LLM Engineer",
+   "location": "Remote",
+   "publishedAt": "2026-10-02T09:00:00Z",
+   "isListed": true,
+   "jobUrl": "https://jobs.ashbyhq.com/example/z9",
+   "descriptionPlain": "Build agents. Requirements: Python, evals."
+  },
+  {
+   "id": "z10",
+   "title": "ML Engineer (unlisted)",
+   "location": "Remote",
+   "publishedAt": "2026-10-02T09:00:00Z",
+   "isListed": false,
+   "jobUrl": "https://jobs.ashbyhq.com/example/z10",
+   "descriptionPlain": "Hidden."
+  }
+ ]
+}

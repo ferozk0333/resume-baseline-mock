@@ -220,3 +220,28 @@ export type JobTemplate = { kind: "job" | "template"; id: string; title: string;
   level?: string };
 export const WORKPLACE: Record<string, string> = { on_site: "On-site", hybrid: "Hybrid", remote: "Remote" };
 export const REACH: Record<number, string> = { 1: "Own work", 2: "Team", 3: "Cross-functional", 4: "Organization", 5: "External" };
+
+// --- Market baselines (specs/15) ---------------------------------------------------------------------------
+export type MarketCriterion = { name: string; kind: string; share: number; required_share: number;
+  by_tier: Record<string, number>; postings: number; companies: number; category: "required" | "preferred" | "dropped";
+  previous: string | null; change: "new" | "dropped" | "moved" | null; share_delta: number | null; variants: string[];
+  quotes: string[] };
+export type MarketVersion = { id: string; role: string; level: string; version: number; window_start: string;
+  window_end: string; postings: number; companies: number; status: "draft" | "published" | "discarded" | "retired";
+  insufficient: boolean; test_version: boolean; baseline_id: string | null; summary_method: string; created_at: string;
+  published_at: string | null;
+  content: { criteria: MarketCriterion[]; required_years: number | null; expected_reach: number | null;
+    scope_expectation: string | null; complexity_criteria: string | null; description: string | null;
+    tiers: Record<string, { companies: number; postings: number }>; material: string[];
+    thresholds: Record<string, unknown> } };
+export type MarketRole = { key: string; title: string; manual_baseline: string; source: "manual" | "market";
+  active: MarketVersion | null; latest: MarketVersion | null; postings: number; companies: number;
+  configured: { companies: number; placeholders: number } };
+export type MarketPosting = { id: string; company: string; tier: string; source: string; title: string; level: string | null;
+  level_method: string | null; source_url: string | null; first_seen: string; last_seen: string; extracted: boolean };
+export type SideBySide = { manual: { required_years: number; expected_reach: string; scope_expectation: string | null;
+    complexity_criteria: string | null };
+  market: { version: number; required_years: number | null; expected_reach: string | null; scope_expectation: string | null;
+    complexity_criteria: string | null } | null;
+  rows: { name: string; kind: string; manual: string | null; market: string | null; share: number | null }[] };
+export type Suggestion = { id: string; name: string; canonical: string | null; method: string | null; status: string };

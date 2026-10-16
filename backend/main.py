@@ -202,6 +202,24 @@ class ApplyIn(BaseModel):
     job_id: str
 
 
+class RecomputeIn(BaseModel):
+    test: bool = False                   # no model: only postings whose extraction is cached or hand-labelled
+
+
+class DecideIn(BaseModel):
+    approve: bool
+    canonical: str | None = None
+
+
+class SourceIn(BaseModel):
+    source: Literal["manual", "market"]
+    confirm: bool = False
+
+
+class MarketSettingsIn(BaseModel):
+    allow_test_versions: bool
+
+
 class WorkflowStart(BaseModel):
     confirm_move: bool = False           # "Move to Shortlisted and start?" was confirmed
 
@@ -385,6 +403,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             cand = store.get_candidate(c, candidate_id) or not_found("Candidate")
             if db.get_baseline(c, baseline_id) is None:
                 not_found("Baseline")
+            from market.baseline import resolve_baseline
+            baseline_id = resolve_baseline(c, baseline_id)          # the role's Market baseline when toggled on
         try:
             videos = json.loads(demo_videos or "[]")
             media.validate_links(videos)
@@ -524,9 +544,11 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             if db.get_baseline(c, body.baseline_id) is None:
                 not_found("Baseline")
             blocker = scoring_blocker(store.load_profile(c, candidate_id))
+            from market.baseline import resolve_baseline
+            baseline_id = resolve_baseline(c, body.baseline_id)     # Manual or Market (specs/15 §9)
         if blocker:
             raise HTTPException(409, blocker)
-        return {"task_id": start_scoring(candidate_id, body.baseline_id, body.weights)}
+        return {"task_id": start_scoring(candidate_id, baseline_id, body.weights)}
 
     def run_row(c, run_id: str) -> dict:
         row = c.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
@@ -546,8 +568,13 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                              "details": v["details"], "formula": FORMULAS.get(s),
                              "weight": weights["subcategories"][dim][s],
                              "effective_weight": agg.effective_weights.get(s, 0.0)})
+        b = c.execute("SELECT market_version_id, title FROM baselines WHERE id = ?", (run["baseline_id"],)).fetchone()
+        source = "manual"
+        if b and b["market_version_id"]:
+            v = c.execute("SELECT version FROM market_versions WHERE id = ?", (b["market_version_id"],)).fetchone()
+            source = f"market v{v[0]}" if v else "market"
         return {"run": {k: run[k] for k in ("id", "candidate_id", "baseline_id", "status", "started_at",
-                                            "finished_at", "logic_version", "plan_status")},
+                                            "finished_at", "logic_version", "plan_status")} | {"baseline_source": source},
                 "progress": {"done": sum(1 for x in subs if x["status"] != "pending"), "total": len(subs)},
                 "weights": weights, "final": agg.final, "dimensions": agg.dimensions, "subcategories": subs,
                 "gaps": [g.as_dict() for g in run_gaps(c, run["id"], weights)]}
@@ -841,6 +868,151 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 raise HTTPException(422, str(exc)) from exc
             baseline_id = jb.get(c, body.job_id)["baseline_id"]
         return {"task_id": start_scoring(candidate_id, baseline_id, None, kind="apply", application_id=app_id)}
+
+    # --- Market baselines (specs/15) -------------------------------------------------------------------------
+    from market import baseline as mb
+    from market import normalize as mnorm
+    from market import pipeline as mp
+    from market import sources as msrc
+    from market import store as mstore
+
+    def role_or_404(key: str) -> msrc.Role:
+        return msrc.load().get(key) or not_found("Role")
+
+    def market_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/market/roles", tags=["market"])
+    def market_roles():
+        with conn() as c:
+            out = []
+            for key, r in msrc.load().items():
+                rows = mstore.postings(c, key)
+                vs = mb.versions(c, key)
+                out.append({"key": key, "title": r.title, "manual_baseline": r.manual_baseline,
+                            "source": mb.source_of(c, key), "active": next((v for v in vs if v["status"] == "published"), None),
+                            "latest": vs[0] if vs else None, "postings": len(rows),
+                            "companies": len({p["company"] for p in rows}),
+                            "configured": {"companies": len(r.companies),
+                                           "placeholders": sum(c2.placeholder for c2 in r.companies)}})
+            return {"roles": out, "allow_test_versions": mb.allow_test_versions(c),
+                    "thresholds": {"WINDOW_DAYS": config.WINDOW_DAYS, "REQ_SHARE": config.REQ_SHARE,
+                                   "PREF_SHARE": config.PREF_SHARE, "MARGIN": config.MARGIN,
+                                   "MIN_COMPANIES": config.MIN_COMPANIES, "MIN_POSTINGS": config.MIN_POSTINGS}}
+
+    @app.get("/market/{role}/versions", tags=["market"])
+    def market_versions(role: str):
+        role_or_404(role)
+        with conn() as c:
+            return [{k: v for k, v in x.items() if k != "content"} for x in mb.versions(c, role)]
+
+    @app.get("/market/{role}/postings", tags=["market"])
+    def market_postings(role: str):
+        role_or_404(role)
+        with conn() as c:
+            return [{k: p[k] for k in ("id", "company", "tier", "source", "title", "level", "level_method", "source_url",
+                                       "first_seen", "last_seen", "posted_at")} | {"extracted": mstore.cached(c, p["text_hash"]) is not None}
+                    for p in mstore.postings(c, role)]
+
+    @app.post("/market/{role}/postings", tags=["market"])
+    async def market_add(role: str, company: str = Form(...), tier: str = Form(...), title: str = Form(...),
+                         url: str | None = Form(None), posted_at: str | None = Form(None), text: str | None = Form(None),
+                         file: UploadFile | None = File(None)):
+        """Add postings by hand (companies without a public API, and the first test postings)."""
+        r = role_or_404(role)
+        from ingest.documents import DocumentError, extract_text
+        try:
+            if file is not None and file.filename:
+                with conn() as c:
+                    text = extract_text(file.filename, await file.read(), c)
+        except DocumentError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        with conn() as c:
+            return market_call(mp.add_manual, c, r, company=company, tier=tier, title=title, text=text or "", url=url,
+                               posted_at=posted_at)
+
+    @app.post("/market/{role}/fetch", tags=["market"])
+    def market_fetch(role: str):
+        """Read the role's public job boards now (normally weekly). No model calls."""
+        r = role_or_404(role)
+        with conn() as c:
+            return mp.fetch_role(c, r)
+
+    @app.post("/market/{role}/recompute", tags=["market"])
+    async def market_recompute(role: str, body: RecomputeIn | None = None):
+        """A new draft version over the window: extraction of new postings (cached), aggregation, one summary."""
+        r = role_or_404(role)
+
+        def work():
+            with conn() as c:
+                return mb.recompute(c, r, llm=state.deps.job_llm, test=bool(body and body.test))
+        return await asyncio.to_thread(work)
+
+    @app.post("/market/{role}/fixtures", tags=["market"])
+    def market_fixtures(role: str):
+        """Test mode: load the hand-labelled fixture postings for the role (no model)."""
+        r = role_or_404(role)
+        with conn() as c:
+            return {"added": mp.load_fixtures(c, r)}
+
+    @app.get("/market/versions/{vid}", tags=["market"])
+    def market_version(vid: str):
+        with conn() as c:
+            v = mb.get_version(c, vid) or not_found("Version")
+            r = msrc.load()[v["role"]]
+            return {**v, "diff": mb.diff(c, vid), "side_by_side": mb.side_by_side(c, r, vid), "role_title": r.title,
+                    "can_publish": (not v["insufficient"] or mb.allow_test_versions(c)) and v["status"] == "draft"}
+
+    @app.post("/market/versions/{vid}/publish", tags=["market"])
+    def market_publish(vid: str):
+        """Nothing goes live without a person publishing it."""
+        with conn() as c:
+            mb.get_version(c, vid) or not_found("Version")
+            return market_call(mb.publish, c, vid)
+
+    @app.post("/market/versions/{vid}/discard", tags=["market"])
+    def market_discard(vid: str):
+        with conn() as c:
+            return mb.discard(c, vid)
+
+    @app.get("/market/suggestions", tags=["market"])
+    def market_suggestions(status: str | None = "pending"):
+        with conn() as c:
+            return {"suggestions": mnorm.suggestions(c, status),
+                    "canonical": sorted(mnorm.canonicals(mnorm.load_map()))}
+
+    @app.post("/market/suggestions/{sid}", tags=["market"])
+    def market_decide(sid: str, body: DecideIn):
+        """A person approves (merge into the canonical name; written to the reviewed map) or rejects."""
+        with conn() as c:
+            return market_call(mnorm.decide, c, sid, body.approve, body.canonical)
+
+    @app.post("/market/{role}/source", tags=["market"])
+    def market_source(role: str, body: SourceIn):
+        """The toggle. 409 with "Switching will re-score N candidates (about M model calls)" unless confirmed."""
+        r = role_or_404(role)
+        with conn() as c:
+            est = mb.switch_estimate(c, r, body.source)
+            if not est["possible"]:
+                raise HTTPException(422, est["reason"])
+            if est["candidates"] and not body.confirm:
+                raise HTTPException(409, est)
+            mb.set_setting(c, f"source:{role}", body.source)
+            return {"source": body.source, **est}
+
+    @app.put("/market/settings", tags=["market"])
+    def market_settings(body: MarketSettingsIn):
+        with conn() as c:
+            mb.set_setting(c, "allow_test_versions", "1" if body.allow_test_versions else "0")
+            return {"allow_test_versions": body.allow_test_versions}
+
+    @app.get("/market/dry-run", tags=["market"])
+    def market_dry_run():
+        with conn() as c:
+            return mp.dry_run(c, msrc.load())
 
     @app.get("/jobs/{job_id}", tags=["recruiter"])
     def job(job_id: str):

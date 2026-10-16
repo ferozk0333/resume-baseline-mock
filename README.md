@@ -63,6 +63,17 @@ A published job owns its baseline (never listed as a candidate role); candidates
 confirmed profile. Editing requirements or "What good looks like" asks first: "N applicants will be re-scored.
 About M model calls." Demo: `JOB_EXTRACT_LIVE=1 make demo` reads JDs with the real model.
 
+### Market baselines (specs/15)
+The **Market** page (recruiter navigation) builds a baseline per role from real job postings:
+fetch (official Greenhouse / Lever / Ashby job-board APIs only; `config/market_sources.yaml`, placeholders until the
+companies are chosen) or add postings by hand → dedupe → level (code first) → one cached extraction per posting
+(`MARKET_EXTRACT_MODEL`, the spec 14 reader) → names through the reviewed map `config/market_synonyms.json` (new names
+wait for a person) → aggregation in code (company → tier → overall shares, thresholds with hysteresis) → a draft
+version → a person publishes it. **Baseline source** per role switches candidate scoring between Manual (default)
+and the active Market version, after a "re-score N candidates" warning. Test mode: "Load test fixtures" and
+"Recompute without a model" (`tests/fixtures/market/`). Costs before running at scale:
+`.venv/bin/python scripts/market_dry_run.py [--fetch]` (never calls a model).
+
 ### Hiring workflow (specs/16)
 One workflow per application, from shortlist to decision: a LangGraph graph that waits for the recruiter at every
 email and every decision. **Nothing is sent automatically.**

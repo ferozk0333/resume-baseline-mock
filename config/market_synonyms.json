@@ -1,0 +1,488 @@
+{
+ "version": 1,
+ "names": {
+  "a/b testing": [
+   "Experimentation / A/B testing"
+  ],
+  "ab test": [
+   "Experimentation / A/B testing"
+  ],
+  "amplitude": [
+   "Product analytics tool"
+  ],
+  "api development": [
+   "API development"
+  ],
+  "apis": [
+   "Technical fluency"
+  ],
+  "asana": [
+   "Jira or Linear"
+  ],
+  "aws": [
+   "Cloud platform"
+  ],
+  "aws ml": [
+   "Cloud ML certification",
+   "Data science or analytics certification"
+  ],
+  "azure": [
+   "Cloud platform"
+  ],
+  "azure data scientist": [
+   "Data science or analytics certification"
+  ],
+  "backend": [
+   "API development"
+  ],
+  "backlog prioritization": [
+   "Prioritization"
+  ],
+  "benchmarking": [
+   "Model evaluation"
+  ],
+  "bi tool": [
+   "BI tool"
+  ],
+  "bigquery": [
+   "Cloud data warehouse"
+  ],
+  "bigquery sql": [
+   "SQL"
+  ],
+  "causal analysis": [
+   "Causal inference"
+  ],
+  "causal inference": [
+   "Causal inference"
+  ],
+  "classification": [
+   "Machine learning"
+  ],
+  "cloud data warehouse": [
+   "Cloud data warehouse"
+  ],
+  "cloud ml certification": [
+   "Cloud ML certification"
+  ],
+  "cloud platform": [
+   "Cloud platform"
+  ],
+  "clustering": [
+   "Machine learning"
+  ],
+  "containers": [
+   "Docker"
+  ],
+  "cross-functional": [
+   "Cross-functional collaboration"
+  ],
+  "cross-functional collaboration": [
+   "Cross-functional collaboration"
+  ],
+  "cspo": [
+   "Product management certification"
+  ],
+  "customer interviews": [
+   "Product discovery and user research"
+  ],
+  "dashboards": [
+   "Data visualization and communication"
+  ],
+  "data cleaning": [
+   "Data preprocessing",
+   "Data wrangling"
+  ],
+  "data exploration": [
+   "Exploratory data analysis"
+  ],
+  "data preparation": [
+   "Data wrangling"
+  ],
+  "data preprocessing": [
+   "Data preprocessing"
+  ],
+  "data science or analytics certification": [
+   "Data science or analytics certification"
+  ],
+  "data storytelling": [
+   "Data visualization and communication"
+  ],
+  "data visualization and communication": [
+   "Data visualization and communication"
+  ],
+  "data wrangling": [
+   "Data wrangling"
+  ],
+  "demand forecasting": [
+   "Forecasting"
+  ],
+  "discovery": [
+   "Product discovery and user research"
+  ],
+  "docker": [
+   "Docker"
+  ],
+  "eda": [
+   "Exploratory data analysis"
+  ],
+  "embeddings": [
+   "Retrieval-augmented generation"
+  ],
+  "etl": [
+   "Data preprocessing",
+   "Data wrangling"
+  ],
+  "evals": [
+   "Model evaluation"
+  ],
+  "experiment design": [
+   "Experimentation / A/B testing"
+  ],
+  "experimentation / a/b testing": [
+   "Experimentation / A/B testing"
+  ],
+  "experiments": [
+   "Experimentation / A/B testing"
+  ],
+  "exploratory data analysis": [
+   "Exploratory data analysis"
+  ],
+  "fastapi": [
+   "API development"
+  ],
+  "feature engineering": [
+   "Data preprocessing"
+  ],
+  "figma": [
+   "Figma"
+  ],
+  "fine tuning": [
+   "Fine-tuning"
+  ],
+  "fine-tuning": [
+   "Fine-tuning"
+  ],
+  "flask": [
+   "API development"
+  ],
+  "forecasting": [
+   "Forecasting"
+  ],
+  "funnel analysis": [
+   "Product analytics"
+  ],
+  "ga4": [
+   "Product analytics tool"
+  ],
+  "gcp": [
+   "Cloud platform"
+  ],
+  "genai": [
+   "LLM application development"
+  ],
+  "generative ai": [
+   "LLM application development"
+  ],
+  "git": [
+   "Git"
+  ],
+  "github": [
+   "Git"
+  ],
+  "gitlab": [
+   "Git"
+  ],
+  "go-to-market": [
+   "Go-to-market"
+  ],
+  "google analytics": [
+   "Product analytics tool"
+  ],
+  "google cloud": [
+   "Cloud platform"
+  ],
+  "google data analytics": [
+   "Data science or analytics certification"
+  ],
+  "google professional ml engineer": [
+   "Cloud ML certification"
+  ],
+  "gtm": [
+   "Go-to-market"
+  ],
+  "hf": [
+   "Hugging Face"
+  ],
+  "hugging face": [
+   "Hugging Face"
+  ],
+  "hypothesis testing": [
+   "Statistical analysis"
+  ],
+  "jira": [
+   "Jira or Linear"
+  ],
+  "jira or linear": [
+   "Jira or Linear"
+  ],
+  "kpis": [
+   "Product analytics"
+  ],
+  "langchain": [
+   "LangChain or LangGraph"
+  ],
+  "langchain or langgraph": [
+   "LangChain or LangGraph"
+  ],
+  "langgraph": [
+   "LangChain or LangGraph"
+  ],
+  "linear": [
+   "Jira or Linear"
+  ],
+  "llamaindex": [
+   "LangChain or LangGraph"
+  ],
+  "llm": [
+   "LLM application development"
+  ],
+  "llm application development": [
+   "LLM application development"
+  ],
+  "llm apps": [
+   "LLM application development"
+  ],
+  "llm evaluation": [
+   "Model evaluation"
+  ],
+  "looker": [
+   "BI tool"
+  ],
+  "lora": [
+   "Fine-tuning"
+  ],
+  "machine learning": [
+   "Machine learning fundamentals",
+   "Machine learning"
+  ],
+  "machine learning fundamentals": [
+   "Machine learning fundamentals"
+  ],
+  "metrics": [
+   "Product analytics"
+  ],
+  "mixpanel": [
+   "Product analytics tool"
+  ],
+  "ml": [
+   "Machine learning fundamentals",
+   "Machine learning"
+  ],
+  "mlops": [
+   "MLOps basics"
+  ],
+  "mlops basics": [
+   "MLOps basics"
+  ],
+  "model deployment": [
+   "MLOps basics"
+  ],
+  "model evaluation": [
+   "Model evaluation"
+  ],
+  "model monitoring": [
+   "MLOps basics"
+  ],
+  "model training": [
+   "Machine learning fundamentals"
+  ],
+  "mysql": [
+   "SQL"
+  ],
+  "pandas": [
+   "pandas"
+  ],
+  "peft": [
+   "Fine-tuning"
+  ],
+  "pmi-acp": [
+   "Product management certification"
+  ],
+  "postgresql": [
+   "SQL"
+  ],
+  "power bi": [
+   "BI tool"
+  ],
+  "pragmatic institute": [
+   "Product management certification"
+  ],
+  "prd": [
+   "Requirements writing"
+  ],
+  "predictive modeling": [
+   "Machine learning"
+  ],
+  "prioritization": [
+   "Prioritization"
+  ],
+  "product analytics": [
+   "Product analytics"
+  ],
+  "product analytics tool": [
+   "Product analytics tool"
+  ],
+  "product discovery and user research": [
+   "Product discovery and user research"
+  ],
+  "product launch": [
+   "Go-to-market"
+  ],
+  "product management certification": [
+   "Product management certification"
+  ],
+  "product specs": [
+   "Requirements writing"
+  ],
+  "prompt engineering": [
+   "LLM application development"
+  ],
+  "python": [
+   "Python"
+  ],
+  "python3": [
+   "Python"
+  ],
+  "pytorch": [
+   "PyTorch"
+  ],
+  "rag": [
+   "Retrieval-augmented generation"
+  ],
+  "redshift": [
+   "Cloud data warehouse"
+  ],
+  "regression": [
+   "Statistical analysis"
+  ],
+  "requirements writing": [
+   "Requirements writing"
+  ],
+  "rest api": [
+   "API development"
+  ],
+  "retrieval-augmented generation": [
+   "Retrieval-augmented generation"
+  ],
+  "rice": [
+   "Prioritization"
+  ],
+  "roadmapping": [
+   "Prioritization"
+  ],
+  "scikit-learn": [
+   "scikit-learn"
+  ],
+  "semantic search": [
+   "Retrieval-augmented generation"
+  ],
+  "sklearn": [
+   "scikit-learn"
+  ],
+  "snowflake": [
+   "Cloud data warehouse"
+  ],
+  "sql": [
+   "SQL"
+  ],
+  "stakeholder management": [
+   "Cross-functional collaboration"
+  ],
+  "statistical analysis": [
+   "Statistical analysis"
+  ],
+  "statistics": [
+   "Statistical analysis"
+  ],
+  "tableau": [
+   "BI tool"
+  ],
+  "technical background": [
+   "Technical fluency"
+  ],
+  "technical fluency": [
+   "Technical fluency"
+  ],
+  "time series": [
+   "Forecasting"
+  ],
+  "torch": [
+   "PyTorch"
+  ],
+  "transformers": [
+   "Hugging Face"
+  ],
+  "uplift modeling": [
+   "Causal inference"
+  ],
+  "user research": [
+   "Product discovery and user research"
+  ],
+  "user stories": [
+   "Requirements writing"
+  ],
+  "vector search": [
+   "Retrieval-augmented generation"
+  ],
+  "visualization": [
+   "Data visualization and communication"
+  ],
+  "wireframes": [
+   "Figma"
+  ]
+ },
+ "kinds": {
+  "Machine learning fundamentals": "skill",
+  "LLM application development": "skill",
+  "Retrieval-augmented generation": "skill",
+  "Model evaluation": "skill",
+  "API development": "skill",
+  "Data preprocessing": "skill",
+  "Fine-tuning": "skill",
+  "MLOps basics": "skill",
+  "Python": "tool",
+  "PyTorch": "tool",
+  "Git": "tool",
+  "Hugging Face": "tool",
+  "LangChain or LangGraph": "tool",
+  "Docker": "tool",
+  "Cloud platform": "tool",
+  "Cloud ML certification": "certification",
+  "Statistical analysis": "skill",
+  "Machine learning": "skill",
+  "Data wrangling": "skill",
+  "Exploratory data analysis": "skill",
+  "Experimentation / A/B testing": "skill",
+  "Data visualization and communication": "skill",
+  "Forecasting": "skill",
+  "Causal inference": "skill",
+  "SQL": "tool",
+  "pandas": "tool",
+  "scikit-learn": "tool",
+  "BI tool": "tool",
+  "Cloud data warehouse": "tool",
+  "Data science or analytics certification": "certification",
+  "Product discovery and user research": "skill",
+  "Requirements writing": "skill",
+  "Prioritization": "skill",
+  "Product analytics": "skill",
+  "Cross-functional collaboration": "skill",
+  "Go-to-market": "skill",
+  "Technical fluency": "skill",
+  "Jira or Linear": "tool",
+  "Product analytics tool": "tool",
+  "Figma": "tool",
+  "Product management certification": "certification"
+ }
+}

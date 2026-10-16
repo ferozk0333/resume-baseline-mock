@@ -24,7 +24,7 @@ export function SiteHeader() {
   const recruiter = path.startsWith("/recruiter");
   const tasks = useTaskCount(recruiter, path);
   const nav = recruiter ? [{ href: "/recruiter", label: "Jobs" }, { href: "/recruiter/tasks", label: "Tasks", count: tasks },
-    { href: "/recruiter/outbox", label: "Outbox" }] : [
+    { href: "/recruiter/outbox", label: "Outbox" }, { href: "/recruiter/market", label: "Market" }] : [
     { href: "/", label: "Candidates" },
     { href: "/baselines", label: "Baselines" },
   ];
@@ -43,7 +43,7 @@ export function SiteHeader() {
                 className={cn(
                   "rounded-md px-3 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground",
                   (n.href === "/" ? path === "/" || path.startsWith("/candidates") || path.startsWith("/runs")
-                    : n.href === "/recruiter" ? path.startsWith("/recruiter") && !/^\/recruiter\/(outbox|tasks)/.test(path)
+                    : n.href === "/recruiter" ? path.startsWith("/recruiter") && !/^\/recruiter\/(outbox|tasks|market)/.test(path)
                     : path.startsWith(n.href)) && "bg-muted text-foreground",
                 )}
               >

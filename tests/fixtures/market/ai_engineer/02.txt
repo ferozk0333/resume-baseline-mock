@@ -1,0 +1,28 @@
+# Applied AI Engineer
+Corvid Health · Full-time
+
+What you'll do
+
+- Build retrieval pipelines over clinical documents.
+- Partner with clinicians and product managers on what to build.
+- Monitor latency and cost in production.
+
+Requirements
+
+- 2+ years of software engineering experience in Python.
+- Hands-on work with LLM APIs: prompting, structured output and tool use.
+- Experience with RAG systems.
+- Experience building REST APIs with FastAPI or Flask.
+
+Nice to have
+
+- Experience with LangChain or LangGraph.
+- Cloud experience on AWS.
+- Experience fine-tuning small models.
+
+What we offer
+
+- Salary range $100,000–$130,000 plus equity.
+- Health, dental and vision coverage.
+
+Corvid Health is an equal opportunity employer. Fictional posting for RightStaff tests.

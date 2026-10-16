@@ -90,7 +90,7 @@ def parse_years(text: str | None) -> float | None:
     if not text:
         return None
     t = text.lower().replace("–", "-").replace("—", "-")
-    if re.search(r"\b(new grad|recent graduate|no experience|graduate program|entry[- ]level with no)\b", t):
+    if re.search(r"\b(new grads?|recent graduates?|no experience|graduate program|entry[- ]level with no)\b", t):
         return 0.0
     words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "ten": 10}
     m = re.search(r"(\d+(?:\.\d+)?)\s*(?:\+|-\s*\d+|to\s+\d+|or more)?\s*(?:years?|yrs?)", t) or \
@@ -234,13 +234,15 @@ def check(raw: JobExtract, text: str) -> dict:
             "good_quotes": good_quotes, "responsibilities": resp, "dropped": dropped}
 
 
-def read_job(llm, text: str) -> dict:
-    """One JOB_EXTRACT_MODEL call + code checks. {"status": "ok", ...} or {"status": "unavailable", "notice"}."""
+def read_job(llm, text: str, model: str | None = None) -> dict:
+    """One JOB_EXTRACT_MODEL call (or `model`, e.g. MARKET_EXTRACT_MODEL) + code checks.
+    {"status": "ok", ...} or {"status": "unavailable", "notice"}."""
+    model = model or config.JOB_EXTRACT_MODEL
     if llm is None:
         return {"status": "unavailable", "notice": "Reading job descriptions needs a model (JOB_EXTRACT_MODEL). "
                                                     "Fill in the form; the job description is on the right to copy from."}
     try:
-        raw = llm.parse(model=config.JOB_EXTRACT_MODEL, system=load_prompt("job_extract_system"),
+        raw = llm.parse(model=model, system=load_prompt("job_extract_system"),
                         user=wrap_tag("job_description", text), output_type=JobExtract)
     except Exception as exc:                            # noqa: BLE001 - any failure falls back to the manual form
         if not isinstance(exc, LLMError):
@@ -248,4 +250,4 @@ def read_job(llm, text: str) -> dict:
         log.warning("job description model unavailable: %s", exc)
         return {"status": "unavailable", "notice": f"The job description could not be read automatically ({exc}). "
                                                     "Fill in the form; the job description is on the right to copy from."}
-    return {"status": "ok", "model": config.JOB_EXTRACT_MODEL, **check(raw, text)}
+    return {"status": "ok", "model": model, **check(raw, text)}

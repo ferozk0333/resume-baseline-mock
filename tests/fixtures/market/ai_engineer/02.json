@@ -1,0 +1,92 @@
+{
+ "company": "Corvid Health",
+ "tier": "mid",
+ "title": "Applied AI Engineer",
+ "posted_at": "2026-09-20",
+ "labelled_by": "hand",
+ "extraction": {
+  "status": "ok",
+  "model": "hand-labelled",
+  "details": {
+   "title": "Applied AI Engineer",
+   "company": "Corvid Health",
+   "level": "entry",
+   "min_years": 2.0
+  },
+  "detail_quotes": {
+   "min_years": "2+ years of software engineering experience in Python."
+  },
+  "requirements": [
+   {
+    "name": "Python",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "2+ years of software engineering experience in Python."
+   },
+   {
+    "name": "LLM application development",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Hands-on work with LLM APIs: prompting, structured output and tool use."
+   },
+   {
+    "name": "Retrieval-augmented generation",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experience with RAG systems."
+   },
+   {
+    "name": "API development",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experience building REST APIs with FastAPI or Flask."
+   },
+   {
+    "name": "LangChain or LangGraph",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Experience with LangChain or LangGraph."
+   },
+   {
+    "name": "Cloud platform",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Cloud experience on AWS."
+   },
+   {
+    "name": "Fine-tuning",
+    "kind": "skill",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Experience fine-tuning small models."
+   }
+  ],
+  "responsibilities": [
+   {
+    "text": "Build retrieval pipelines over clinical documents.",
+    "quote": "Build retrieval pipelines over clinical documents."
+   },
+   {
+    "text": "Partner with clinicians and product managers on what to build.",
+    "quote": "Partner with clinicians and product managers on what to build."
+   },
+   {
+    "text": "Monitor latency and cost in production.",
+    "quote": "Monitor latency and cost in production."
+   }
+  ],
+  "good": {
+   "expected_reach": 3
+  },
+  "good_quotes": {
+   "expected_reach": "Monitor latency and cost in production."
+  },
+  "dropped": []
+ }
+}

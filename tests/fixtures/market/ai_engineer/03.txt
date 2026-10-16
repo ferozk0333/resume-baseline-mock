@@ -1,0 +1,26 @@
+# LLM Engineer
+Tidewell · Full-time
+
+What you'll do
+
+- Prototype and ship agent features for small-business accounting.
+- Write evaluation sets and run them on every change.
+
+Requirements
+
+- New grads welcome: projects count.
+- Strong Python.
+- You have built something with LLMs and can show it.
+- Experience writing evals for model outputs.
+
+Nice to have
+
+- Experience with vector databases such as pgvector.
+- Docker.
+
+What we offer
+
+- Salary range $100,000–$130,000 plus equity.
+- Health, dental and vision coverage.
+
+Tidewell is an equal opportunity employer. Fictional posting for RightStaff tests.

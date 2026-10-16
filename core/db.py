@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS baselines (
   description TEXT,
   is_mock INTEGER DEFAULT 1,
   updated_at TEXT,
-  owner_job_id TEXT               -- set for a recruiter-created job's own baseline (specs/14); never listed as a role
+  owner_job_id TEXT,              -- set for a recruiter-created job's own baseline (specs/14); never listed as a role
+  market_version_id TEXT          -- set for a published Market baseline (specs/15); used through the role's toggle
 );
 
 CREATE TABLE IF NOT EXISTS baseline_criteria (
@@ -361,6 +362,28 @@ CREATE TABLE IF NOT EXISTS scores (
 );
 CREATE INDEX IF NOT EXISTS idx_scores_run ON scores(run_id);
 
+CREATE TABLE IF NOT EXISTS market_postings (   -- specs/15 §3
+  id TEXT PRIMARY KEY, role TEXT, company TEXT, tier TEXT, source TEXT, source_id TEXT, external_id TEXT,
+  source_url TEXT, title TEXT, location TEXT, level TEXT, level_method TEXT,
+  text_hash TEXT, text TEXT, raw_file TEXT, posted_at TEXT, first_seen TEXT, last_seen TEXT,
+  status TEXT,                    -- active | closed | excluded (title filter)
+  created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS market_extractions (   -- one extraction per posting text, never repeated
+  text_hash TEXT PRIMARY KEY, model TEXT, extract_json TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS market_versions (
+  id TEXT PRIMARY KEY, role TEXT, level TEXT, version INTEGER, window_start TEXT, window_end TEXT,
+  postings INTEGER, companies INTEGER, content_json TEXT, content_hash TEXT,
+  status TEXT,                    -- draft | published | discarded
+  insufficient INTEGER, test_version INTEGER, baseline_id TEXT, summary_method TEXT,
+  created_at TEXT, published_at TEXT
+);
+CREATE TABLE IF NOT EXISTS market_suggestions (   -- new names waiting for a person: merge into a canonical name?
+  id TEXT PRIMARY KEY, name TEXT, canonical TEXT, method TEXT, status TEXT, created_at TEXT, decided_at TEXT
+);
+CREATE TABLE IF NOT EXISTS market_settings (key TEXT PRIMARY KEY, value TEXT);
+
 CREATE TABLE IF NOT EXISTS gap_reports (
   id TEXT PRIMARY KEY,
   run_id TEXT,
@@ -438,6 +461,19 @@ EMAILS = """CREATE TABLE IF NOT EXISTS emails (
   id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT, kind TEXT, stage_id TEXT, batch_id TEXT, status TEXT,
   intended_to TEXT, actual_to TEXT, subject TEXT, body TEXT, model TEXT, provider TEXT, reasons_json TEXT,
   checks_json TEXT, error TEXT, created_at TEXT, updated_at TEXT, sent_at TEXT)"""
+MARKET_TABLES = [
+    "CREATE TABLE IF NOT EXISTS market_postings (id TEXT PRIMARY KEY, role TEXT, company TEXT, tier TEXT, source TEXT, "
+    "source_id TEXT, external_id TEXT, source_url TEXT, title TEXT, location TEXT, level TEXT, level_method TEXT, "
+    "text_hash TEXT, text TEXT, raw_file TEXT, posted_at TEXT, first_seen TEXT, last_seen TEXT, status TEXT, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS market_extractions (text_hash TEXT PRIMARY KEY, model TEXT, extract_json TEXT, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS market_versions (id TEXT PRIMARY KEY, role TEXT, level TEXT, version INTEGER, "
+    "window_start TEXT, window_end TEXT, postings INTEGER, companies INTEGER, content_json TEXT, content_hash TEXT, "
+    "status TEXT, insufficient INTEGER, test_version INTEGER, baseline_id TEXT, summary_method TEXT, created_at TEXT, "
+    "published_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS market_suggestions (id TEXT PRIMARY KEY, name TEXT, canonical TEXT, method TEXT, "
+    "status TEXT, created_at TEXT, decided_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS market_settings (key TEXT PRIMARY KEY, value TEXT)",
+]
 WORKFLOW_TABLES = [
     "CREATE TABLE IF NOT EXISTS workflows (application_id TEXT PRIMARY KEY, job_id TEXT, thread_id TEXT, token TEXT, "
     "stage TEXT, round INTEGER, phase TEXT, step TEXT, title TEXT, payload_json TEXT, status TEXT, paused_status TEXT, "
@@ -505,6 +541,7 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (19, ["ALTER TABLE baselines ADD COLUMN owner_job_id TEXT", "ALTER TABLE jobs ADD COLUMN status TEXT DEFAULT 'open'",
           *(f"ALTER TABLE jobs ADD COLUMN {c} TEXT" for c in ("details_json", "jd_text", "jd_file", "draft_json",
                                                               "updated_at"))]),
+    (20, ["ALTER TABLE baselines ADD COLUMN market_version_id TEXT", *MARKET_TABLES]),
 ]
 
 
@@ -568,7 +605,8 @@ def get_baseline(conn: sqlite3.Connection, baseline_id: str) -> Baseline | None:
 
 def list_baselines(conn: sqlite3.Connection, include_owned: bool = False) -> list[Baseline]:
     """Role baselines. A recruiter job's own baseline (specs/14) is listed only with include_owned."""
-    rows = conn.execute("SELECT * FROM baselines" + ("" if include_owned else " WHERE owner_job_id IS NULL") +
+    rows = conn.execute("SELECT * FROM baselines" + ("" if include_owned else
+                        " WHERE owner_job_id IS NULL AND market_version_id IS NULL") +
                         " ORDER BY title, id").fetchall()
     return [_row_to_baseline(r, _criteria_rows(conn, r["id"])) for r in rows]
 

@@ -112,3 +112,11 @@ ask if wanted.
 12. **Flash checks dropped.** The extraction comparison (`compare_extraction.py --provider gemini`) and the Flash half
     of the complexity comparison failed twice (503s on 2026-10-13/14, then Google's daily 429). Dropped as decided.
     Partial result: 4 of the 6 judged complexity items were labelled by Flash; all 4 match Flash-Lite ("meets").
+13. **Job-board API terms (specs/15 §2).** Greenhouse, Lever and Ashby document their job-board GET endpoints as
+    public and unauthenticated, built for careers pages. None publishes a read rate limit or a separate terms page
+    for third-party aggregation. The fetchers read each board once per weekly fetch, with an identifying User-Agent,
+    and stop a board on 429. Please confirm this use is acceptable before adding real companies.
+14. **Market thresholds are proposals.** REQ_SHARE 0.5, PREF_SHARE 0.2, MARGIN 0.05, MIN_COMPANIES 8, MIN_POSTINGS 20,
+    equal tier weights. They are not tuned on any data.
+15. **Synonym map location.** The spec names `data/market_synonyms.json`, but `data/` is gitignored (databases). The
+    reviewed map lives in `config/market_synonyms.json` so approvals are versioned.

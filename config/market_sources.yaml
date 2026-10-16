@@ -1,0 +1,70 @@
+# Market baseline sources (specs/15 §2).
+# TODO(owner): replace every placeholder with the real companies. 15 per role: 5 large tech, 5 mid-size, 5 small
+# startups. `source` is greenhouse | lever | ashby (official public job-board APIs; `source_id` is the board token /
+# site name / job-board name) or manual (paste or upload postings on the Market page; most large tech companies).
+# Placeholders (`placeholder: true`) are never fetched.
+
+roles:
+  ai_engineer:
+    title: AI Engineer
+    manual_baseline: baseline-ai-engineer-entry
+    title_keywords: [ai engineer, ml engineer, machine learning engineer, llm engineer, applied ai, applied scientist, genai engineer]
+    title_exclusions: [sales engineer, solutions engineer, support engineer, manager, director, recruiter, intern]
+    companies:
+      - {name: "TODO large company 1", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 2", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 3", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 4", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 5", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO mid company 1", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 2", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO mid company 3", tier: mid, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO mid company 4", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 5", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 1", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 2", tier: startup, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 3", tier: startup, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO startup company 4", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 5", tier: startup, source: ashby, source_id: "", placeholder: true}
+  data_scientist:
+    title: Data Scientist
+    manual_baseline: baseline-data-scientist-entry
+    title_keywords: [data scientist, product data scientist, applied data scientist, decision scientist]
+    title_exclusions: [manager, director, recruiter, research scientist, intern]
+    companies:
+      - {name: "TODO large company 1", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 2", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 3", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 4", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 5", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO mid company 1", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 2", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO mid company 3", tier: mid, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO mid company 4", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 5", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 1", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 2", tier: startup, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 3", tier: startup, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO startup company 4", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 5", tier: startup, source: ashby, source_id: "", placeholder: true}
+  product_manager:
+    title: Product Manager
+    manual_baseline: baseline-product-manager-entry
+    title_keywords: [product manager, associate product manager, apm, product owner]
+    title_exclusions: [product marketing, project manager, program manager, director, vp, intern]
+    companies:
+      - {name: "TODO large company 1", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 2", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 3", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 4", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 5", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO mid company 1", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 2", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO mid company 3", tier: mid, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO mid company 4", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 5", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 1", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 2", tier: startup, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 3", tier: startup, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO startup company 4", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 5", tier: startup, source: ashby, source_id: "", placeholder: true}

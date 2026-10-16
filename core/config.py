@@ -268,3 +268,23 @@ IMAP_PASSWORD = _env("IMAP_PASSWORD", "") or SMTP_PASSWORD
 IMAP_POLL_MINUTES = float(_env("IMAP_POLL_MINUTES", "3"))
 WORKFLOW_TICK_SECONDS = int(_env("WORKFLOW_TICK_SECONDS", "60"))   # nudges due, interviews passed, inbox; 0 = off
 MESSAGE_MAX_WORDS = 120                                  # nudge, answer and offer-note drafts
+
+# --- Market baseline (specs/15) ---------------------------------------------------------------------------------
+MARKET_SOURCES = ROOT / "config" / "market_sources.yaml"
+MARKET_SYNONYMS = ROOT / "config" / "market_synonyms.json"     # reviewed synonym map (versioned, not in data/)
+MARKET_FIXTURES = ROOT / "tests" / "fixtures" / "market"        # test mode: hand-labelled postings, no model
+MARKET_EXTRACT_MODEL = _env("MARKET_EXTRACT_MODEL", "gemini/gemini-3.8-flash")   # once per new posting, cached
+MARKET_SUMMARY_MODEL = _env("MARKET_SUMMARY_MODEL", "gemini/gemini-3.8-flash")   # scope/complexity/description per version
+MARKET_MERGE_MODEL = _env("MARKET_MERGE_MODEL", "gemini/gemini-3.5-flash-lite")  # proposes merges for leftover names
+MARKET_MERGE_BATCH = 40
+WINDOW_DAYS = int(_env("WINDOW_DAYS", "90"))           # a posting counts while last_seen is within this window
+RECOMPUTE_DAYS = int(_env("RECOMPUTE_DAYS", "30"))
+FETCH_DAYS = 7                                          # weekly fetch; only updates last_seen for known postings
+REQ_SHARE = float(_env("REQ_SHARE", "0.5"))             # required if listed as required by ≥ this share (proposal)
+PREF_SHARE = float(_env("PREF_SHARE", "0.2"))           # preferred if listed at all by ≥ this share (proposal)
+MARGIN = float(_env("MARGIN", "0.05"))                  # hysteresis: a category changes only past threshold ± margin
+MIN_COMPANIES = int(_env("MIN_COMPANIES", "8"))
+MIN_POSTINGS = int(_env("MIN_POSTINGS", "20"))
+TIER_WEIGHTS = {"large": 1.0, "mid": 1.0, "startup": 1.0}   # equal by default
+DEDUPE_SIMILARITY = 0.92                                # same company + this text similarity = one posting
+MARKET_USER_AGENT = "RightStaff-market-baseline/0.1 (local research mock; weekly)"

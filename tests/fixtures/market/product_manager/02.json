@@ -1,0 +1,81 @@
+{
+ "company": "Corvid Health",
+ "tier": "mid",
+ "title": "Product Manager I",
+ "posted_at": "2026-09-22",
+ "labelled_by": "hand",
+ "extraction": {
+  "status": "ok",
+  "model": "hand-labelled",
+  "details": {
+   "title": "Product Manager I",
+   "company": "Corvid Health",
+   "level": "entry",
+   "min_years": 1.0
+  },
+  "detail_quotes": {
+   "min_years": "1+ years in product management or a related role."
+  },
+  "requirements": [
+   {
+    "name": "Product discovery and user research",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "User research experience."
+   },
+   {
+    "name": "Requirements writing",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experience writing PRDs."
+   },
+   {
+    "name": "Jira or Linear",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experience with Jira."
+   },
+   {
+    "name": "Cross-functional collaboration",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Cross-functional collaboration with engineering and design."
+   },
+   {
+    "name": "Healthcare domain",
+    "kind": "skill",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Healthcare domain experience."
+   },
+   {
+    "name": "SQL",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "SQL."
+   }
+  ],
+  "responsibilities": [
+   {
+    "text": "Lead discovery with clinicians.",
+    "quote": "Lead discovery with clinicians."
+   },
+   {
+    "text": "Coordinate launches with sales and support.",
+    "quote": "Coordinate launches with sales and support."
+   }
+  ],
+  "good": {
+   "expected_reach": 3
+  },
+  "good_quotes": {
+   "expected_reach": "Coordinate launches with sales and support."
+  },
+  "dropped": []
+ }
+}
