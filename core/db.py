@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -384,6 +384,21 @@ CREATE TABLE IF NOT EXISTS market_suggestions (   -- new names waiting for a per
 );
 CREATE TABLE IF NOT EXISTS market_settings (key TEXT PRIMARY KEY, value TEXT);
 
+-- Candidate experience (specs/17)
+CREATE TABLE IF NOT EXISTS candidate_targets (    -- target roles (1-3 role baselines), one primary
+  candidate_id TEXT, baseline_id TEXT, is_primary INTEGER, position INTEGER, added_at TEXT,
+  PRIMARY KEY (candidate_id, baseline_id)
+);
+CREATE TABLE IF NOT EXISTS candidate_onboarding ( -- first-run progress, so every step is resumable
+  candidate_id TEXT PRIMARY KEY,
+  step TEXT,                      -- proof | roles | review | scores | details | done
+  read_task_id TEXT, score_task_id TEXT, confirmed_at TEXT, finished_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS candidate_application_details (  -- "fill once": never sent to a model, never shown
+  candidate_id TEXT PRIMARY KEY,                            -- to recruiters, never used in scoring or pools
+  work_auth_json TEXT, questions_json TEXT, eeo_json TEXT, saved_at TEXT, dismissed_at TEXT, updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS gap_reports (
   id TEXT PRIMARY KEY,
   run_id TEXT,
@@ -474,6 +489,14 @@ MARKET_TABLES = [
     "status TEXT, created_at TEXT, decided_at TEXT)",
     "CREATE TABLE IF NOT EXISTS market_settings (key TEXT PRIMARY KEY, value TEXT)",
 ]
+CANDIDATE_TABLES = [
+    "CREATE TABLE IF NOT EXISTS candidate_targets (candidate_id TEXT, baseline_id TEXT, is_primary INTEGER, "
+    "position INTEGER, added_at TEXT, PRIMARY KEY (candidate_id, baseline_id))",
+    "CREATE TABLE IF NOT EXISTS candidate_onboarding (candidate_id TEXT PRIMARY KEY, step TEXT, read_task_id TEXT, "
+    "score_task_id TEXT, confirmed_at TEXT, finished_at TEXT, updated_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS candidate_application_details (candidate_id TEXT PRIMARY KEY, work_auth_json TEXT, "
+    "questions_json TEXT, eeo_json TEXT, saved_at TEXT, dismissed_at TEXT, updated_at TEXT)",
+]
 WORKFLOW_TABLES = [
     "CREATE TABLE IF NOT EXISTS workflows (application_id TEXT PRIMARY KEY, job_id TEXT, thread_id TEXT, token TEXT, "
     "stage TEXT, round INTEGER, phase TEXT, step TEXT, title TEXT, payload_json TEXT, status TEXT, paused_status TEXT, "
@@ -542,6 +565,7 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
           *(f"ALTER TABLE jobs ADD COLUMN {c} TEXT" for c in ("details_json", "jd_text", "jd_file", "draft_json",
                                                               "updated_at"))]),
     (20, ["ALTER TABLE baselines ADD COLUMN market_version_id TEXT", *MARKET_TABLES]),
+    (21, CANDIDATE_TABLES),
 ]
 
 

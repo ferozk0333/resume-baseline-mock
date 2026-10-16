@@ -13,8 +13,16 @@ type Cert = { name: string; issuer: string; credential_id: string; verify_url: s
 type Ref = { name: string; relationship: string; contact: string; statement: string };
 const VIDEO = /^(https?:\/\/)?(www\.|m\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)[\w-]{11}|youtu\.be\/[\w-]{11}|loom\.com\/(share|embed)\/[0-9a-f]{32})/i;
 
-export function UploadForm({ candidateId, baselineId, onStarted }: {
-  candidateId: string; baselineId: string; onStarted: (taskId: string) => void;
+/** Why each optional source helps (specs/17 §3, step 1). */
+function Why({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs font-medium text-emerald-800">{children}</p>;
+}
+
+/** The documents form. Onboarding (specs/17) has no role yet (roles are picked while the documents are read) and
+ * may create the candidate on submit (`ensureCandidate`). */
+export function UploadForm({ candidateId, ensureCandidate, baselineId, onboarding = false, onStarted }: {
+  candidateId?: string; ensureCandidate?: () => Promise<string>; baselineId?: string; onboarding?: boolean;
+  onStarted: (taskId: string, candidateId: string) => void;
 }) {
   const [resume, setResume] = useState<File | null>(null);
   const [linkedin, setLinkedin] = useState<File | null>(null);
@@ -33,7 +41,8 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
     if (!resume) return;
     setBusy(true);
     const form = new FormData();
-    form.append("baseline_id", baselineId);
+    if (baselineId) form.append("baseline_id", baselineId);
+    if (onboarding) form.append("onboarding", "true");
     form.append("resume", resume);
     if (linkedin) form.append("linkedin_pdf", linkedin);
     if (github.trim()) form.append("github", github.trim());
@@ -45,8 +54,9 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
     form.append("references", JSON.stringify(refs.filter((r) => r.name.trim()).map((r) => ({
       name: r.name, relationship: r.relationship || null, contact: r.contact || null, statement: r.statement || null }))));
     try {
-      const { task_id } = await post<{ task_id: string }>(`/candidates/${candidateId}/onboard`, form);
-      onStarted(task_id);
+      const cid = candidateId ?? (await ensureCandidate!());
+      const { task_id } = await post<{ task_id: string }>(`/candidates/${cid}/onboard`, form);
+      onStarted(task_id, cid);
     } catch (err) {
       toast.error((err as Error).message);
       setBusy(false);
@@ -69,6 +79,7 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
           <div className="space-y-1.5">
             <Label htmlFor="linkedin">LinkedIn profile (PDF)</Label>
             <Input id="linkedin" type="file" accept=".pdf" onChange={(e) => setLinkedin(e.target.files?.[0] ?? null)} />
+            <Why>Confirms your resume (Trust)</Why>
             <p className="text-xs text-muted-foreground">
               On your LinkedIn profile, open <span className="font-medium">More → Save to PDF</span> and upload that file.
             </p>
@@ -84,11 +95,13 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
           <div className="space-y-1.5">
             <Label htmlFor="github">GitHub username or profile URL</Label>
             <Input id="github" value={github} onChange={(e) => setGithub(e.target.value)} placeholder="octocat" />
+            <Why>Shows real work (Expertise, Trust)</Why>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="portfolio">Portfolio URL</Label>
             <Input id="portfolio" type="url" value={portfolio} onChange={(e) => setPortfolio(e.target.value)}
               placeholder="https://…" />
+            <Why>Shows finished work in context (Expertise)</Why>
           </div>
         </CardContent>
       </Card>
@@ -98,8 +111,9 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
           <CardTitle className="text-base">Project demo videos</CardTitle>
           <CardDescription>
             Short walkthroughs of your projects: show the demo, explain the architecture and the design choices you
-            made. 1–2 minutes each is ideal. Up to 3 YouTube or Loom links; shown to recruiters, not scored.
+            made. 1–2 minutes each is ideal. Up to 3 YouTube or Loom links.
           </CardDescription>
+          <Why>Lets recruiters see your work for themselves (shown to recruiters, not scored)</Why>
         </CardHeader>
         <CardContent className="space-y-2">
           {videos.map((v, i) => (
@@ -127,6 +141,7 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
           <CardHeader>
             <CardTitle className="text-base">Certifications</CardTitle>
             <CardDescription>A credential ID or link lets us count it as verified.</CardDescription>
+            <Why>Backs the skills you claim (Expertise, Trust)</Why>
           </CardHeader>
           <CardContent className="space-y-3">
             {certs.map((c, i) => (
@@ -148,6 +163,7 @@ export function UploadForm({ candidateId, baselineId, onStarted }: {
           <CardHeader>
             <CardTitle className="text-base">References</CardTitle>
             <CardDescription>A manager or supervisor confirming relevant work counts most.</CardDescription>
+            <Why>A manager reference is the strongest proof (Trust)</Why>
           </CardHeader>
           <CardContent className="space-y-3">
             {refs.map((r, i) => (

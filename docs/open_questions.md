@@ -120,3 +120,8 @@ ask if wanted.
     equal tier weights. They are not tuned on any data.
 15. **Synonym map location.** The spec names `data/market_synonyms.json`, but `data/` is gitignored (databases). The
     reviewed map lives in `config/market_synonyms.json` so approvals are versioned.
+16. **Baseline scores don't apply to demo jobs (specs/17).** Before, a real-judge run on a role baseline also applied
+    the candidate to every job using that baseline (the 3 seeded demo jobs). Onboarding scores no longer do: a
+    candidate applies only with Apply. Demo tools keep the old behaviour. Please confirm.
+17. **Thin profiles (score < 10).** Shown as-is with "Most of your score is missing evidence, not weak evidence."
+    No scoring change.

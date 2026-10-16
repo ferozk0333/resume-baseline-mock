@@ -1,199 +1,173 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PercentileLine } from "@/components/app/candidate/score-card";
 import { PostingPreview } from "@/components/app/jobs/posting-preview";
-import { ApiError, get, post, WORKPLACE, type Baseline, type Candidate, type Posting, type Task } from "@/lib/api";
+import { ApiError, get, post, STEP_LABELS, WORKPLACE, type OnboardingState, type Posting, type ScoreCard } from "@/lib/api";
+import { useCurrentCandidate } from "@/lib/current-candidate";
 
-type Run = { id: string; baseline_id: string; baseline_title: string; status: string; started_at: string };
+export default function HomePage() {
+  return <Suspense fallback={<Skeleton className="h-96" />}><Home /></Suspense>;
+}
 
-export default function Home() {
+/** Candidate Home (specs/17 §4). Phase A: the baseline score strip, "Finish your profile", and open jobs to apply to;
+ * the ranked "Jobs for you" list with job detail comes in phase B. */
+function Home() {
   const router = useRouter();
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [baselines, setBaselines] = useState<Baseline[]>([]);
-  const [selected, setSelected] = useState<string>("");
-  const [baselineId, setBaselineId] = useState<string>("");
-  const [runsFor, setRunsFor] = useState<{ id: string; runs: Run[] }>({ id: "", runs: [] });
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [jobs, setJobs] = useState<Posting[]>([]);
-  const [applying, setApplying] = useState<string | null>(null);
-  const [openJob, setOpenJob] = useState<string | null>(null);
+  const [cid, ready, setCid] = useCurrentCandidate();
+  const [state, setState] = useState<OnboardingState | null>(null);
+  const [cards, setCards] = useState<ScoreCard[] | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    get<Posting[]>("/open-jobs").then(setJobs).catch(() => {});
-    Promise.all([get<Candidate[]>("/candidates"), get<Baseline[]>("/baselines")])
-      .then(([c, b]) => {
-        setCandidates(c);
-        setBaselines(b);
-        if (b[0]?.id) setBaselineId(b[0].id);
-      })
-      .catch((e) => toast.error(`Could not reach the API: ${e.message}`));
-  }, []);
+    if (!ready) return;
+    if (!cid) { router.replace("/onboarding"); return; }           // first run
+    get<OnboardingState>(`/candidates/${cid}/onboarding`).then((s) => {
+      setState(s);
+      if (s.onboarding.step === "done") get<ScoreCard[]>(`/candidates/${cid}/baseline-scores`).then(setCards).catch(() => setCards([]));
+    }).catch((e) => {
+      if (e instanceof ApiError && e.status === 404) setCid(null); else toast.error(e.message);
+    });
+  }, [ready, cid, router, setCid]);
 
-  useEffect(() => {
-    if (!selected) return;
-    get<Run[]>(`/candidates/${selected}/runs`).then((runs) => setRunsFor({ id: selected, runs }))
-      .catch(() => setRunsFor({ id: selected, runs: [] }));
-  }, [selected]);
-  const runs = runsFor.id === selected ? runsFor.runs : [];
-
-  const target = baselines.find((b) => b.id === baselineId);
-
-  async function createCandidate() {
-    if (!name.trim()) return;
-    setBusy(true);
-    try {
-      const c = await post<Candidate>("/candidates", { name: name.trim(), target_role: target?.title ?? null });
-      router.push(`/candidates/${c.id}/onboard?baseline=${baselineId}`);
-    } catch (e) {
-      toast.error((e as Error).message);
-      setBusy(false);
-    }
+  if (!ready || !cid || !state) return <Skeleton className="h-96" />;
+  const step = state.onboarding.step;
+  if (step !== "done") {
+    const at = STEP_LABELS.findIndex((s) => s.key === step);
+    return (
+      <Card className="max-w-xl">
+        <CardHeader>
+          <CardTitle>Finish setting up your profile</CardTitle>
+          <CardDescription>Step {at + 1} of {STEP_LABELS.length}: {STEP_LABELS[at].label}. Your progress is saved.</CardDescription>
+        </CardHeader>
+        <CardContent><Link href="/onboarding" className={buttonVariants()}>Continue</Link></CardContent>
+      </Card>
+    );
   }
-
-  async function apply(jobId: string) {
-    if (!selected) return;
-    setApplying(jobId);
-    try {
-      const { task_id } = await post<{ task_id: string }>(`/candidates/${selected}/apply`, { job_id: jobId });
-      toast.info("Applied. Scoring against the job…");
-      for (;;) {                                     // the run page shows progress once the run exists
-        await new Promise((r) => setTimeout(r, 1000));
-        const t = await get<Task>(`/tasks/${task_id}`);
-        if (t.status === "error") throw new Error(t.error ?? "Scoring failed.");
-        if (t.run_id) { router.push(`/runs/${t.run_id}`); return; }
-      }
-    } catch (e) {
-      toast.error(e instanceof ApiError && e.status === 409 ? e.message : (e as Error).message);
-      setApplying(null);
-    }
-  }
+  const card = cards?.find((c) => c.baseline_id === role) ?? cards?.[0];
+  const next = card?.actions[0];
+  const finish = !state.details.saved_at && !state.details.dismissed_at && !dismissed;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Score a profile against a role</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pick a target role, then start with a resume or continue with a saved candidate.
-        </p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Target role</CardTitle>
-          <CardDescription>The baseline the profile is scored against.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {baselines.map((b) => (
-            <button key={b.id} type="button" onClick={() => setBaselineId(b.id!)} aria-pressed={b.id === baselineId}
-              className={`rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
-                b.id === baselineId ? "border-primary bg-primary/5 ring-2 ring-primary/30" : "bg-white hover:bg-muted"}`}>
-              <div className="font-medium">{b.title}</div>
-              <div className="text-xs text-muted-foreground">{b.level} · {b.required_years} yrs</div>
-            </button>
-          ))}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 md:grid-cols-2">
+    <div className="space-y-6">
+      <h1 className="sr-only">Home</h1>
+      {!cards ? <Skeleton className="h-28" /> : card && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">New candidate</CardTitle>
-            <CardDescription>Upload a resume on the next screen.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="grid gap-5 md:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="cand-name">Name</Label>
-              <Input id="cand-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Jane Doe"
-                onKeyDown={(e) => e.key === "Enter" && createCandidate()} />
+              <div className="flex flex-wrap items-center gap-2">
+                <label htmlFor="strip-role" className="sr-only">Role</label>
+                {cards.length > 1 ? (
+                  <select id="strip-role" value={card.baseline_id} onChange={(e) => setRole(e.target.value)}
+                    className="h-8 rounded-lg border border-input bg-white px-2 text-sm font-medium">
+                    {cards.map((c) => <option key={c.baseline_id} value={c.baseline_id}>{c.title}{c.is_primary ? " (primary)" : ""}</option>)}
+                  </select>
+                ) : <span className="text-sm font-medium">{card.title}</span>}
+                <span className="text-sm text-muted-foreground">baseline score</span>
+              </div>
+              <div className="text-4xl font-semibold tabular-nums text-primary">{card.final?.toFixed(0) ?? "—"}
+                <span className="ml-1 text-sm font-normal text-muted-foreground">/ 100</span></div>
+              <PercentileLine card={card} />
+              <Link href={`/scores?role=${card.baseline_id}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+                View my scores <ArrowRight className="size-4" /></Link>
             </div>
-            <Button onClick={createCandidate} disabled={!name.trim() || !baselineId || busy}>Start</Button>
+            <div className="space-y-2 rounded-lg bg-muted/50 p-4">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next best action</div>
+              {next ? (
+                <>
+                  <p className="font-medium">{next.title}</p>
+                  <p className="text-sm text-primary">up to {next.points.toFixed(1)} points</p>
+                  <Link href={`/scores?role=${card.baseline_id}&tab=plan`} className={buttonVariants({ size: "sm" })}>Start</Link>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">Open your plan for {card.title} to see what adds the most.</p>
+                  <Link href={`/scores?role=${card.baseline_id}&tab=plan`} className={buttonVariants({ size: "sm", variant: "outline" })}>Open the plan</Link>
+                </>
+              )}
+            </div>
           </CardContent>
         </Card>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Saved candidates</CardTitle>
-            <CardDescription>Review their profile again, or open a past score.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {candidates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No candidates yet.</p>
-            ) : (
-              <div className="max-h-64 space-y-1 overflow-y-auto">
-                {candidates.map((c) => (
-                  <button key={c.id} type="button" onClick={() => setSelected(c.id)} aria-pressed={c.id === selected}
-                    className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${
-                      c.id === selected ? "bg-primary/10" : "hover:bg-muted"}`}>
-                    <span className="font-medium">{c.name || "Unnamed"}</span>
-                    <span className="text-xs text-muted-foreground">{c.target_role}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {selected && (
-              <div className="space-y-2 border-t pt-3">
-                <Button variant="outline" size="sm"
-                  onClick={() => router.push(`/candidates/${selected}/onboard?baseline=${baselineId}&step=review`)}>
-                  Review profile and score
-                </Button>
-                {runs.length > 0 && (
-                  <ul className="space-y-1 text-sm">
-                    {runs.slice(0, 5).map((r) => (
-                      <li key={r.id}>
-                        <button type="button" className="flex w-full items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted"
-                          onClick={() => router.push(`/runs/${r.id}`)}>
-                          <span>{r.baseline_title}</span>
-                          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                            {new Date(r.started_at).toLocaleString()}
-                            <Badge variant="secondary">{r.status}</Badge>
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+      {finish && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium">Finish your profile</p>
+              <p className="text-sm text-muted-foreground">Answer the questions most applications ask, once: work authorization, start date, salary.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => {
+                setDismissed(true);
+                post(`/candidates/${cid}/application-details/dismiss`).catch((e) => toast.error(e.message));
+              }}>Dismiss</Button>
+              <Link href="/profile#application-details" className={buttonVariants({ size: "sm" })}>Add details</Link>
+            </div>
           </CardContent>
         </Card>
-      </div>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Apply to a job</CardTitle>
-          <CardDescription>
-            Open jobs. Applying uses the selected candidate&apos;s confirmed profile and scores it against the job; the
-            recruiter sees the application.{!selected && " Pick a saved candidate first."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {jobs.length === 0 ? <p className="text-sm text-muted-foreground">No open jobs right now.</p> : (
-            <ul aria-label="Open jobs" className="divide-y">
-              {jobs.map((j) => (
-                <li key={j.id} className="py-3">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button type="button" className="min-w-0 text-left" onClick={() => setOpenJob(openJob === j.id ? null : j.id)} aria-expanded={openJob === j.id}>
-                      <div className="font-medium hover:underline">{j.title}</div>
-                      <div className="text-xs text-muted-foreground">{[j.company, j.location, j.workplace ? WORKPLACE[j.workplace] : null].filter(Boolean).join(" · ")}</div>
-                    </button>
-                    <Button size="sm" className="ml-auto" disabled={!selected || applying !== null} onClick={() => apply(j.id)}>
-                      {applying === j.id ? "Scoring…" : "Apply"}
-                    </Button>
-                  </div>
-                  {openJob === j.id && <div className="mt-3 rounded-lg border bg-muted/30 p-4"><PostingPreview p={j} /></div>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <OpenJobs cid={cid} />
     </div>
+  );
+}
+
+/** Open recruiter jobs. Applying uses the confirmed profile; the candidate never sees the recruiter's job score. */
+function OpenJobs({ cid }: { cid: string }) {
+  const [jobs, setJobs] = useState<Posting[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [applied, setApplied] = useState<Set<string>>(new Set());
+  useEffect(() => { get<Posting[]>("/open-jobs").then(setJobs).catch(() => setJobs([])); }, []);
+  const apply = useCallback(async (jobId: string) => {
+    setBusy(jobId);
+    try {
+      await post(`/candidates/${cid}/apply`, { job_id: jobId });
+      setApplied((s) => new Set(s).add(jobId));
+      toast.success("Applied. The recruiter can see your application now.");
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setBusy(null); }
+  }, [cid]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Open jobs</CardTitle>
+        <CardDescription>Jobs posted by recruiters on RightStaff.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {jobs === null ? <Skeleton className="h-24" /> : jobs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No open jobs right now.</p>
+        ) : (
+          <ul aria-label="Open jobs" className="divide-y">
+            {jobs.map((j) => (
+              <li key={j.id} className="py-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpen(open === j.id ? null : j.id)}
+                    aria-expanded={open === j.id}>
+                    <div className="font-medium hover:underline">{j.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {[j.company, j.location, j.workplace ? WORKPLACE[j.workplace] : null].filter(Boolean).join(" · ")}</div>
+                  </button>
+                  {applied.has(j.id) ? <Badge variant="secondary">Applied</Badge> : (
+                    <Button size="sm" disabled={busy !== null} onClick={() => apply(j.id)}>{busy === j.id ? "Applying…" : "Apply"}</Button>
+                  )}
+                </div>
+                {open === j.id && <div className="mt-3 rounded-lg border bg-muted/30 p-4"><PostingPreview p={j} /></div>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }

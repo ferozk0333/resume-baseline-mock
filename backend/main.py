@@ -240,6 +240,19 @@ class SwitchBaselineIn(BaseModel):
     confirm: bool = False                # the re-score notice was confirmed
 
 
+class TargetsIn(BaseModel):
+    baseline_ids: list[str]
+    primary: str | None = None
+
+
+class TargetIn(BaseModel):
+    baseline_id: str
+
+
+class OnboardingStepIn(BaseModel):
+    step: Literal["proof", "roles", "review", "scores", "details", "done"]
+
+
 class MarketSettingsIn(BaseModel):
     allow_test_versions: bool
 
@@ -427,7 +440,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             return store.get_candidate(c, cid)
 
     @app.post("/candidates/{candidate_id}/onboard", response_model=TaskOut, status_code=202, tags=["candidates"])
-    async def onboard(candidate_id: str, baseline_id: str = Form(...), resume: UploadFile = File(...),
+    async def onboard(candidate_id: str, baseline_id: str | None = Form(None), resume: UploadFile = File(...),
                       linkedin_pdf: UploadFile | None = File(None), github: str | None = Form(None),
                       portfolio_url: str | None = Form(None),
                       linkedin_url: str | None = Form(None, description="LinkedIn profile URL (display only)"),
@@ -435,9 +448,17 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                       certifications: str = Form("[]", description="JSON list of {name, issuer, date, "
                                                                     "credential_id, verify_url}"),
                       references: str = Form("[]", description="JSON list of {name, relationship, contact, "
-                                                                "statement}")):
+                                                                "statement}"),
+                      onboarding: bool = Form(False, description="First-run onboarding (specs/17): plain-language "
+                                                                 "progress; target roles are picked while it runs")):
+        """Read the documents and stop at review. Without a baseline (onboarding: roles are picked while this runs),
+        the job-independent questions that start during review use the primary target role, or the first role
+        baseline: they don't depend on the role, so any role baseline gives the same answers."""
         with conn() as c:
             cand = store.get_candidate(c, candidate_id) or not_found("Candidate")
+            if baseline_id is None:
+                from backend import candidate as cx
+                baseline_id = (cx.primary(c, candidate_id) or {}).get("baseline_id") or next(iter(cx.role_baselines(c)))
             if db.get_baseline(c, baseline_id) is None:
                 not_found("Baseline")
             from market.baseline import resolve_baseline
@@ -460,10 +481,19 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             github=github or None, portfolio_url=portfolio_url or None, certifications=certs, references=refs,
             name=cand["name"], target_role=cand["target_role"], candidate_id=candidate_id)
         task_id = tasks.create("onboard", candidate_id)
+        if onboarding:
+            from backend import candidate as cx
+            with conn() as c:
+                cx.set_step(c, candidate_id, "roles", read_task_id=task_id, confirmed_at=None)
 
         def work(progress):
             progress.say("ingest", "Reading your documents…", 2)
-            res = state.pipeline.start_onboarding(inputs, baseline_id, on_event=progress.on_event)
+            if onboarding:
+                from backend import candidate as cx
+                on_event = cx.reading_progress(progress)
+            else:
+                on_event = progress.on_event
+            res = state.pipeline.start_onboarding(inputs, baseline_id, on_event=on_event)
             with conn() as c:
                 media.save_links(c, candidate_id, videos)
                 if profile_url:
@@ -543,6 +573,147 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     def candidate_runs(candidate_id: str):
         with conn() as c:
             return db.list_runs(c, candidate_id)
+
+    # --- Candidate experience (specs/17) ---------------------------------------------------------------------
+    from backend import candidate as cx
+
+    def cand_or_404(c, candidate_id: str) -> dict:
+        return store.get_candidate(c, candidate_id) or not_found("Candidate")
+
+    def bad_request(fn, *args):
+        try:
+            return fn(*args)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/candidates/{candidate_id}/onboarding", tags=["candidate"])
+    def get_onboarding(candidate_id: str):
+        """Where the candidate is in the first run (every step resumable), with the tasks to re-attach to."""
+        with conn() as c:
+            cand = cand_or_404(c, candidate_id)
+            ob = cx.onboarding(c, candidate_id)
+            d = cx.application_details(c, candidate_id)
+            return {"candidate": cand, "onboarding": ob, "targets": cx.targets(c, candidate_id),
+                    "read_task": tasks.get(ob["read_task_id"]) if ob.get("read_task_id") else None,
+                    "score_task": tasks.get(ob["score_task_id"]) if ob.get("score_task_id") else None,
+                    "awaiting_review": candidate_id in state.review_threads,
+                    "details": {"saved_at": d["saved_at"], "dismissed_at": d["dismissed_at"]},
+                    "roles": [{"baseline_id": k, "title": v} for k, v in cx.role_baselines(c).items()]}
+
+    @app.put("/candidates/{candidate_id}/onboarding", tags=["candidate"])
+    def put_onboarding(candidate_id: str, body: OnboardingStepIn):
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            if body.step in ("review", "scores", "details", "done") and not cx.targets(c, candidate_id):
+                raise HTTPException(409, "Pick at least one target role first.")
+            return bad_request(cx.set_step, c, candidate_id, body.step)
+
+    @app.put("/candidates/{candidate_id}/targets", tags=["candidate"])
+    def put_targets(candidate_id: str, body: TargetsIn):
+        """1–3 target roles, one primary (default: the first picked)."""
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            return bad_request(cx.set_targets, c, candidate_id, body.baseline_ids, body.primary)
+
+    def score_roles(candidate_id: str, roles: list[dict], kind: str = "baseline_scores") -> str:
+        """Score each role baseline in turn (job-independent judgments are reused across roles). Only the primary
+        role's plan is written now; the others are "deferred" until their plan is first opened. A baseline score
+        never applies the candidate to a job (Apply does)."""
+        task_id = tasks.create(kind, candidate_id)
+
+        def work(progress):
+            progress.say("prepare_match", "Getting your scores ready…", 3)
+            thread = state.review_threads.pop(candidate_id, None)
+            if thread:                                  # roles are scored below, each with its own baseline
+                try:
+                    state.pipeline.confirm_review(thread, {"cancel": True})
+                except Exception:                       # noqa: BLE001 - the review thread only held the pause
+                    log.exception("closing the review thread failed")
+            runs, paused = {}, None
+            from market.baseline import resolve_baseline
+            for i, t in enumerate(roles):
+                with conn() as c:
+                    bid = resolve_baseline(c, t["baseline_id"])
+                progress.say("score", f"{t['title']}: getting started", 5 + 90 * i / len(roles))
+                res = state.pipeline.score(candidate_id, bid, plan=t["is_primary"],
+                                           on_event=cx.scoring_progress(progress, t["title"], i, len(roles)))
+                if not res.get("run_id"):
+                    raise ValueError(res.get("blocked") or "Scoring did not start.")
+                runs[t["baseline_id"]] = res["run_id"]
+                paused = paused or res.get("paused")
+            return {"runs": runs, "paused": paused, "_message": paused or "Your scores are ready"}
+        tasks.submit(task_id, work)
+        return task_id
+
+    @app.post("/candidates/{candidate_id}/baseline-scores", response_model=TaskOut, status_code=202, tags=["candidate"])
+    def baseline_scores(candidate_id: str):
+        """"Confirm profile": score every target role (primary first). 409 when the profile can't be scored."""
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            roles = cx.targets(c, candidate_id)
+            if not roles:
+                raise HTTPException(409, "Pick at least one target role first.")
+            blocker = scoring_blocker(store.load_profile(c, candidate_id))
+            if blocker:
+                raise HTTPException(409, blocker)
+        task_id = score_roles(candidate_id, roles)
+        with conn() as c:
+            cx.set_step(c, candidate_id, "scores", score_task_id=task_id, confirmed_at=db.now_iso())
+        return {"task_id": task_id}
+
+    @app.get("/candidates/{candidate_id}/baseline-scores", tags=["candidate"])
+    def get_baseline_scores(candidate_id: str):
+        """One card per target role, primary first. Code only (no model call)."""
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            return cx.score_cards(c, candidate_id)
+
+    @app.post("/candidates/{candidate_id}/targets", tags=["candidate"])
+    def add_target(candidate_id: str, body: TargetIn):
+        """"Add a role": scored now, plan deferred; job-independent judgments are reused."""
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            if cx.onboarding(c, candidate_id)["step"] != "done":
+                raise HTTPException(409, "Finish setting up first.")
+            blocker = scoring_blocker(store.load_profile(c, candidate_id))
+            if blocker:
+                raise HTTPException(409, blocker)
+            roles = bad_request(cx.add_target, c, candidate_id, body.baseline_id)
+            new = [t for t in roles if t["baseline_id"] == body.baseline_id]
+            have = cx.role_run(c, candidate_id, body.baseline_id)
+        task_id = None if have else score_roles(candidate_id, [{**new[0], "is_primary": False}], kind="add_role")
+        return {"targets": roles, "task_id": task_id}
+
+    @app.delete("/candidates/{candidate_id}/targets/{baseline_id}", tags=["candidate"])
+    def remove_target(candidate_id: str, baseline_id: str):
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            return bad_request(cx.remove_target, c, candidate_id, baseline_id)
+
+    @app.post("/candidates/{candidate_id}/targets/{baseline_id}/primary", tags=["candidate"])
+    def make_primary(candidate_id: str, baseline_id: str):
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            return bad_request(cx.set_primary, c, candidate_id, baseline_id)
+
+    @app.get("/candidates/{candidate_id}/application-details", tags=["candidate"])
+    def get_application_details(candidate_id: str):
+        """The candidate's own "fill once" answers. Never part of any recruiter response or model input."""
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            return cx.application_details(c, candidate_id)
+
+    @app.put("/candidates/{candidate_id}/application-details", tags=["candidate"])
+    def put_application_details(candidate_id: str, body: dict):
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            return bad_request(cx.save_application_details, c, candidate_id, body)
+
+    @app.post("/candidates/{candidate_id}/application-details/dismiss", tags=["candidate"])
+    def dismiss_application_details(candidate_id: str):
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            return cx.dismiss_application_details(c, candidate_id)
 
     # --- Scoring ---------------------------------------------------------------------------------------
     def start_scoring(candidate_id: str, baseline_id: str, weights: dict | None, kind: str = "score",
@@ -664,6 +835,33 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             if plan is None:
                 return {"status": run.get("plan_status") or "none", "actions": [], "gaps": []}
             return plan_view(plan)
+
+    @app.post("/runs/{run_id}/plan", tags=["plan"])
+    def open_plan(run_id: str):
+        """First open of a role's plan (specs/17 §3.1): write it now if it was deferred. {"status": "ready"} when it
+        already exists, else {"task_id"} ("Preparing your plan…"). One plan call, recorded on the run."""
+        with conn() as c:
+            run = run_row(c, run_id)
+            if current_plan(c, run_id) is not None:
+                return {"status": "ready", "task_id": None}
+            if run.get("plan_status") == "generating":
+                return {"status": "generating", "task_id": None}
+            db.set_plan_status(c, run_id, "generating")
+        task_id = tasks.create("plan", run["candidate_id"], run_id)
+
+        def work(progress):
+            progress.say("gap_analysis", "Preparing your plan…", 20)
+            from graph.pipeline import write_plan
+            from graph.pipeline import run_scores as scores_of
+            with conn() as c:
+                subs = scores_of(c, run_id)
+            plan = write_plan(state.deps, run_id, run["candidate_id"], run["baseline_id"], subs,
+                              json.loads(run["weights_json"]))
+            if plan.error:
+                raise ValueError(f"The plan could not be prepared: {plan.error}")
+            return {"run_id": run_id, "_message": "Plan ready"}
+        tasks.submit(task_id, work)
+        return {"status": "generating", "task_id": task_id}
 
     @app.post("/runs/{run_id}/plan/regenerate", response_model=TaskOut, status_code=202, tags=["plan"])
     def regenerate(run_id: str, body: WeightsIn | None = None):

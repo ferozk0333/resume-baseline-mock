@@ -83,7 +83,8 @@ class RunState(TypedDict, total=False):
     ranked_gaps: list[dict]
     plan_markdown: str | None
     plan_error: str | None
-    plan_status: str | None                               # generating | ready | failed
+    plan_status: str | None                               # generating | ready | failed | deferred
+    skip_plan: bool                                       # leave the plan for later ("deferred", specs/17 §3.1)
 
 
 class ScoreOut(TypedDict, total=False):
@@ -355,6 +356,9 @@ def _gap_analysis(deps: Deps):
             ranked = [g.as_dict() for g in rank_gaps(subscores, state["weights"],
                                                      db.get_baseline(conn, state["baseline_id"]))]
             args = (deps, run_id, state["candidate_id"], state["baseline_id"], subscores, state["weights"])
+            if state.get("skip_plan"):              # written on first open of this role's plan (specs/17 §3.1)
+                db.set_plan_status(conn, run_id, "deferred")
+                return {"ranked_gaps": ranked, "plan_markdown": None, "plan_error": None, "plan_status": "deferred"}
             if deps.planner is not None and deps.plan_in_background:
                 db.set_plan_status(conn, run_id, "generating")     # finish late: the score is shown first
                 PLAN_JOBS[run_id] = BACKGROUND.submit(timing.bind(write_plan), *args)
@@ -564,10 +568,11 @@ class Pipeline:
         return self._run(Command(resume=answer or {"confirmed": True}), thread_id, on_progress, on_event)
 
     def score(self, candidate_id: str, baseline_id: str, weights: dict | None = None, on_progress=None,
-              on_event=None) -> dict:
-        """Score a confirmed profile against a baseline, without re-extracting (01 step 9)."""
+              on_event=None, plan: bool = True) -> dict:
+        """Score a confirmed profile against a baseline, without re-extracting (01 step 9).
+        plan=False leaves the improvement plan "deferred" (written when it is first opened)."""
         tid = str(uuid.uuid4())
-        return self._run({"candidate_id": candidate_id, "baseline_id": baseline_id,
+        return self._run({"candidate_id": candidate_id, "baseline_id": baseline_id, "skip_plan": not plan,
                           "weights": weights or config.default_weights()}, tid, on_progress, on_event)
 
 

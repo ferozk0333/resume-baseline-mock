@@ -15,8 +15,9 @@ import { patch, type Project, type ProfileResponse, type Role } from "@/lib/api"
 type Edit = { op: "add" | "edit" | "delete" | "add_back"; item: string; id?: string; data?: Record<string, unknown> };
 const month = (d: string | null) => (d ? d.slice(0, 7) : "");
 
-export function Review({ data, onChange, onConfirm, confirming }: {
+export function Review({ data, onChange, onConfirm, confirming, confirmLabel = "Confirm & score" }: {
   data: ProfileResponse; onChange: (d: ProfileResponse) => void; onConfirm: () => void; confirming: boolean;
+  confirmLabel?: string;
 }) {
   const cid = data.candidate.id;
   const { roles, projects, claims, certifications } = data.profile;
@@ -121,7 +122,7 @@ export function Review({ data, onChange, onConfirm, confirming }: {
 
       <div className="sticky bottom-0 -mx-6 flex items-center justify-end gap-3 border-t bg-background/95 px-6 py-4 backdrop-blur">
         {data.blocker && <p className="mr-auto text-sm text-destructive">{data.blocker}</p>}
-        <Button size="lg" onClick={onConfirm} disabled={!!data.blocker || confirming}>Confirm &amp; score</Button>
+        <Button size="lg" onClick={onConfirm} disabled={!!data.blocker || confirming}>{confirmLabel}</Button>
       </div>
     </div>
   );

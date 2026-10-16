@@ -1,11 +1,11 @@
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 
-test("upload → review → score → plan", async ({ page }) => {
+test("Demo tools: upload → review → score → plan", async ({ page }) => {
   const problems: string[] = [];
   page.on("console", (m) => { if (m.type() === "error") problems.push(m.text()); });
   page.on("pageerror", (e) => problems.push(e.message));
-  await page.goto("/");
+  await page.goto("/admin/demo");                 // the old "Score a profile" page lives in Admin → Demo tools (specs/17)
   await page.getByRole("button", { name: /^Data Scientist entry/ }).click();       // the target role, not an open job
   await page.getByLabel("Name").fill("Jane Doe");
   await page.screenshot({ path: "e2e/.tmp/home.png", fullPage: true });
@@ -49,7 +49,7 @@ test("upload → review → score → plan", async ({ page }) => {
   await expect(page.getByText("Build an A/B test project")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Ranked gaps")).toBeVisible();
   await page.screenshot({ path: "e2e/.tmp/plan.png", fullPage: true });
-  await page.getByRole("link", { name: "Baselines" }).click();
+  await page.goto("/baselines");
   await expect(page.getByRole("cell", { name: /Data Scientist/ })).toBeVisible();
   await page.screenshot({ path: "e2e/.tmp/baselines.png", fullPage: true });
   expect(problems).toEqual([]);

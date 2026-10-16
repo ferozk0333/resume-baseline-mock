@@ -66,8 +66,8 @@ test("upload a JD → steps 2–4 → publish → candidate applies", async ({ p
   await expect(page.getByText("Original job description")).toBeVisible();
   await page.screenshot({ path: "e2e/.tmp/job-6-published-jd-tab.png" });
 
-  // Candidate side: the job is open for applications
-  await page.getByRole("link", { name: "Candidate" }).click();
+  // The job is open for applications (Demo tools lists open jobs for any saved candidate; specs/17)
+  await page.goto("/admin/demo");
   await expect(page.getByRole("list", { name: "Open jobs" })).toContainText("AI Engineer");
   await page.getByRole("list", { name: "Open jobs" }).getByRole("button", { name: /AI Engineer/ }).first().click();
   await page.screenshot({ path: "e2e/.tmp/job-7-candidate-apply.png", fullPage: true });

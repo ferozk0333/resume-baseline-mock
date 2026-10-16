@@ -94,6 +94,24 @@ email and every decision. **Nothing is sent automatically.**
   (Gmail: same app password as SMTP). Replies match their workflow by the `[RS-xxxxxx]` token in the subject, or by
   In-Reply-To; our own sent copies are skipped. Every send is idempotent (one send per approved draft).
 
+### Candidate experience (specs/17, phase A)
+The candidate side is now one person's view: the demo has no sign-in, so the profile being viewed is remembered in
+the browser ("Demo: viewing as … · Switch profile" in the header). With no profile yet, `/` opens the first run.
+- **Onboarding** (`/onboarding`, 5 steps, every step resumable; progress is in the database, "Save and exit" any
+  time): Add your proof → Target roles (1–3, one primary, picked *while* the documents are read) → Review
+  ("Confirm profile") → Your baseline scores (one card per role: score, percentile or why not, 4 dimensions, top 3
+  actions) → Finish your profile (optional application details, "Skip for now") → "You're set up".
+- **Plans:** only the primary role's plan is written during onboarding. Other roles' plans are written the first
+  time they are opened ("Preparing your plan…"), one plan call each (`POST /runs/{id}/plan`).
+- **My scores** (`/scores`): a tab per role with the Score and Plan pages; add a role (scored at once, reusing the
+  job-independent answers), remove a role, change the primary. **Profile** (`/profile`): sources, update documents
+  or review again (both re-score), application details.
+- **Application details** (work authorization, frequent questions, voluntary self-identification) are never sent
+  to a model, never in a recruiter response and never read by scoring, pools or percentiles
+  (`tests/test_candidate.py` checks all three).
+- The old "Score a profile against a role" page is now **Admin → Demo tools** (`/admin/demo`); role baselines are
+  under Admin too.
+
 ## Models
 Claude is the default for extraction, fallback judging, complexity and the plan. Any of these can run on
 Groq instead by naming a Groq model with a `groq/` prefix, e.g. `EXTRACT_MODEL=groq/openai/gpt-oss-120b`

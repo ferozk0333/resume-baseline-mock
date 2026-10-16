@@ -79,7 +79,7 @@ export type RunView = { run: { id: string; candidate_id: string; baseline_id: st
   gaps: Gap[] };
 export type PlanAction = { type: string; type_label: string; title: string; what_to_do: string; must_show: string[]; addresses: string[];
   covers_criteria: string[]; builds_on: string | null; points: number; points_text: string };
-export type Plan = { status: "ready" | "generating" | "failed" | "none"; error?: string | null; actions: PlanAction[];
+export type Plan = { status: "ready" | "generating" | "failed" | "none" | "deferred"; error?: string | null; actions: PlanAction[];
   quick_wins?: string[]; not_actionable?: string[]; gaps: Gap[] };
 
 export const DIMENSIONS = ["experience", "expertise", "authority", "trust"] as const;
@@ -252,3 +252,30 @@ export type SideBySide = { manual: { required_years: number; expected_reach: str
     complexity_criteria: string | null } | null;
   rows: { name: string; kind: string; manual: string | null; market: string | null; share: number | null }[] };
 export type Suggestion = { id: string; name: string; canonical: string | null; method: string | null; status: string };
+
+// --- Candidate experience (specs/17) -------------------------------------------------------------------------
+export type OnboardingStep = "proof" | "roles" | "review" | "scores" | "details" | "done";
+export type Target = { baseline_id: string; title: string; is_primary: boolean };
+export type OnboardingState = { candidate: Candidate;
+  onboarding: { step: OnboardingStep; read_task_id: string | null; score_task_id: string | null;
+    confirmed_at: string | null; finished_at: string | null };
+  targets: Target[]; read_task: Task | null; score_task: Task | null; awaiting_review: boolean;
+  details: { saved_at: string | null; dismissed_at: string | null }; roles: { baseline_id: string; title: string }[] };
+export type CardAction = { title: string; type_label: string; points: number; points_text: string; covers_criteria: string[] };
+export type ScoreCard = Target & { run_id: string | null; status: "scored" | "running" | "not_scored";
+  final: number | null; dimensions: Record<string, number | null>;
+  percentile: { shown: boolean; top: number | null; value: number | null; pool_size: number; min_pool: number } | null;
+  plan_status: "ready" | "generating" | "failed" | "deferred" | "none" | null; actions: CardAction[];
+  gaps: { label: string; dimension: string; gain_text: string; status: string }[]; thin: boolean;
+  baseline_source: "standard" | "market" };
+export type YesNo = "yes" | "no";
+export type ApplicationDetails = {
+  work_authorization: { country: string; authorized: YesNo | null; sponsorship_now: YesNo | "decline";
+    sponsorship_future: YesNo | "decline" };
+  questions: { earliest_start: string | null; notice_period: string | null; salary_min: number | null;
+    salary_currency: string; relocate: YesNo | null; work_mode: string | null; locations: string[]; links: string[] };
+  eeo: { gender: string; race_ethnicity: string; veteran_status: string; disability_status: string };
+  saved_at: string | null; dismissed_at: string | null };
+export const STEP_LABELS: { key: Exclude<OnboardingStep, "done">; label: string }[] = [
+  { key: "proof", label: "Add your proof" }, { key: "roles", label: "Target roles" }, { key: "review", label: "Review" },
+  { key: "scores", label: "Your baseline scores" }, { key: "details", label: "Finish your profile" }];
