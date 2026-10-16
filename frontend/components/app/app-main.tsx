@@ -3,7 +3,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 /** Full window width for the recruiter workspace (specs/13 §1); a centered column everywhere else. */
-export const isWorkspace = (path: string) => /^\/recruiter\/jobs\/[^/]+$/.test(path);
+export const isWorkspace = (path: string) => /^\/recruiter\/(jobs\/[^/]+|applications\/[^/]+\/workflow)$/.test(path);
 
 export function AppMain({ children }: { children: React.ReactNode }) {
   const wide = isWorkspace(usePathname());

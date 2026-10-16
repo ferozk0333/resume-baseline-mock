@@ -488,9 +488,12 @@ def interview_stage(conn, job_id: str, stage: dict) -> str:
     return later[0]["name"] if later else "interview"
 
 
-def draft_scheduling(conn, app: dict, job: dict, stage: dict, writer, batch_id: str | None = None) -> dict:
+def draft_scheduling(conn, app: dict, job: dict, stage: dict, writer, batch_id: str | None = None, *,
+                     meeting: str | None = None, kind: str | None = None, token: str | None = None) -> dict:
+    """A scheduling or stage email. `stage` is where the candidate moves when it is sent; `meeting` is the
+    interview it invites to (default: the stage after Scheduling, or the stage itself)."""
     s = settings(conn, job["id"])
-    meeting = interview_stage(conn, job["id"], stage)
+    meeting = meeting or interview_stage(conn, job["id"], stage)
     cand = store.get_candidate(conn, app["candidate_id"])
     others = _other_names(conn, app)
     choices = evidence_choices(conn, app, job)
@@ -520,25 +523,33 @@ def draft_scheduling(conn, app: dict, job: dict, stage: dict, writer, batch_id: 
     checks = {"errors": check_scheduling(d, body, choices, others) if choices else [],
               "model_errors": first_errors or errors if model == TEMPLATE_MODEL else first_errors,
               "words": word_count(body), "evidence_id": d.evidence_id or None}
-    kind = "scheduling" if stage["name"] == "Scheduling" or batch_id else "stage"
-    return _save_draft(conn, app, job, kind, stage["id"], batch_id, d.subject, body, model, None, None, checks)
+    kind = kind or ("scheduling" if stage["name"] == "Scheduling" or batch_id else "stage")
+    return _save_draft(conn, app, job, kind, stage["id"], batch_id, d.subject, body, model, None, None, checks,
+                       token=token)
 
 
 # --- Emails: store, edit, send ------------------------------------------------------------------------------
 
-def _save_draft(conn, app, job, kind, stage_id, batch_id, subject, body, model, reasons, note, checks) -> dict:
+def _save_draft(conn, app, job, kind, stage_id, batch_id, subject, body, model, reasons, note, checks, *,
+                token: str | None = None, in_reply_to: str | None = None, attachments: list[dict] | None = None,
+                interview_id: str | None = None) -> dict:
+    """A new draft; an older draft of the same kind for this application is cancelled."""
     cand = store.get_candidate(conn, app["candidate_id"])
     eid = new_id()
     with conn:
         conn.execute("UPDATE emails SET status = 'cancelled', updated_at = ? WHERE application_id = ? AND kind = ? "
                      "AND status = 'draft'", (now_iso(), app["id"], kind))
         conn.execute("INSERT INTO emails (id, application_id, job_id, kind, stage_id, batch_id, status, intended_to, "
-                     "subject, body, model, reasons_json, checks_json, created_at, updated_at) "
-                     "VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)",
+                     "subject, body, model, reasons_json, checks_json, created_at, updated_at, token, in_reply_to, "
+                     "attachments_json, interview_id) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                      (eid, app["id"], job["id"], kind, stage_id, batch_id, cand.get("email"), subject, body, model,
                       json.dumps({"reasons": reasons, "note": note}) if reasons is not None else None,
-                      json.dumps(checks), now_iso(), now_iso()))
+                      json.dumps(checks), now_iso(), now_iso(), token, in_reply_to,
+                      json.dumps(attachments) if attachments else None, interview_id))
     return get_email(conn, eid)
+
+
+save_draft = _save_draft
 
 
 def get_email(conn, email_id: str) -> dict | None:
@@ -549,6 +560,8 @@ def get_email(conn, email_id: str) -> dict | None:
     out = dict(r)
     out["reasons"] = json.loads(out.pop("reasons_json") or "null")
     out["checks"] = json.loads(out.pop("checks_json") or "{}")
+    out["attachments"] = [{k: a[k] for k in ("filename", "content_type")} | {"size": len(a.get("text", ""))}
+                          for a in json.loads(out.pop("attachments_json", None) or "[]")]
     out["template"] = out["model"] == TEMPLATE_MODEL
     out["label"] = "Template draft" if out["template"] else f"Drafted by {out['model']}"
     return out
@@ -557,6 +570,9 @@ def get_email(conn, email_id: str) -> dict | None:
 def list_emails(conn, *, status: str | None = None, job_id: str | None = None, batch_id: str | None = None,
                 application_id: str | None = None, kind: str | None = None) -> list[dict]:
     q, args = "SELECT id FROM emails WHERE 1 = 1", []
+    if status == "failed":                                 # a failed send stays a draft (with its error) to retry
+        q += " AND status = 'draft' AND error IS NOT NULL"
+        status = None
     for col, val in (("status", status), ("job_id", job_id), ("batch_id", batch_id),
                      ("application_id", application_id), ("kind", kind)):
         if val:
@@ -587,12 +603,30 @@ def cancel_email(conn, email_id: str) -> dict:
     return get_email(conn, email_id)
 
 
+def attachments_of(conn, email_id: str) -> list[dict]:
+    row = conn.execute("SELECT attachments_json FROM emails WHERE id = ?", (email_id,)).fetchone()
+    return json.loads((row and row[0]) or "[]")
+
+
 def send_email(conn, email_id: str) -> dict:
-    """Deliver one draft (outbox or SMTP, demo redirect applied) and log it. Called only by the Send action."""
+    """Deliver one draft (outbox or SMTP, demo redirect applied) and log it. Called only by the Send action.
+
+    Idempotent: the draft is claimed first (draft → sending in one UPDATE), so a refresh, a double click or two
+    servers can deliver it once at most. A failed send can be retried: it returns to draft."""
     e = get_email(conn, email_id)
     if e is None or e["status"] != "draft":
         raise ValueError("Only drafts can be sent.")
-    out = mailer.address(e["intended_to"], e["candidate_name"], e["subject"], e["body"])
+    with conn:
+        claimed = conn.execute("UPDATE emails SET status = 'sending', updated_at = ? WHERE id = ? AND status = 'draft'",
+                               (now_iso(), email_id)).rowcount
+    if claimed != 1:
+        raise ValueError("This draft is already being sent or was sent.")
+    subject = f"{e['subject']} [RS-{e['token']}]" if e.get("token") and f"[RS-{e['token']}]" not in e["subject"] \
+        else e["subject"]
+    out = mailer.address(e["intended_to"], e["candidate_name"], subject, e["body"])
+    out.message_id = mailer.make_message_id()
+    out.in_reply_to = e.get("in_reply_to")
+    out.attachments = attachments_of(conn, email_id)
     try:
         mailer.deliver(out)
         status, error = "sent", None
@@ -602,35 +636,29 @@ def send_email(conn, email_id: str) -> dict:
         status, error = "failed", f"SMTP error: {exc}"
     with conn:
         conn.execute("UPDATE emails SET status = ?, actual_to = ?, subject = ?, body = ?, provider = ?, error = ?, "
-                     "sent_at = ?, updated_at = ? WHERE id = ?",
-                     (status, out.actual_to, out.subject, out.body, out.provider, error,
-                      now_iso() if status == "sent" else None, now_iso(), email_id))
+                     "sent_at = ?, updated_at = ?, message_id = ? WHERE id = ?",
+                     ("sent" if status == "sent" else "draft", out.actual_to,
+                      out.subject if status == "sent" else e["subject"], out.body if status == "sent" else e["body"],
+                      out.provider, error, now_iso() if status == "sent" else None, now_iso(),
+                      out.message_id if status == "sent" else None, email_id))
+        if status == "sent":
+            conn.execute("INSERT INTO messages (id, application_id, direction, subject, body, token, message_id, "
+                         "in_reply_to, intended_to, actual_to, from_addr, draft_id, status, source, sent_at, created_at) "
+                         "VALUES (?, ?, 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?, ?)",
+                         (new_id(), e["application_id"], out.subject, out.body, e.get("token"), out.message_id,
+                          out.in_reply_to, e["intended_to"], out.actual_to, config.EMAIL_FROM or None, email_id,
+                          out.provider, now_iso(), now_iso()))
     sent = get_email(conn, email_id)
     if status == "sent":
         app = dict(conn.execute("SELECT * FROM applications WHERE id = ?", (e["application_id"],)).fetchone())
         where = "to the outbox" if out.provider == "outbox" else f"to {out.actual_to}"
         log_activity(conn, app, "email", f"Email sent {where}: {e['subject']}", {"email_id": email_id})
+    else:
+        sent = {**sent, "status": "failed"}                # shown as failed; the row stays a draft to retry
     return sent
 
 
-# --- Interview loop (specs/13 §3) -----------------------------------------------------------------------------
-
-def loop_targets(conn, job: dict, app_ids: list[str]) -> tuple[dict, list[dict]]:
-    """The Scheduling stage and the shortlisted applications a loop starts with (raises ValueError otherwise)."""
-    if not app_ids:
-        raise ValueError("Select at least one shortlisted candidate.")
-    all_stages = stages(conn, job["id"])
-    stage = next((s for s in all_stages if s["name"] == "Scheduling"), next(s for s in all_stages if not s["terminal"]))
-    apps = []
-    for app_id in app_ids:
-        row = conn.execute("SELECT * FROM applications WHERE id = ? AND job_id = ?", (app_id, job["id"])).fetchone()
-        if row is None:
-            raise ValueError(f"application {app_id} is not in this job")
-        if row["status"] != "shortlisted":
-            raise ValueError("Only shortlisted candidates can start the interview loop.")
-        apps.append(dict(row))
-    return stage, apps
-
+# --- Stage emails ---------------------------------------------------------------------------------------------
 
 def send_scheduling(conn, email_id: str) -> dict:
     """Send one approved scheduling or stage email; the candidate moves to the email's stage."""

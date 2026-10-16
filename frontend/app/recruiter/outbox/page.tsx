@@ -7,7 +7,8 @@ import { SendNotice } from "@/components/app/recruiter/email-editor";
 import { get, type Email } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const KIND: Record<string, string> = { not_moving_forward: "Not moving forward", scheduling: "Scheduling", stage: "Stage" };
+const KIND: Record<string, string> = { not_moving_forward: "Not moving forward", scheduling: "Scheduling", stage: "Stage",
+  nudge: "Nudge", answer: "Answer", confirmation: "Confirmation", offer: "Offer note" };
 const FILTERS = [["sent", "Sent"], ["draft", "Drafts"], ["failed", "Failed"], ["", "All"]] as const;
 
 /** Every email (specs/13 §4): intended and actual recipient, subject, body, model or template, status, time. */
@@ -48,6 +49,8 @@ export default function OutboxPage() {
                   <dt className="text-muted-foreground">Candidate</dt><dd>{e.candidate_name}</dd>
                   <dt className="text-muted-foreground">Intended recipient</dt><dd>{e.intended_to ?? "no address on file"}</dd>
                   <dt className="text-muted-foreground">Actual recipient</dt><dd>{e.actual_to ?? "—"}{e.provider && ` (${e.provider})`}</dd>
+                  {e.attachments?.length > 0 && <><dt className="text-muted-foreground">Attachments</dt>
+                    <dd>{e.attachments.map((a) => `📎 ${a.filename} (${a.content_type.split(";")[0]})`).join(", ")}</dd></>}
                   {e.error && <><dt className="text-muted-foreground">Error</dt><dd className="text-red-700">{e.error}</dd></>}
                 </dl>
                 <details>

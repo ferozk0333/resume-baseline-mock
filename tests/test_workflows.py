@@ -199,28 +199,7 @@ def test_send_after_a_restart_still_works(seeded):
     assert restarted.post(f"/emails/{draft['id']}/send").json()["status"] == "sent"
 
 
-def test_a_paused_interview_loop_survives_a_restart(seeded):
-    def sched(user):
-        eid = user.split("- id: ", 1)[1].split(" |", 1)[0]
-        return wf.SchedulingDraft(subject="Next step", opening="Thank you for applying.",
-                                  personal_line="Your work on Acme stood out.", evidence_id=eid, closing="Talk soon.")
-    api = client(seeded, Writer(sched))
-    job, rows = ds_rows(api)
-    picked = [r["application_id"] for r in rows[:2]]
-    for a in picked:
-        api.patch(f"/applications/{a}", json={"status": "shortlisted"})
-    out = api.post(f"/jobs/{job['id']}/interview-loop", json={"application_ids": picked}).json()
-    first, second = out["drafts"]
-    restarted = client(seeded)                                              # new server, paused loop on disk
-    from backend.loop_flow import LoopFlow
-    assert LoopFlow(seeded, None).paused(out["batch_id"])
-    assert restarted.post(f"/emails/{first['id']}/send").json()["status"] == "sent"
-    assert restarted.post(f"/emails/{second['id']}/cancel").json()["status"] == "cancelled"
-    assert not LoopFlow(seeded, None).paused(out["batch_id"])               # nothing pending: the loop ended
-    assert restarted.post(f"/emails/{second['id']}/send").status_code == 422
-
-
-# --- 3. Interview plan, pipeline, loop ------------------------------------------------------------------------
+# --- 3. Interview plan, pipeline, first invite ------------------------------------------------------------------------
 
 def test_default_plan_and_editing(seeded):
     api = client(seeded)
@@ -256,7 +235,7 @@ def test_stage_moves_are_logged(seeded):
     assert [c["application_id"] for c in next(s for s in board if s["name"] == "Interview")["cards"]] == [a]
 
 
-def test_interview_loop_drafts_reviewed_then_sent_move_to_scheduling(seeded, monkeypatch):
+def test_invites_are_drafted_reviewed_then_sent_move_to_scheduling(seeded, monkeypatch):
     monkeypatch.setattr(config, "DEMO_EMAIL_TO", "demo@example.org")
 
     def sched(user):
@@ -272,17 +251,16 @@ def test_interview_loop_drafts_reviewed_then_sent_move_to_scheduling(seeded, mon
     for a in picked:
         api.patch(f"/applications/{a}", json={"status": "shortlisted"})
     api.put(f"/jobs/{job['id']}/settings", json={"duration_minutes": 45, "availability": "Mon–Wed 10:00–14:00 ET"})
-    out = api.post(f"/jobs/{job['id']}/interview-loop", json={"application_ids": picked}).json()
-    assert len(out["drafts"]) == 2 and sent_count(seeded) == 0
-    for d in out["drafts"]:
+    api.post(f"/jobs/{job['id']}/workflows", json={"application_ids": picked})
+    drafts = [api.get(f"/applications/{a}/workflow").json()["step"]["email"] for a in picked]
+    assert len(drafts) == 2 and sent_count(seeded) == 0
+    for d in drafts:                                     # the workflow's invite = the spec 13 scheduling draft
         assert not d["template"] and d["checks"]["errors"] == [] and d["checks"]["words"] <= 120
         assert "45-minute phone screen" in d["body"] and "Mon–Wed 10:00–14:00 ET" in d["body"] and job["title"] in d["body"]
-    batch = api.get(f"/jobs/{job['id']}/interview-loop/{out['batch_id']}").json()["drafts"]
-    assert {d["id"] for d in batch} == {d["id"] for d in out["drafts"]}
-    api.post(f"/emails/{out['drafts'][0]['id']}/send")
+    api.post(f"/emails/{drafts[0]['id']}/send")
     statuses = {a: api.get(f"/applications/{a}").json() for a in picked}
     stage_of = {a: s["stage"] for a, s in statuses.items()}
-    sent_app = out["drafts"][0]["application_id"]
+    sent_app = drafts[0]["application_id"]
     assert stage_of[sent_app] == "Scheduling" and stage_of[[a for a in picked if a != sent_app][0]] == "Shortlisted"
     assert sent_count(seeded) == 1
 
@@ -294,16 +272,9 @@ def test_scheduling_line_must_cite_this_candidates_evidence(seeded):
     job, rows = ds_rows(api)
     a = by_name(rows, "Strong early-career DS")["application_id"]
     api.patch(f"/applications/{a}", json={"status": "shortlisted"})
-    d = api.post(f"/jobs/{job['id']}/interview-loop", json={"application_ids": [a]}).json()["drafts"][0]
+    d = api.post(f"/applications/{a}/workflow", json={}).json()["step"]["email"]
     assert d["template"] and d["checks"]["errors"] == [] and d["checks"]["evidence_id"]
     assert "evidence_id must be one of" in " ".join(d["checks"]["model_errors"])
-
-
-def test_loop_only_for_shortlisted(seeded):
-    api = client(seeded)
-    job, rows = ds_rows(api)
-    assert api.post(f"/jobs/{job['id']}/interview-loop",
-                    json={"application_ids": [rows[0]["application_id"]]}).status_code == 422
 
 
 # --- 5. Median for the role ------------------------------------------------------------------------------------

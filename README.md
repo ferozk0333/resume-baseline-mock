@@ -41,17 +41,37 @@ robustness checks only: it is never an applicant.
   Resume, Work, LinkedIn, Activity); ↑/↓ move through the list; the tab and selection are in the URL.
 - **Not moving forward:** a drawer with code-chosen reasons and an email draft (EMAIL_MODEL, checked in code; a
   "Template draft" when the model is unavailable). Nothing is sent until the recruiter clicks Send.
-- **Interview loop:** shortlist, select, "Start interview loop": one review screen of scheduling drafts. The
-  interview plan, duration and availability live in Job settings; the Pipeline board moves cards between stages.
+- **Interview plan:** stages, duration and availability windows live in Job settings; the Pipeline board moves
+  cards between stages.
 - **Email:** `EMAIL_PROVIDER=outbox` (default) stores emails and shows them on the Outbox page; nothing leaves the
   machine. `smtp` sends with `SMTP_*` and `EMAIL_FROM`. While `DEMO_EMAIL_TO` is set (default), every email goes
   to that address only, with the intended recipient named in the subject and body.
 - `make demo` runs on fakes: candidate uploads are not read and get preset scores (a banner says so). For real
   processing of an upload (Jev + Gemini, never Claude), stop the demo and run `make live` (same database, so the recruiter jobs stay).
-- Paused "Not moving forward" drafts and interview loops are checkpointed to `<db>.graphs.db` (LangGraph SQLite)
+- Paused "Not moving forward" drafts and hiring workflows are checkpointed to `<db>.graphs.db` (LangGraph SQLite)
   and survive a restart.
 - `make demo` drafts emails with templates (no model). For model drafts on the free tier:
   `EMAIL_LIVE=1 EMAIL_MODEL=gemini/gemini-3.5-flash-lite make demo`. "Why" points and phone-screen questions are code templates ("Demo text").
+
+### Hiring workflow (specs/16)
+One workflow per application, from shortlist to decision: a LangGraph graph that waits for the recruiter at every
+email and every decision. **Nothing is sent automatically.**
+- **Start:** "Start interview loop" on the job page (the ticked candidates, or the one open in the panel; anyone
+  not shortlisted is moved there after a confirmation), or from the workflow page.
+- **Workflow page** (`/recruiter/applications/{id}/workflow`, from a board card, the panel's Workflow button or
+  Tasks): stage timeline · the current step · the email thread and history. Steps: approve the invite → the
+  candidate's reply (paste it, pick a canned one, or IMAP) is read by `REPLY_MODEL` (code rules if unavailable) →
+  pick a slot (proposed from the availability windows, skipping booked slots) → approve the confirmation with its
+  `.ics` invite → interview → scorecards (1–4 per focus area) → summary by `FEEDBACK_MODEL` (code summary if
+  unavailable; never a recommendation) → the recruiter decides: advance, not moving forward, or hold.
+- **Tasks** (top navigation, with a count): everything waiting for the recruiter, oldest first.
+- **Scheduled checks** every `WORKFLOW_TICK_SECONDS` (60): a nudge is *drafted* after `NUDGE_DAYS` (3) without a
+  reply; feedback is asked for when the interview time passes. `POST /workflows/tick` runs them now.
+- **Board moves** update the workflow and never send anything; when an email would normally follow, the workflow
+  asks "Send stage email?".
+- **Replies by email (optional):** `REPLY_INBOX=imap` polls the demo inbox read-only every `IMAP_POLL_MINUTES`
+  (Gmail: same app password as SMTP). Replies match their workflow by the `[RS-xxxxxx]` token in the subject, or by
+  In-Reply-To; our own sent copies are skipped. Every send is idempotent (one send per approved draft).
 
 ## Models
 Claude is the default for extraction, fallback judging, complexity and the plan. Any of these can run on

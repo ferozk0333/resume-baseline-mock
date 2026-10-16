@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, Copy, ExternalLink, GitFork, Info, Mail } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronDown, Copy, ExternalLink, GitFork, Info, Mail, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/app/score/subcategory-row";
@@ -52,6 +53,9 @@ export function ProfilePanel({ p, tab, onTab, stages, onStatus, onStage, onRejec
             <p className="text-sm text-muted-foreground">{p.current_role ?? "No current role"}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/recruiter/applications/${p.application_id}/workflow`} className={buttonVariants({ size: "sm", variant: "outline" })}>
+              <Workflow /> Workflow
+            </Link>
             {inLoop && (
               <>
                 <select aria-label="Stage" value={p.stage_id ?? ""} onChange={(e) => onStage(e.target.value)}
@@ -102,7 +106,11 @@ export function ProfilePanel({ p, tab, onTab, stages, onStatus, onStage, onRejec
           <TabsContent value="resume"><Resume p={p} /></TabsContent>
           <TabsContent value="work"><Work p={p} /></TabsContent>
           <TabsContent value="linkedin"><LinkedIn p={p} /></TabsContent>
-          <TabsContent value="activity"><ActivityTab id={p.application_id} refresh={activityKey} /></TabsContent>
+          <TabsContent value="activity">
+            <p className="mb-3 text-sm"><Link href={`/recruiter/applications/${p.application_id}/workflow`} className="text-primary hover:underline">
+              Open the hiring workflow</Link> <span className="text-muted-foreground">for the email thread, replies, interviews and feedback.</span></p>
+            <ActivityTab id={p.application_id} refresh={activityKey} />
+          </TabsContent>
         </div>
       </Tabs>
     </article>

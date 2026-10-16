@@ -1,13 +1,30 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isWorkspace } from "@/components/app/app-main";
+import { get, type RecruiterTask } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+/** Open recruiter tasks, refreshed every 30 s and on navigation. */
+function useTaskCount(active: boolean, path: string) {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    const load = () => get<RecruiterTask[]>("/recruiter/tasks").then((t) => setN(t.length)).catch(() => setN(null));
+    load();
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
+  }, [active, path]);
+  return n;
+}
 
 export function SiteHeader() {
   const path = usePathname();
   const recruiter = path.startsWith("/recruiter");
-  const nav = recruiter ? [{ href: "/recruiter", label: "Jobs" }, { href: "/recruiter/outbox", label: "Outbox" }] : [
+  const tasks = useTaskCount(recruiter, path);
+  const nav = recruiter ? [{ href: "/recruiter", label: "Jobs" }, { href: "/recruiter/tasks", label: "Tasks", count: tasks },
+    { href: "/recruiter/outbox", label: "Outbox" }] : [
     { href: "/", label: "Candidates" },
     { href: "/baselines", label: "Baselines" },
   ];
@@ -26,11 +43,14 @@ export function SiteHeader() {
                 className={cn(
                   "rounded-md px-3 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground",
                   (n.href === "/" ? path === "/" || path.startsWith("/candidates") || path.startsWith("/runs")
-                    : n.href === "/recruiter" ? path.startsWith("/recruiter") && !path.startsWith("/recruiter/outbox")
+                    : n.href === "/recruiter" ? path.startsWith("/recruiter") && !/^\/recruiter\/(outbox|tasks)/.test(path)
                     : path.startsWith(n.href)) && "bg-muted text-foreground",
                 )}
               >
                 {n.label}
+                {"count" in n && !!n.count && (
+                  <span aria-label={`${n.count} open`} className="ml-1.5 rounded-full bg-primary px-1.5 py-px text-[11px] font-semibold text-primary-foreground tabular-nums">{n.count}</span>
+                )}
               </Link>
             ))}
           </nav>

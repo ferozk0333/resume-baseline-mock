@@ -134,19 +134,60 @@ export type Stage = { id: string; name: string; position: number; terminal: bool
 export type JobSettings = { recruiter_name: string; duration_minutes: number; availability: string; scheduling_link: string };
 export type Reason = { id: string; source: string; title: string; detail: string; advice: string; action_type: string;
   selected: boolean };
-export type Email = { id: string; application_id: string; job_id: string; kind: "not_moving_forward" | "scheduling" | "stage";
+export type Email = { id: string; application_id: string; job_id: string;
+  kind: "not_moving_forward" | "scheduling" | "stage" | "nudge" | "answer" | "confirmation" | "offer";
   stage_id: string | null; batch_id: string | null; status: "draft" | "sent" | "failed" | "cancelled";
   intended_to: string | null; actual_to: string | null; subject: string; body: string; model: string; provider: string | null;
   reasons: { reasons: Reason[]; note: string | null } | null;
   checks: { errors?: string[]; model_errors?: string[]; warnings?: string[]; words?: number; evidence_id?: string | null;
     edited?: boolean };
   error: string | null; created_at: string; sent_at: string | null; candidate_name: string | null; template: boolean;
-  label: string };
+  label: string; attachments: { filename: string; content_type: string; size: number }[];
+  in_reply_to?: string | null; token?: string | null };
 export type Activity = { id: string; kind: "stage" | "email" | "decision" | "note"; summary: string; created_at: string;
   detail: Record<string, unknown>; email?: Email };
 export type EmailConfig = { provider: string; demo_redirect: string | null; model: string | null };
-export type PipelineBoard = { stages: (Stage & { cards: Pick<ApplicantRow, "application_id" | "name" | "current_role" |
-  "match" | "confidence" | "demo" | "status">[] })[]; unstaged: number };
+export type BoardCard = Pick<ApplicantRow, "application_id" | "name" | "current_role" | "match" | "confidence" | "demo" |
+  "status"> & { workflow: WorkflowBadge };
+export type PipelineBoard = { stages: (Stage & { cards: BoardCard[] })[]; unstaged: number };
 
 /** "Top 20%" for percentile 80: the share of candidates at or above, rounded to 5 (at least 5). */
 export const topShare = (p: number) => Math.max(5, 5 * Math.round((100 - p) / 5));
+
+// --- Hiring workflow (specs/16) ---------------------------------------------------------------------------
+export type WorkflowBadge = { status: string; label: string } | null;
+export type Slot = { start: string; end: string; timezone: string; label: string; source: "availability" | "candidate";
+  fits: boolean; note: string | null };
+export type Reading = { label: "slot_chosen" | "times_proposed" | "question" | "decline" | "unclear"; quote: string;
+  times: { quote: string; start: string; timezone: string }[]; question: string | null; method: string;
+  model: string | null; notes: string[] };
+export type Message = { id: string; direction: "out" | "in"; subject: string; body: string; token: string | null;
+  message_id: string | null; actual_to: string | null; intended_to: string | null; from_addr: string | null;
+  status: string; source: string; reading: Reading | null; sent_at: string | null; created_at: string };
+export type Interview = { id: string; stage: string; start: string; end: string; timezone: string; status: string;
+  label: string | null };
+export type Scorecard = { id: string; interviewer: string; stage: string; recommendation: string; notes: string;
+  ratings: { area: string; rating: number; notes: string }[]; created_at: string };
+export type SummaryPoint = { text: string; quotes: { scorecard_id: string; quote: string }[] };
+export type FeedbackSummary = { stage: string; scorecards: number; recommendations: Record<string, number>;
+  agreements: SummaryPoint[]; disagreements: SummaryPoint[]; open_questions: SummaryPoint[]; method: string;
+  model: string | null; notes: string[] };
+export type WorkflowStep = { step: string; title: string; status: string; since: string | null; due: string | null;
+  email_id?: string; purpose?: string; error?: string | null; email?: Email; reply_id?: string | null; reply?: Message;
+  slots?: Slot[]; interview_id?: string | null; interview?: Interview | null; stage?: string | null; focus?: string[];
+  scorecards?: Scorecard[]; summary?: FeedbackSummary | null; next?: string; options?: { key: string; label: string }[];
+  unread: number };
+export type TimelineItem = { key: string; name: string; group: string | null;
+  status: "done" | "current" | "upcoming" | "skipped" | "not_reached" | "closed"; date: string | null; note?: string };
+export type WorkflowView = {
+  application: { id: string; name: string | null; job_id: string; job_title: string; company: string;
+    board_stage: string | null; match: number | null; status: string; current_role: string | null };
+  workflow: { status: string; status_label: string; step: string; stage: string; round: number; phase: string;
+    outcome: string | null; next_due: string | null; token: string; created_at: string; badge: WorkflowBadge } | null;
+  step: WorkflowStep | null; timeline: TimelineItem[]; rounds: { name: string; focus: string[] }[];
+  thread: Message[]; drafts: Email[]; interviews: Interview[]; scorecards: Scorecard[];
+  history: { type: string; actor: "recruiter" | "agent" | "candidate"; at: string; text: string }[];
+  settings: JobSettings; canned_replies: { key: string; text: string }[];
+};
+export type RecruiterTask = { application_id: string; candidate: string; job_id: string; job_title: string;
+  company: string; stage: string; step: string; title: string; since: string; kind: string };

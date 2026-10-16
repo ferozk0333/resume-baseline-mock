@@ -10,7 +10,8 @@ refused. Only `send()` delivers, and only for an email a recruiter sent from the
 from __future__ import annotations
 
 import smtplib
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from email.message import EmailMessage
 
 from core import config
@@ -27,6 +28,13 @@ class Outgoing:
     subject: str
     body: str
     provider: str
+    message_id: str | None = None
+    in_reply_to: str | None = None
+    attachments: list[dict] = field(default_factory=list)     # [{filename, content_type, text}]
+
+
+def make_message_id() -> str:
+    return f"<{uuid.uuid4().hex}@rightstaff.local>"
 
 
 def address(intended_to: str | None, candidate_name: str | None, subject: str, body: str) -> Outgoing:
@@ -57,7 +65,17 @@ def deliver(out: Outgoing) -> None:
         raise SendRefused(f"SMTP is not configured: set {', '.join(missing)} in .env.")
     msg = EmailMessage()
     msg["From"], msg["To"], msg["Subject"] = config.EMAIL_FROM, out.actual_to, out.subject
+    if out.message_id:
+        msg["Message-ID"] = out.message_id
+    if out.in_reply_to:
+        msg["In-Reply-To"] = msg["References"] = out.in_reply_to
     msg.set_content(out.body)
+    for a in out.attachments:
+        maintype, _, rest = a["content_type"].partition("/")
+        subtype, *params = [x.strip() for x in rest.split(";")]
+        extra = dict(p.split("=", 1) for p in params if "=" in p and not p.startswith("charset"))
+        msg.add_attachment(a["text"].encode("utf-8"), maintype=maintype, subtype=subtype, filename=a["filename"],
+                           params=extra)
     with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=30) as smtp:
         smtp.starttls()
         smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)

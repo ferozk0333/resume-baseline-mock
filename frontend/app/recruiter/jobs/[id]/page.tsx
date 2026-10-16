@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, CalendarClock, Columns3, Settings2 } from "lucide-react";
@@ -10,9 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApplicantList } from "@/components/app/recruiter/applicant-list";
 import { RejectDrawer, StageEmailDrawer } from "@/components/app/recruiter/decision-drawers";
+import { useStartLoop } from "@/components/app/recruiter/start-loop";
 import { PipelineBoard } from "@/components/app/recruiter/pipeline-board";
 import { ProfilePanel, TABS, type Tab } from "@/components/app/recruiter/profile-panel";
-import { get, patch, post, type ApplicantRow, type Email, type Job, type Panel, type Stage } from "@/lib/api";
+import { get, patch, type ApplicantRow, type Job, type Panel, type Stage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const selectClass = "h-8 rounded-lg border border-input bg-white px-2 text-sm";
@@ -109,15 +110,9 @@ function Workspace() {
     catch (e) { toast.error((e as Error).message); }
   }
 
-  const shortlistedPicked = useMemo(() => (rows ?? []).filter((r) => picked.includes(r.application_id)
-    && r.status === "shortlisted").map((r) => r.application_id), [rows, picked]);
-  async function startLoop() {
-    try {
-      const out = await post<{ batch_id: string; drafts: Email[] }>(`/jobs/${id}/interview-loop`,
-        { application_ids: shortlistedPicked });
-      router.push(`/recruiter/jobs/${id}/loop/${out.batch_id}`);
-    } catch (e) { toast.error((e as Error).message); }
-  }
+  // Start interview loop: the ticked candidates, or the one open in the panel (any status; specs/16 §0).
+  const loopIds = picked.length ? picked : panel ? [panel.application_id] : [];
+  const loop = useStartLoop(id, refresh);
 
   const weightsLabel = job?.preset ? `${job.preset} preset` : "the team weights table";
   return (
@@ -137,9 +132,9 @@ function Workspace() {
           ))}
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
-          <Button size="sm" disabled={!shortlistedPicked.length} onClick={startLoop}
-            title="Select shortlisted candidates in the list">
-            <CalendarClock /> Start interview loop{shortlistedPicked.length ? ` (${shortlistedPicked.length})` : ""}
+          <Button size="sm" disabled={!loopIds.length || loop.busy} onClick={() => loop.start(loopIds)}
+            title={picked.length ? "Start for the ticked candidates" : "Start for the candidate shown"}>
+            <CalendarClock /> Start interview loop{picked.length ? ` (${picked.length})` : ""}
           </Button>
           <Button size="sm" variant="outline" disabled={picked.length < 2 || picked.length > 3}
             onClick={() => router.push(`/recruiter/jobs/${id}/compare?ids=${picked.join(",")}`)}>
@@ -152,7 +147,7 @@ function Workspace() {
       </div>
 
       {view === "pipeline" ? (
-        <PipelineBoard jobId={id} onOpen={(appId) => setUrl({ view: "ranked", app: appId })} />
+        <PipelineBoard jobId={id} />
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)] gap-3">
           <section aria-label="Ranked applicants" className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-white">
@@ -203,6 +198,7 @@ function Workspace() {
             applicationId={panel.application_id} name={panel.name} stages={stages} onSent={refresh} />
         </>
       )}
+      {loop.dialog}
     </div>
   );
 }

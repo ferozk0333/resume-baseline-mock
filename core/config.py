@@ -49,6 +49,8 @@ GEMINI_MODELS = {
     "complexity": _env("GEMINI_COMPLEXITY_MODEL", "gemini-3.5-flash-lite"),
     "plan": _env("GEMINI_PLAN_MODEL", "gemini-3.8-flash"),
     "email": _env("GEMINI_EMAIL_MODEL", "gemini-3.5-flash-lite"),
+    "reply": _env("GEMINI_REPLY_MODEL", "gemini-3.5-flash-lite"),
+    "feedback": _env("GEMINI_FEEDBACK_MODEL", "gemini-3.5-flash-lite"),
 }
 
 
@@ -93,6 +95,10 @@ REASONING_MODEL = _role_model("REASONING_MODEL", "claude-sonnet-5-5", "plan")
 COMPLEXITY_MODEL = _role_model("COMPLEXITY_MODEL", REASONING_MODEL, "complexity")
 # Recruiter emails (specs/13 §2–§4): drafts only; a recruiter sends. Template draft when the model is unavailable.
 EMAIL_MODEL = _role_model("EMAIL_MODEL", "claude-haiku-4-5-20251001", "email")
+# Hiring workflow (specs/16): reading candidate replies and summarizing interview feedback. Code rules / a code
+# summary when the model is unavailable; the recruiter always decides.
+REPLY_MODEL = _role_model("REPLY_MODEL", "claude-haiku-4-5-20251001", "reply")
+FEEDBACK_MODEL = _role_model("FEEDBACK_MODEL", "claude-haiku-4-5-20251001", "feedback")
 JEV_MODEL = _env("JEV_MODEL", "jev-1.13.0")   # pinned; saved judgments are matched on this version
 JEV_URL = "https://api.typesafe.ai/v1/systemone"
 # Effort per purpose (low | medium | high; empty = the model's default: high on Sonnet 5.5, medium on
@@ -249,3 +255,14 @@ EMAIL_FROM = _env("EMAIL_FROM", "")
 DEMO_EMAIL_TO = os.getenv("DEMO_EMAIL_TO", "you@example.com").split("#", 1)[0].strip()
 REJECTION_MAX_WORDS = 150
 SCHEDULING_MAX_WORDS = 120
+
+# --- Hiring workflow (specs/16) ------------------------------------------------------------------------
+NUDGE_DAYS = float(_env("NUDGE_DAYS", "3"))             # no reply after this many days → draft a nudge (not sent)
+REPLY_INBOX = _env("REPLY_INBOX", "none")                # none (paste replies) | imap (poll the demo inbox)
+IMAP_HOST = _env("IMAP_HOST", "imap.gmail.com")
+IMAP_PORT = int(_env("IMAP_PORT", "993"))
+IMAP_USER = _env("IMAP_USER", "") or SMTP_USER           # same Gmail app password as SMTP by default
+IMAP_PASSWORD = _env("IMAP_PASSWORD", "") or SMTP_PASSWORD
+IMAP_POLL_MINUTES = float(_env("IMAP_POLL_MINUTES", "3"))
+WORKFLOW_TICK_SECONDS = int(_env("WORKFLOW_TICK_SECONDS", "60"))   # nudges due, interviews passed, inbox; 0 = off
+MESSAGE_MAX_WORDS = 120                                  # nudge, answer and offer-note drafts

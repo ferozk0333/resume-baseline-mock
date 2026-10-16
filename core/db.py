@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -202,7 +202,62 @@ CREATE TABLE IF NOT EXISTS emails (         -- every drafted or sent email (spec
   model TEXT,                     -- model id, or "template" (labelled "Template draft")
   provider TEXT,                  -- outbox | smtp
   reasons_json TEXT, checks_json TEXT, error TEXT,
-  created_at TEXT, updated_at TEXT, sent_at TEXT
+  created_at TEXT, updated_at TEXT, sent_at TEXT,
+  token TEXT,                     -- hiring workflow token "[RS-1a2b3c]" added to the subject on send (specs/16)
+  message_id TEXT,                -- Message-ID header, set on send
+  in_reply_to TEXT,               -- Message-ID of the candidate reply this answers
+  attachments_json TEXT,          -- [{filename, content_type, text}] e.g. the .ics invite
+  interview_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS workflows (      -- hiring workflow per application (specs/16 §6)
+  application_id TEXT PRIMARY KEY, job_id TEXT,
+  thread_id TEXT,                 -- LangGraph thread (SQLite checkpointer)
+  token TEXT,                     -- matches replies: "[RS-<token>]" in the subject
+  stage TEXT,                     -- timeline position, e.g. "Phone screen · Scheduling"
+  round INTEGER, phase TEXT,      -- interview round (index into the plan's interview stages) and its phase
+  step TEXT,                      -- the waiting interrupt: approve_email | await_reply | confirm_slot | …
+  title TEXT,                     -- Tasks line, e.g. "Approve scheduling email"
+  payload_json TEXT,              -- what the step shows (email id, reply id, slots, options)
+  status TEXT,                    -- needs_action | waiting_candidate | scheduled | paused | closed
+  paused_status TEXT, next_due TEXT, step_since TEXT, outcome TEXT,
+  created_at TEXT, updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS workflow_events (
+  id TEXT PRIMARY KEY, application_id TEXT,
+  type TEXT, payload_json TEXT,
+  actor TEXT,                     -- recruiter | agent | candidate
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS messages (       -- the email thread: every sent and received message
+  id TEXT PRIMARY KEY, application_id TEXT,
+  direction TEXT,                 -- out | in
+  subject TEXT, body TEXT, token TEXT,
+  message_id TEXT, in_reply_to TEXT,
+  intended_to TEXT, actual_to TEXT, from_addr TEXT,
+  draft_id TEXT,                  -- emails.id for outbound
+  status TEXT,                    -- out: sent | in: new | read
+  source TEXT,                    -- outbox | smtp | pasted | canned | imap
+  reading_json TEXT,              -- reply classification shown to the recruiter
+  sent_at TEXT, created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS interviews (
+  id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT,
+  stage TEXT, start TEXT, end TEXT, timezone TEXT,
+  ics_uid TEXT, status TEXT,      -- tentative | confirmed | done | cancelled
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS scorecards (
+  id TEXT PRIMARY KEY, application_id TEXT, interview_id TEXT, stage TEXT,
+  interviewer TEXT,
+  ratings_json TEXT,              -- [{area, rating 1-4, notes}]
+  notes TEXT,
+  recommendation TEXT,            -- strong_yes | yes | no | strong_no
+  created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS generated_summaries (  -- "why" points and phone-screen questions, cached per run and weights
@@ -377,6 +432,20 @@ EMAILS = """CREATE TABLE IF NOT EXISTS emails (
   id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT, kind TEXT, stage_id TEXT, batch_id TEXT, status TEXT,
   intended_to TEXT, actual_to TEXT, subject TEXT, body TEXT, model TEXT, provider TEXT, reasons_json TEXT,
   checks_json TEXT, error TEXT, created_at TEXT, updated_at TEXT, sent_at TEXT)"""
+WORKFLOW_TABLES = [
+    "CREATE TABLE IF NOT EXISTS workflows (application_id TEXT PRIMARY KEY, job_id TEXT, thread_id TEXT, token TEXT, "
+    "stage TEXT, round INTEGER, phase TEXT, step TEXT, title TEXT, payload_json TEXT, status TEXT, paused_status TEXT, "
+    "next_due TEXT, step_since TEXT, outcome TEXT, created_at TEXT, updated_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS workflow_events (id TEXT PRIMARY KEY, application_id TEXT, type TEXT, "
+    "payload_json TEXT, actor TEXT, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, application_id TEXT, direction TEXT, subject TEXT, "
+    "body TEXT, token TEXT, message_id TEXT, in_reply_to TEXT, intended_to TEXT, actual_to TEXT, from_addr TEXT, "
+    "draft_id TEXT, status TEXT, source TEXT, reading_json TEXT, sent_at TEXT, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS interviews (id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT, stage TEXT, "
+    "start TEXT, end TEXT, timezone TEXT, ics_uid TEXT, status TEXT, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS scorecards (id TEXT PRIMARY KEY, application_id TEXT, interview_id TEXT, stage TEXT, "
+    "interviewer TEXT, ratings_json TEXT, notes TEXT, recommendation TEXT, created_at TEXT)",
+]
 PROVIDER_USAGE = """CREATE TABLE IF NOT EXISTS provider_usage (
   provider TEXT, model TEXT, day TEXT, requests INTEGER, tokens INTEGER, PRIMARY KEY (provider, model, day))"""
 HTTP_CACHE = """CREATE TABLE IF NOT EXISTS http_cache (
@@ -424,6 +493,9 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (16, ["ALTER TABLE candidates ADD COLUMN email TEXT", "ALTER TABLE jobs ADD COLUMN settings_json TEXT",
           "ALTER TABLE applications ADD COLUMN stage_id TEXT", INTERVIEW_STAGES, ACTIVITY, EMAILS]),
     (17, ["ALTER TABLE candidates ADD COLUMN linkedin_url TEXT"]),
+    (18, [*(f"ALTER TABLE emails ADD COLUMN {c} TEXT" for c in ("token", "message_id", "in_reply_to",
+                                                                "attachments_json", "interview_id")),
+          *WORKFLOW_TABLES]),
 ]
 
 

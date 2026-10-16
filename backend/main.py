@@ -64,7 +64,7 @@ class State:
         self._pipeline: Pipeline | None = None
         self.review_threads: dict[str, str] = {}          # candidate_id → paused onboarding thread
         self._rejection = None
-        self._loop = None
+        self._hiring = None
 
     @property
     def rejection(self):
@@ -75,12 +75,12 @@ class State:
         return self._rejection
 
     @property
-    def loop(self):
-        """The interview-loop graph (paused loops are checkpointed to SQLite)."""
-        if self._loop is None:
-            from backend.loop_flow import LoopFlow
-            self._loop = LoopFlow(self.db_path, self.deps.writer)
-        return self._loop
+    def hiring(self):
+        """The hiring workflow graph, one thread per application (checkpointed to SQLite)."""
+        if self._hiring is None:
+            from backend.hiring_flow import HiringFlow
+            self._hiring = HiringFlow(self.db_path, self.deps.writer, rejection=self.rejection)
+        return self._hiring
 
     @property
     def deps(self) -> Deps:
@@ -181,8 +181,43 @@ class RejectIn(BaseModel):
     note: str | None = None
 
 
-class LoopIn(BaseModel):
+class WorkflowStart(BaseModel):
+    confirm_move: bool = False           # "Move to Shortlisted and start?" was confirmed
+
+
+class BulkStart(WorkflowStart):
     application_ids: list[str]
+    check_only: bool = False             # only list who would be moved to Shortlisted (for the confirmation)
+
+
+class WorkflowAction(BaseModel):
+    """The recruiter's answer at the current step, e.g. {"action": "send", "email_id": …},
+    {"action": "confirm", "start": "2026-10-20T11:00:00-04:00"}, {"action": "choose", "option": "slots"}."""
+    action: str
+    email_id: str | None = None
+    message_id: str | None = None
+    option: str | None = None
+    start: str | None = None
+    end: str | None = None
+    stage_id: str | None = None
+
+
+class ReplyIn(BaseModel):
+    text: str | None = None
+    canned: str | None = None
+
+
+class Rating(BaseModel):
+    area: str
+    rating: int
+    notes: str | None = None
+
+
+class ScorecardIn(BaseModel):
+    interviewer: str
+    ratings: list[Rating]
+    notes: str | None = None
+    recommendation: Literal["strong_yes", "yes", "no", "strong_no"]
 
 
 class StageEmailIn(BaseModel):
@@ -205,9 +240,36 @@ class ProfileEdit(BaseModel):
 
 # --- App ------------------------------------------------------------------------------------------------
 
+def start_ticker(state: State) -> None:
+    """Scheduled workflow checks every WORKFLOW_TICK_SECONDS (no email is sent): replies to read, nudges due,
+    interviews that ended; and the inbox poll when REPLY_INBOX=imap."""
+    import threading
+    import time
+
+    def loop():
+        last_poll = 0.0
+        while True:
+            time.sleep(config.WORKFLOW_TICK_SECONDS)
+            try:
+                state.hiring.tick()
+                if config.REPLY_INBOX == "imap" and time.time() - last_poll >= config.IMAP_POLL_MINUTES * 60:
+                    last_poll = time.time()
+                    log.info("inbox poll: %s", state.hiring.poll_inbox())
+            except Exception:                           # noqa: BLE001 - logged; the next tick tries again
+                log.exception("workflow tick failed")
+    threading.Thread(target=loop, name="workflow-tick", daemon=True).start()
+
+
 def create_app(deps: Deps | None = None) -> FastAPI:
+    from contextlib import asynccontextmanager
     state = State(deps)
-    app = FastAPI(title="RightStaff API", version="0.2",
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        if config.WORKFLOW_TICK_SECONDS > 0:
+            start_ticker(state)
+        yield
+    app = FastAPI(title="RightStaff API", version="0.2", lifespan=lifespan,
                   description="Scores a candidate against a baseline role profile (EEAT). Local mock.")
     app.add_middleware(CORSMiddleware, allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
                        allow_methods=["*"], allow_headers=["*"])     # local mock: any local web port
@@ -664,15 +726,25 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     @app.get("/jobs/{job_id}/pipeline", tags=["workflows"])
     def job_pipeline(job_id: str):
+        """Board columns; each card carries its workflow status (Needs your action, Scheduled …)."""
+        from backend import hiring
         with conn() as c:
-            return wf.pipeline(c, job_or_404(c, job_id))
+            board = wf.pipeline(c, job_or_404(c, job_id))
+            for col in board["stages"]:
+                for card in col["cards"]:
+                    card["workflow"] = hiring.card_status(c, hiring.get(c, card["application_id"]))
+            return board
 
     @app.patch("/applications/{app_id}/stage", tags=["workflows"])
     def move_stage(app_id: str, body: StageMove):
-        """Move a card between stages; the move is logged in Activity."""
+        """Move a card between stages; the move is logged in Activity and updates the hiring workflow
+        (specs/16 §5). Nothing is sent: if an email would follow, the workflow asks "Send stage email?"."""
         with conn() as c:
-            a = wf_call(wf.move, c, app_or_404(c, app_id), body.stage_id)
-            return {"application_id": app_id, "status": a["status"], "stage_id": a["stage_id"]}
+            before = app_or_404(c, app_id)
+            a = wf_call(wf.move, c, before, body.stage_id)
+        if body.stage_id and body.stage_id != before.get("stage_id"):
+            wf_call(state.hiring.board_move, app_id, body.stage_id)
+        return {"application_id": app_id, "status": a["status"], "stage_id": a["stage_id"]}
 
     @app.get("/applications/{app_id}/activity", tags=["workflows"])
     def application_activity(app_id: str):
@@ -693,17 +765,109 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             app_or_404(c, app_id)
         return state.rejection.draft(app_id, body.reason_ids if body else None, body.note if body else None)
 
-    @app.post("/jobs/{job_id}/interview-loop", tags=["workflows"])
-    def start_loop(job_id: str, body: LoopIn):
-        with conn() as c:
-            job = job_or_404(c, job_id)
-        return wf_call(state.loop.start, job, body.application_ids)
+    # --- Hiring workflow (specs/16): one per application; every email and decision waits for the recruiter ----
+    from backend import hiring as hr
+    from backend import replies as rp
 
-    @app.get("/jobs/{job_id}/interview-loop/{batch_id}", tags=["workflows"])
-    def loop_batch(job_id: str, batch_id: str):
+    def start_one(c, app_id: str, confirm_move: bool) -> dict:
+        a = app_or_404(c, app_id)
+        open_ = hr.get(c, app_id)
+        if open_ and open_["status"] != "closed":
+            return open_
+        if a["status"] != "shortlisted":
+            if not confirm_move:
+                raise HTTPException(409, "Move to Shortlisted and start?")
+            wf.set_status(c, a, "shortlisted")
+        return wf_call(state.hiring.start, app_id)
+
+    @app.post("/applications/{app_id}/workflow", tags=["hiring"])
+    def start_workflow(app_id: str, body: WorkflowStart | None = None):
+        """Start the interview loop for one candidate (any status: confirm the move to Shortlisted first)."""
+        with conn() as c:
+            start_one(c, app_id, bool(body and body.confirm_move))
+            return hr.view(c, app_id)
+
+    @app.post("/jobs/{job_id}/workflows", tags=["hiring"])
+    def start_workflows(job_id: str, body: BulkStart):
+        """Bulk "Start interview loop". 409 lists the candidates who are not shortlisted unless confirmed."""
         with conn() as c:
             job_or_404(c, job_id)
-            return {"batch_id": batch_id, "drafts": wf.list_emails(c, job_id=job_id, batch_id=batch_id)}
+            apps = [app_or_404(c, a) for a in body.application_ids]
+            if not apps:
+                raise HTTPException(422, "Select at least one candidate.")
+            if any(a["job_id"] != job_id for a in apps):
+                raise HTTPException(422, "Those candidates are not all in this job.")
+            def has_open(a):
+                return (hr.get(c, a["id"]) or {}).get("status") not in (None, "closed")
+            to_move = [a for a in apps if a["status"] != "shortlisted" and not has_open(a)]
+            if body.check_only:
+                return {"needs_move": [hr.candidate_name(c, a) or "Applicant" for a in to_move]}
+            if to_move and not body.confirm_move:
+                names = [hr.candidate_name(c, a) or "Applicant" for a in to_move]
+                raise HTTPException(409, f"Move to Shortlisted and start? ({', '.join(names)})")
+            started = [start_one(c, a["id"], True)["application_id"] for a in apps]
+            return {"started": started}
+
+    @app.get("/applications/{app_id}/workflow", tags=["hiring"])
+    def workflow_view(app_id: str):
+        with conn() as c:
+            app_or_404(c, app_id)
+            return hr.view(c, app_id)
+
+    @app.post("/applications/{app_id}/workflow/action", tags=["hiring"])
+    def workflow_action(app_id: str, body: WorkflowAction):
+        """The recruiter's answer at the current step. "hold" pauses the decision."""
+        with conn() as c:
+            app_or_404(c, app_id)
+            if body.action in ("pause", "hold"):
+                wf_call(hr.pause, c, app_id, "recruiter", "on_hold" if body.action == "hold" else "paused")
+            elif body.action == "resume":
+                wf_call(hr.unpause, c, app_id)
+            else:
+                wf_call(state.hiring.act, app_id, body.model_dump(exclude_none=True))
+            return hr.view(c, app_id)
+
+    @app.post("/applications/{app_id}/workflow/reply", tags=["hiring"])
+    def workflow_reply(app_id: str, body: ReplyIn):
+        """Simulate / paste the candidate's reply (or pick a canned one). The agent reads it; nothing is sent."""
+        text = rp.CANNED.get(body.canned or "") or body.text
+        if not text or not text.strip():
+            raise HTTPException(422, "Paste the reply or pick a canned one.")
+        with conn() as c:
+            app_or_404(c, app_id)
+            wf_call(state.hiring.reply, app_id, text, "canned" if body.canned else "pasted")
+            return hr.view(c, app_id)
+
+    @app.post("/applications/{app_id}/workflow/scorecards", tags=["hiring"])
+    def add_scorecard(app_id: str, body: ScorecardIn):
+        with conn() as c:
+            app_or_404(c, app_id)
+            row = hr.get(c, app_id)
+            if row is None or row["step"] != "enter_feedback":
+                raise HTTPException(422, "Feedback is entered when the workflow asks for it.")
+            wf_call(hr.add_scorecard, c, app_id, interview_id=row["payload"].get("interview_id"),
+                    stage=row["payload"].get("stage") or "Interview", interviewer=body.interviewer,
+                    ratings=[r.model_dump() for r in body.ratings], notes=body.notes,
+                    recommendation=body.recommendation)
+            return hr.view(c, app_id)
+
+    @app.get("/recruiter/tasks", tags=["hiring"])
+    def recruiter_tasks():
+        """Everything waiting for the recruiter across jobs, oldest first."""
+        with conn() as c:
+            return hr.tasks(c)
+
+    @app.post("/workflows/tick", tags=["hiring"])
+    def workflows_tick():
+        """Run the scheduled checks now (also runs every WORKFLOW_TICK_SECONDS): replies, nudges, interviews."""
+        out = {"touched": state.hiring.tick()}
+        if config.REPLY_INBOX == "imap":
+            try:
+                out["inbox"] = state.hiring.poll_inbox()
+            except Exception as exc:                    # noqa: BLE001 - shown, never fatal
+                out["inbox_error"] = clean_error(exc)
+        return out
+
 
     @app.post("/applications/{app_id}/stage-email", tags=["workflows"])
     def stage_email(app_id: str, body: StageEmailIn):
@@ -737,20 +901,24 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         """The recruiter's Send action: the only way an email is delivered."""
         with conn() as c:
             e = wf.get_email(c, email_id) or not_found("Email")
+            row = hr.get(c, e["application_id"])
+            if row and row["step"] == "approve_email" and row["payload"].get("email_id") == email_id:
+                wf_call(state.hiring.act, e["application_id"], {"action": "send", "email_id": email_id})
+                return wf.get_email(c, email_id)
             if e["kind"] == "not_moving_forward":
                 return wf_call(state.rejection.decide, email_id, "send")
-            if e["batch_id"] and e["status"] == "draft":
-                return wf_call(state.loop.decide, e["batch_id"], "send", [email_id])[0]
             return wf_call(wf.send_scheduling, c, email_id)
 
     @app.post("/emails/{email_id}/cancel", tags=["workflows"])
     def cancel(email_id: str):
         with conn() as c:
             e = wf.get_email(c, email_id) or not_found("Email")
+            row = hr.get(c, e["application_id"])
+            if row and row["step"] == "approve_email" and row["payload"].get("email_id") == email_id:
+                wf_call(state.hiring.act, e["application_id"], {"action": "discard"})
+                return wf.get_email(c, email_id)
             if e["kind"] == "not_moving_forward" and e["status"] == "draft":
                 return wf_call(state.rejection.decide, email_id, "cancel")
-            if e["batch_id"] and e["status"] == "draft":
-                return wf_call(state.loop.decide, e["batch_id"], "remove", [email_id])[0]
             return wf.cancel_email(c, email_id)
 
     @app.get("/jobs/{job_id}/compare", tags=["recruiter"])

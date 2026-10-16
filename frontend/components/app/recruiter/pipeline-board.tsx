@@ -1,13 +1,18 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { get, patch, type PipelineBoard as Board } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/** One column per stage (terminal last). Drag a card to another column, or use its "Move to" menu. */
-export function PipelineBoard({ jobId, onOpen }: { jobId: string; onOpen: (applicationId: string) => void }) {
+const BADGE: Record<string, string> = { needs_action: "bg-amber-100 text-amber-900", waiting_candidate: "bg-sky-100 text-sky-900",
+  scheduled: "bg-emerald-100 text-emerald-900", feedback_due: "bg-violet-100 text-violet-900", paused: "bg-slate-100 text-slate-700" };
+
+/** One column per stage (terminal last). Drag a card to another column, or use its "Move to" menu. Clicking a
+ *  card opens its hiring workflow. Moving a card never sends anything (specs/16 §5). */
+export function PipelineBoard({ jobId }: { jobId: string }) {
   const [board, setBoard] = useState<Board | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const load = useCallback(() => {
@@ -24,7 +29,7 @@ export function PipelineBoard({ jobId, onOpen }: { jobId: string; onOpen: (appli
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <p className="shrink-0 text-xs text-muted-foreground">
         {board.unstaged} applicant{board.unstaged === 1 ? "" : "s"} not yet in the interview plan (shortlist them in Ranked).
-        Moving a card logs it in the candidate&apos;s Activity.
+        Moving a card logs it and updates the workflow; it never sends anything.
       </p>
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
         {board.stages.map((s) => (
@@ -41,12 +46,17 @@ export function PipelineBoard({ jobId, onOpen }: { jobId: string; onOpen: (appli
                 <li key={c.application_id} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", c.application_id)}
                   className="cursor-grab rounded-lg border bg-white p-2.5 text-sm shadow-xs active:cursor-grabbing">
                   <div className="flex items-start justify-between gap-2">
-                    <button type="button" onClick={() => onOpen(c.application_id)} className="min-w-0 text-left font-medium hover:underline">
+                    <Link href={`/recruiter/applications/${c.application_id}/workflow`} className="min-w-0 text-left font-medium hover:underline">
                       <span className="line-clamp-1">{c.name ?? "Unnamed"}</span>
-                    </button>
+                    </Link>
                     <span className="font-semibold tabular-nums text-primary">{c.match === null ? "—" : Math.round(c.match)}</span>
                   </div>
                   <div className="line-clamp-1 text-xs text-muted-foreground">{c.current_role ?? "—"}</div>
+                  {c.workflow && (
+                    <span className={cn("mt-1 inline-block rounded px-1.5 py-px text-[11px] font-medium", BADGE[c.workflow.status])}>
+                      {c.workflow.label}
+                    </span>
+                  )}
                   <select aria-label={`Move ${c.name ?? "applicant"} to`} value="" onChange={(e) => e.target.value && move(c.application_id, e.target.value)}
                     className="mt-1.5 h-6 w-full rounded-md border border-input bg-white px-1 text-xs text-muted-foreground">
                     <option value="">Move to…</option>

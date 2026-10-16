@@ -210,7 +210,8 @@ def test_configured_limits_and_role_models():
     assert config._limits("a=1/2/3, b=4/5/6") == {"a": (1, 2, 3), "b": (4, 5, 6)}
     assert config.GEMINI_MODELS == {"extract": "gemini-3.8-flash", "judge": "gemini-3.5-flash-lite",
                                     "complexity": "gemini-3.5-flash-lite", "plan": "gemini-3.8-flash",
-                                    "email": "gemini-3.5-flash-lite"}
+                                    "email": "gemini-3.5-flash-lite", "reply": "gemini-3.5-flash-lite",
+                                    "feedback": "gemini-3.5-flash-lite"}
 
 
 def test_a_gemini_judge_answer_is_a_valid_judgment_end_to_end(limiter, monkeypatch):
