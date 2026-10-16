@@ -21,3 +21,12 @@ def no_real_email(monkeypatch):
 def no_workflow_ticker(monkeypatch):
     """The scheduled workflow checks never run in the background during tests (tests call tick() directly)."""
     monkeypatch.setattr(config, "WORKFLOW_TICK_SECONDS", 0)
+
+
+@pytest.fixture(autouse=True)
+def never_live(monkeypatch):
+    """specs/18 §2 item 8: tests never call a real provider, whatever the environment says."""
+    from core import config
+    from core.routing import LIMITER
+    monkeypatch.setattr(config, "LIVE", False)
+    LIMITER.reset()

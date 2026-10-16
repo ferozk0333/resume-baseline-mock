@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import os
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -78,25 +79,125 @@ def gemini_limits(model: str) -> tuple[int, int, int]:
 GEMINI_CONCURRENCY = int(_env("GEMINI_CONCURRENCY", "4"))
 GEMINI_THINKING_LEVEL = _env("GEMINI_THINKING_LEVEL", "low")
 
+# --- Routing (specs/18 §2) ---------------------------------------------------------------------------------------------
+# Real model calls (Gemini, Groq, Claude, Jev) only with LIVE=1 (`make live` sets it). Dev servers, scripts and tests
+# without it fail at once with a clear message instead of calling a provider.
+LIVE = _env("LIVE", "0") == "1"
+# Ordered provider/model lists per task. In phase 1 the first model of each list is the one used today; the others
+# take over only when it is exhausted, busy or overloaded. Override one list with ROUTE_<TASK>="model,model,…"
+# (a "claude-…" id at the top works with no code change).
+_ROUTE_DEFAULTS = {
+    "extract_document": "gemini/gemini-3.8-flash,gemini/gemini-3.7-flash,gemini/gemini-3.6-flash,"
+                        "gemini/gemini-3-flash-preview,gemini/gemini-2.5-flash",
+    "extract_web": "gemini/gemini-3.5-flash-lite,gemini/gemini-3.1-flash-lite,gemini/gemma-4-31b-it,"
+                   "groq/openai/gpt-oss-120b",
+    "judge_single": "gemini/gemini-3.5-flash-lite,gemini/gemini-3.1-flash-lite,groq/openai/gpt-oss-120b,"
+                    "groq/qwen/qwen3.8-27b,groq/openai/gpt-oss-20b,gemini/gemma-4-31b-it,gemini/gemma-4-26b-it",
+    "judge_grouped": "gemini/gemini-3.5-flash-lite,gemini/gemini-3.1-flash-lite,gemini/gemma-4-31b-it",
+    "plan": "gemini/gemini-3.8-flash,gemini/gemini-3.7-flash,gemini/gemini-3.6-flash",
+}
+ROUTES: dict[str, list[str]] = {
+    task: [m.strip() for m in _env(f"ROUTE_{task.upper()}", default).split(",") if m.strip()]
+    for task, default in _ROUTE_DEFAULTS.items()}
+
+
+@dataclass(frozen=True)
+class ModelLimits:
+    rpm: int = 0          # 0 = no limit known
+    tpm: int = 0
+    rpd: int = 0
+    tpd: int = 0
+
+
+def _model_limits(text: str) -> dict[str, ModelLimits]:
+    """"provider/model=RPM/TPM/RPD[/TPD],…" → {model: ModelLimits}."""
+    out = {}
+    for part in filter(None, (x.strip() for x in text.split(","))):
+        model, _, nums = part.partition("=")
+        n = [int(x) for x in nums.split("/")]
+        out[model.strip()] = ModelLimits(*n)
+    return out
+
+
+# Free-tier limits (specs/18 §1, 2026-10-16; Groq: console.groq.com/docs/rate-limits). Override with MODEL_LIMITS.
+_FLASH = "5/250000/20"
+MODEL_LIMITS = {
+    **_model_limits(",".join(f"gemini/{m}={_FLASH}" for m in ("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
+                                                              "gemini-3-flash-preview", "gemini-2.5-flash"))),
+    **_model_limits("gemini/gemini-3.5-flash-lite=15/250000/500,gemini/gemini-3.1-flash-lite=15/250000/500,"
+                    "gemini/gemma-4-31b-it=30/16000/14400,gemini/gemma-4-26b-it=30/16000/14400,"
+                    "groq/openai/gpt-oss-120b=30/8000/1000/200000,groq/openai/gpt-oss-20b=30/8000/1000/200000,"
+                    "groq/qwen/qwen3.8-27b=30/8000/1000/200000,"
+                    "groq/meta-llama/llama-prompt-guard-2-86m=30/15000/14400/500000,"
+                    "groq/meta-llama/llama-prompt-guard-2-22m=30/15000/14400/500000"),
+    **{f"gemini/{m}": ModelLimits(*lim) for m, lim in _limits(_env("GEMINI_LIMITS", "")).items()},
+    **_model_limits(_env("MODEL_LIMITS", "")),
+}
+
+
+def model_limits(model: str) -> ModelLimits:
+    """Known limits of a model (a Gemini model not listed uses GEMINI_RPM/TPM/RPD; Claude: none)."""
+    if model in MODEL_LIMITS:
+        return MODEL_LIMITS[model]
+    if model.startswith("gemini/"):
+        return ModelLimits(GEMINI_RPM, GEMINI_TPM, GEMINI_RPD)
+    if model.startswith("groq/"):
+        return ModelLimits(30, GROQ_TPM, 1000, 200000)
+    return ModelLimits()
+
+
+_CONCURRENCY = {k.strip(): int(v) for k, _, v in (x.partition("=") for x in _env("MODEL_CONCURRENCY", "").split(",") if "=" in x)}
+
+
+def model_concurrency(model: str) -> int:
+    """Calls in flight per model: up to its requests per minute (MODEL_CONCURRENCY="model=n,…" overrides)."""
+    if model in _CONCURRENCY:
+        return _CONCURRENCY[model]
+    rpm = model_limits(model).rpm
+    return rpm if rpm else CLAUDE_MAX_CONCURRENCY
+
+
+GEMINI_TIMEOUT_S = float(_env("GEMINI_TIMEOUT_S", "45"))
+GROQ_TIMEOUT_S = float(_env("GROQ_TIMEOUT_S", "20"))
+ROUTE_MAX_ATTEMPTS = int(_env("ROUTE_MAX_ATTEMPTS", "4"))      # model calls per request, across the list
+ROUTE_MAX_WAIT_S = float(_env("ROUTE_MAX_WAIT_S", "5"))        # one wait when every model is busy
+ROUTE_BUSY_BUDGET_S = float(_env("ROUTE_BUSY_BUDGET_S", "60"))  # longer than this is "exhausted", not "busy"
+ROUTE_MAX_TOTAL_WAIT_S = float(_env("ROUTE_MAX_TOTAL_WAIT_S", "90"))   # all models busy this long: give up the call
+OVERLOAD_COOLDOWN_S = float(_env("OVERLOAD_COOLDOWN_S", "20"))  # a model that answered 5xx/timeout rests this long
+# Hedging (off by default): a single-item call with no answer after N s also goes to the next model; first answer
+# wins. Each hedge costs one more request of quota.
+HEDGE_AFTER_S = float(_env("HEDGE_AFTER_S", "0"))
+HEDGE_TASKS = tuple(t.strip() for t in _env("HEDGE_TASKS", "judge_single").split(","))
+
+
+# The route each role uses with LLM_PROVIDER=gemini (specs/18 §2 item 1).
+ROLE_ROUTES = {"extract": "extract_document", "extract_web": "extract_web", "judge": "judge_single",
+               "judge_batch": "judge_grouped", "complexity": "judge_single", "plan": "plan", "email": "judge_single",
+               "reply": "judge_single", "feedback": "judge_single", "job_extract": "extract_document"}
+
 
 def _role_model(env: str, claude_default: str, role: str) -> str:
-    """The model for one role. With LLM_PROVIDER=gemini, Claude IDs in .env are replaced by the Gemini model
-    for the role; an explicit "gemini/…" or "groq/…" setting always wins."""
+    """The model (or route) for one role. With LLM_PROVIDER=gemini, Claude IDs in .env are replaced by the role's
+    route ("route:<task>"); an explicit "gemini/…", "groq/…" or "route:…" setting always wins."""
     explicit = os.getenv(env, "").split("#", 1)[0].strip()
     if LLM_PROVIDER == "gemini":
-        return explicit if explicit.startswith(("gemini/", "groq/")) else f"gemini/{GEMINI_MODELS[role]}"
+        return explicit if explicit.startswith(("gemini/", "groq/", "route:")) else f"route:{ROLE_ROUTES[role]}"
     return explicit or claude_default
 
 
 EXTRACT_MODEL = _role_model("EXTRACT_MODEL", "claude-haiku-4-5-20251001", "extract")
 JUDGE_FALLBACK_MODEL = _role_model("JUDGE_FALLBACK_MODEL", "claude-haiku-4-5-20251001", "judge")
 REASONING_MODEL = _role_model("REASONING_MODEL", "claude-sonnet-5-5", "plan")
+# READMEs and portfolio pages (extract_web) and grouped judge questions (judge_grouped): same model as their role
+# unless a route applies.
+EXTRACT_WEB_MODEL = _role_model("EXTRACT_WEB_MODEL", EXTRACT_MODEL, "extract_web")
+JUDGE_BATCH_MODEL = _role_model("JUDGE_BATCH_MODEL", "", "judge_batch")     # empty: same as JUDGE_FALLBACK_MODEL
 # Complexity judgments; can be switched to Haiku if labels flip between fresh runs (07 §5).
 COMPLEXITY_MODEL = _role_model("COMPLEXITY_MODEL", REASONING_MODEL, "complexity")
 # Recruiter emails (specs/13 §2–§4): drafts only; a recruiter sends. Template draft when the model is unavailable.
 EMAIL_MODEL = _role_model("EMAIL_MODEL", "claude-haiku-4-5-20251001", "email")
 # Reading a job description into the create-job form (specs/14 §4): one call per JD; manual form if unavailable.
-JOB_EXTRACT_MODEL = _env("JOB_EXTRACT_MODEL", "gemini/gemini-3.8-flash")
+JOB_EXTRACT_MODEL = _env("JOB_EXTRACT_MODEL", "route:extract_document")
 # Hiring workflow (specs/16): reading candidate replies and summarizing interview feedback. Code rules / a code
 # summary when the model is unavailable; the recruiter always decides.
 REPLY_MODEL = _role_model("REPLY_MODEL", "claude-haiku-4-5-20251001", "reply")

@@ -30,11 +30,12 @@ demo:
 	RIGHTSTAFF_DB=$${RIGHTSTAFF_DEMO_DB:-data/demo.db} RIGHTSTAFF_UPLOADS=data/demo-uploads API_PORT=$${API_PORT:-8000} \
 	$(MAKE) fake-api
 
-# Real processing of uploads on the free tier: Jev judges, Gemini for extraction, fallback, complexity and plan
-# (never Claude). Same database as the demo (data/demo.db), so the recruiter jobs stay and real runs join the
+# Real processing of uploads on the free tier: Jev judges; extraction, fallback judging, complexity and the plan go
+# along their routes (Gemini, overflow to other free models; never Claude). LIVE=1 allows real provider calls:
+# every other command (dev, api, fake-api, e2e, tests) refuses them. Same database as the demo (data/demo.db), so the recruiter jobs stay and real runs join the
 # comparison pools (demo pool: 5 candidates, groups of 2). Stop `make demo` first: both serve port 8000.
 live:
-	LLM_PROVIDER=gemini RIGHTSTAFF_DB=$${RIGHTSTAFF_DEMO_DB:-data/demo.db} MIN_POOL=$${MIN_POOL:-5} MIN_GROUP=$${MIN_GROUP:-2} \
+	LIVE=1 LLM_PROVIDER=gemini RIGHTSTAFF_DB=$${RIGHTSTAFF_DEMO_DB:-data/demo.db} MIN_POOL=$${MIN_POOL:-5} MIN_GROUP=$${MIN_GROUP:-2} \
 	$(UVICORN) backend.main:create_app --factory --port 8000
 
 test:

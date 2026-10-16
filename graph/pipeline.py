@@ -319,7 +319,7 @@ def _aggregate(deps: Deps):
 
 # Background work (specs/09 §2.6): job-independent judgments during review, and the improvement plan
 # after the score is returned. PLAN_JOBS lets callers wait for a run's plan (tests, timing script).
-BACKGROUND = ThreadPoolExecutor(max_workers=4, thread_name_prefix="rightstaff-bg")
+BACKGROUND = ThreadPoolExecutor(max_workers=8, thread_name_prefix="rightstaff-bg")
 PLAN_JOBS: dict[str, Future] = {}
 
 
@@ -390,6 +390,30 @@ def early_judgments(deps: Deps, candidate_id: str, baseline_id: str) -> int:
                 return 0
             subs = [s for group in DIMENSIONS.values() for s in group if s.name in EARLY_SUBCATEGORIES]
             asks = [a for s in subs for a in s.plan(ctx) if not QUESTIONS[a.key].job_dependent]
+            resolve(ctx, asks, call=True)
+            t.update(asks=len(asks), calls=ctx.svc.calls)
+            return len(asks)
+
+
+def early_role_judgments(deps: Deps, candidate_id: str, baseline_id: str) -> int:
+    """Early start (specs/18 §2 item 7): the roles are picked before Review, so as soon as the documents are read,
+    ask everything scoring will ask for this role: relevance first, then every subcategory's questions (grouped
+    questions together, as scoring does). Nothing is scored and no run is created. Confirm finds the answers saved
+    (or waits for ones still in flight); an item edited in Review has new text, so it is asked again then."""
+    from graph.nodes.prepare import relevance_asks
+    from judges.service import JudgmentService  # noqa: F401  (in-flight answers are shared through it)
+    state = {"candidate_id": candidate_id, "baseline_id": baseline_id}
+    with timing.span(timing.EARLY, "role_specific", baseline=baseline_id) as t:
+        with open_ctx(deps, state, with_relevance=False) as ctx:
+            if scoring_blocker(ctx.profile):
+                return 0
+            resolve(ctx, relevance_asks(ctx), call=True)
+        with open_ctx(deps, state) as ctx:                     # relevance labels now saved
+            for name, subs in DIMENSIONS.items():
+                grouped = [x for x in subs if x.name in GROUPED.get(name, ())]
+                if grouped:
+                    resolve(ctx, [a for x in grouped for a in x.plan(ctx)], call=True)
+            asks = [a for subs in DIMENSIONS.values() for x in subs for a in x.plan(ctx)]
             resolve(ctx, asks, call=True)
             t.update(asks=len(asks), calls=ctx.svc.calls)
             return len(asks)
@@ -476,6 +500,7 @@ class Pipeline:
         self.print_timings = config.PRINT_TIMINGS if print_timings is None else print_timings
         self.recorders: dict[str, timing.Recorder] = {}     # thread_id → timings (onboarding + scoring)
         self.early: dict[str, Future] = {}                   # thread_id → job-independent judgments job
+        self.prejudged: dict[tuple[str, str], Future] = {}   # (candidate, baseline) → early role-specific judgments
 
     @staticmethod
     def _cfg(thread_id: str) -> dict:
@@ -552,6 +577,22 @@ class Pipeline:
                 self.early[tid] = BACKGROUND.submit(timing.bind(early_judgments), self.deps, res["candidate_id"],
                                                     baseline_id)
         return res
+
+    def prejudge(self, candidate_id: str, baseline_ids: list[str]) -> list[str]:
+        """Start early role-specific judgments for these baselines (one background job each, not repeated while one
+        runs). Returns the baselines started."""
+        started = []
+        for bid in dict.fromkeys(baseline_ids):
+            job = self.prejudged.get((candidate_id, bid))
+            if job is not None and not job.done():
+                continue
+            self.prejudged[(candidate_id, bid)] = BACKGROUND.submit(timing.bind(early_role_judgments), self.deps,
+                                                                   candidate_id, bid)
+            started.append(bid)
+        return started
+
+    def wait_for_prejudge(self, candidate_id: str, timeout: float = 300) -> dict[str, int]:
+        return {bid: job.result(timeout) for (cid, bid), job in list(self.prejudged.items()) if cid == candidate_id}
 
     def wait_for_early(self, thread_id: str, timeout: float = 300) -> int | None:
         job = self.early.get(thread_id)

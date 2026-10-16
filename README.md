@@ -171,6 +171,22 @@ The free tier's limits are per project and shown in AI Studio, so set `GEMINI_RP
 Pacific) reuses everything already extracted and judged. Free-tier prompts may be used by Google and read by
 human reviewers: don't send real personal data on the free tier.
 
+### Speed and failover (specs/18, phase 1)
+- **Routes per task** (`config.ROUTES`, override with `ROUTE_<TASK>`): ordered provider/model lists for
+  extract_document, extract_web, judge_single, judge_grouped and plan. The first model is the one used today; the
+  others take over only when it is busy, overloaded or out of quota. A `claude-…` id on top works with no code change.
+- **Failover, never sleep:** a 429, 5xx or timeout sends the call to the next model at once; the provider's answer
+  wins over our counters (Google's retryDelay or per-day quota, Groq's `retry-after` / `x-ratelimit-*`). Only when
+  every model is busy is there a wait of at most `ROUTE_MAX_WAIT_S` (5 s). At most `ROUTE_MAX_ATTEMPTS` (4) calls per
+  request. Every model out of quota for the day: fail fast ("Daily free-tier limit reached…"; saved work is kept).
+- **Limits per model** (requests and tokens per minute and per day, from `MODEL_LIMITS`); calls in flight per model up
+  to its requests per minute; timeouts Gemini 45 s, Groq 20 s. Optional hedging (`HEDGE_AFTER_S`, off).
+- **Early start:** the roles picked during reading are judged as soon as the documents are read; Confirm only
+  finishes what's left (an item edited in Review is judged again).
+- **LIVE guard:** real provider calls only with `LIVE=1` (`make live` sets it). Scripts that call real models need it too.
+- Logs (`rightstaff.routing`): `failover: <task> <model> → <next> (<why>)`, `all busy: …`, `fail fast: …`. Runs record
+  calls per task per model (`calls_by_task`) and failovers in their timings.
+
 ## Tests
 ```bash
 .venv/bin/python -m pytest -q                       # offline: FakeJudge and fixtures, no API calls

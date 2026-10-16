@@ -97,9 +97,15 @@ class Recorder:
             t["calls"] += 1
             for k in TOKEN_KEYS:
                 t[k] += e.get(k) or 0
+        by_task: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))   # specs/18: calls per task per model
+        for e in self.of(MODEL):
+            if e.get("method"):
+                by_task[e["method"]][e.get("model") or e["name"]] += 1
         return {
             "steps": steps,
             "calls": calls,
+            "calls_by_task": {t: dict(m) for t, m in sorted(by_task.items())},
+            "failovers": self.counters.get("failover", 0),
             "model_calls": dict(model_calls),
             "rate_limits": dict(sorted(self.counters.items())),
             "tokens_by_model": {m: {**t, "usd": cost(m, t)} for m, t in sorted(tokens.items())},

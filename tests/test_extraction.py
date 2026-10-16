@@ -694,15 +694,17 @@ def test_groq_request_uses_strict_schema_and_fits_the_token_limit(monkeypatch):
     closed(schema["schema"])
 
 
-def test_groq_waits_on_429_then_succeeds(monkeypatch):
-    import time as _time
+def test_groq_429_goes_to_the_router_with_the_stated_reset():
+    """specs/18: no sleeping in the client; the router moves on and rests the model until the reset."""
     from core.llm import GroqLLM
-    slept = []
-    monkeypatch.setattr(_time, "sleep", slept.append)
-    session = GroqSession((429, {"error": "rate"}, {"retry-after": "2"}), _groq_ok({"projects": [], "claims": []}))
-    GroqLLM(session=session, api_key="k").parse(model="groq/openai/gpt-oss-20b", system="S", user="U",
-                                                output_type=schemas.PortfolioExtract)
-    assert slept == [2.0] and len(session.bodies) == 2
+    from core.routing import Throttled
+    session = GroqSession((429, {"error": "Rate limit reached for requests per day (RPD)"},
+                           {"retry-after": "2", "x-ratelimit-reset-requests": "7m54.72s"}))
+    with pytest.raises(Throttled) as e:
+        GroqLLM(session=session, api_key="k").parse(model="groq/openai/gpt-oss-20b", system="S", user="U",
+                                                    output_type=schemas.PortfolioExtract)
+    assert e.value.retry_after == 2.0 and e.value.daily and e.value.reset_after == pytest.approx(474.72)
+    assert len(session.bodies) == 1
 
 
 def test_groq_cut_off_and_invalid_output_are_errors():

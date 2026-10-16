@@ -273,6 +273,8 @@ def generate_plan(conn: sqlite3.Connection, run_id: str, subscores: dict, weight
     gap_keys = {g.subcategory for g in gaps}
     user = build_user_message(baseline, subscores, weights, gaps, profile, peer_lines)
     first_attempt: list[dict] = []
+    from core.routing import clear_last
+    clear_last()
     try:
         plan = _ask(planner, model, user)
         kept, rejected = validate_plan(plan, gap_keys, baseline)
@@ -286,6 +288,8 @@ def generate_plan(conn: sqlite3.Connection, run_id: str, subscores: dict, weight
         log.warning("plan generation failed: %s", exc)
         return PlanResult(run_id, weights, gaps, error=str(exc))
 
+    from core.routing import last_model
+    model = last_model(model)                       # the model that answered (failover may change it)
     quick_wins, not_actionable = plan.quick_wins[:3], plan.not_actionable
     dropped = list(rejected)
     if len(plan.quick_wins) > 3:

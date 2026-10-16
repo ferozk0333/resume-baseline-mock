@@ -329,6 +329,12 @@ def judge_models() -> dict:
         "complexity_model": config.COMPLEXITY_MODEL,
         "extract_model": config.EXTRACT_MODEL,
         "plan_model": config.REASONING_MODEL,
+        "judge_batch_model": config.JUDGE_BATCH_MODEL or config.JUDGE_FALLBACK_MODEL,
+        # Routes in use (specs/18): which models each task may fail over to. The model that answered each call is
+        # on its judgment / extraction row and in the run's timings (calls per task per model).
+        "routes": {t: config.ROUTES[t] for t in sorted({m.removeprefix("route:") for m in (
+            config.EXTRACT_MODEL, config.EXTRACT_WEB_MODEL, config.JUDGE_FALLBACK_MODEL, config.JUDGE_BATCH_MODEL,
+            config.COMPLEXITY_MODEL, config.REASONING_MODEL) if m.startswith("route:")})},
     }
 
 

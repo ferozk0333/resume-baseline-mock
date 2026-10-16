@@ -1,0 +1,271 @@
+"""Routing, failover and fail fast (specs/18 §2, §7): scripted providers, a fake clock, no network."""
+import logging
+import threading
+import time
+
+import pytest
+from pydantic import BaseModel
+
+from core import config, db, timing
+from core.llm import DailyLimitReached, LLMError, RoutedLLM
+from core.routing import ModelLimiter, Overloaded, Router, Throttled, Unusable, last_model, models_of, parse_duration
+
+A, B, C = "gemini/gemini-3.5-flash-lite", "gemini/gemini-3.1-flash-lite", "groq/openai/gpt-oss-120b"
+
+
+class Out(BaseModel):
+    label: str
+
+
+class Script:
+    """One fake provider per model: a list of outcomes (an Out, an exception, or a callable)."""
+
+    def __init__(self, **by_model):
+        self.by_model = {k.replace("__", "/"): list(v) for k, v in by_model.items()}
+        self.calls: list[str] = []
+        self._lock = threading.Lock()
+
+    def client_for(self, model):
+        script = self
+
+        class Client:
+            def parse(self, *, model, system, user, output_type):
+                with script._lock:
+                    script.calls.append(model)
+                    queue = script.by_model.get(model) or [Out(label=model)]
+                    step = queue.pop(0) if len(queue) > 1 else queue[0]
+                if callable(step) and not isinstance(step, BaseModel):
+                    step = step()
+                if isinstance(step, BaseException):
+                    raise step
+                return step
+        return Client()
+
+
+class Clock:
+    def __init__(self, t=1_800_000_000.0):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch):
+    path = str(tmp_path / "r.db")
+    db.init_app_db(path).close()
+    monkeypatch.setitem(config.ROUTES, "judge_single", [A, B, C])
+    clock, slept = Clock(), []
+
+    def sleep(s):
+        slept.append(s)
+        clock.t += s
+    lim = ModelLimiter(path, clock=clock)
+    return type("Env", (), {"path": path, "clock": clock, "slept": slept, "lim": lim, "sleep": sleep})
+
+
+def router(env, script, **kw):
+    return Router(script.client_for, limiter=env.lim, sleep=env.sleep, clock=env.clock, **kw)
+
+
+def ask(r, model="route:judge_single", user="U"):
+    return r.parse(model=model, system="S", user=user, output_type=Out)
+
+
+# --- Order and overflow ---------------------------------------------------------------------------------------------
+
+def test_the_first_model_answers_and_the_others_are_overflow_only(env):
+    s = Script()
+    r = router(env, s)
+    for _ in range(10):
+        assert ask(r).label == A
+    assert set(s.calls) == {A} and last_model() == A
+
+
+def test_a_busy_first_model_overflows_to_the_next_at_once(env, monkeypatch):
+    monkeypatch.setitem(config.MODEL_LIMITS, A, config.ModelLimits(2, 10**9, 500))
+    s = Script()
+    r = router(env, s)
+    assert [ask(r).label for _ in range(4)] == [A, A, B, B]           # A's 2 per minute used: B takes over
+    assert env.slept == []
+    env.clock.t += 61                                                  # a minute later A is first again
+    assert ask(r).label == A
+
+
+# --- Failover --------------------------------------------------------------------------------------------------------
+
+def test_429_503_and_timeouts_fail_over_immediately_without_sleeping(env, caplog):
+    caplog.set_level(logging.WARNING, logger="rightstaff.routing")
+    s = Script(**{A: [Throttled("A: HTTP 429", retry_after=30)], B: [Overloaded("B: HTTP 503")]})
+    rec = timing.Recorder()
+    with timing.recording(rec):
+        assert ask(router(env, s)).label == C
+    assert s.calls == [A, B, C] and env.slept == []
+    assert rec.summary()["failovers"] == 2
+    assert rec.summary()["calls_by_task"]["judge_single"] == {A: 1, B: 1, C: 1}
+    lines = [r.getMessage() for r in caplog.records]
+    assert lines[0] == f"failover: judge_single {A} → {B} (limit, retry after 30 s)"
+    assert lines[1] == f"failover: judge_single {B} → {C} (overloaded (B: HTTP 503))"
+    assert env.lim.used_today(B)[0] == 0                               # an overloaded request does not count today
+
+
+def test_a_throttled_model_rests_until_the_stated_reset(env):
+    s = Script(**{A: [Throttled("429", retry_after=20), Out(label="A again")]})
+    r = router(env, s)
+    assert ask(r).label == B
+    assert ask(r).label == B and s.calls.count(A) == 1                 # still resting: not asked again
+    env.clock.t += 21
+    assert ask(r).label == "A again"
+
+
+def test_at_most_four_attempts_per_call(env, monkeypatch):
+    monkeypatch.setitem(config.ROUTES, "judge_single", [A, B, C, "groq/x", "groq/y"])
+    bad = [Overloaded("busy")]
+    s = Script(**{A: bad, B: bad, C: bad, "groq__x": bad, "groq__y": [Out(label="never")]})
+    with pytest.raises(LLMError, match="after 4 attempt"):
+        ask(router(env, s))
+    assert len(s.calls) == 4
+
+
+def test_invalid_output_moves_on_and_an_unusable_model_is_skipped(env):
+    s = Script(**{A: [LLMError("output failed validation twice")], B: [Unusable("HTTP 404 model not found")]})
+    assert ask(router(env, s)).label == C
+
+
+# --- Waiting and failing fast ---------------------------------------------------------------------------------------
+
+def test_every_model_busy_waits_at_most_five_seconds_then_proceeds(env, monkeypatch, caplog):
+    caplog.set_level(logging.INFO, logger="rightstaff.routing")
+    for m in (A, B, C):
+        monkeypatch.setitem(config.MODEL_LIMITS, m, config.ModelLimits(1, 10**9, 500))
+    s = Script()
+    r = router(env, s)
+    assert [ask(r).label for _ in range(3)] == [A, B, C]
+    assert ask(r).label == A                                           # all three used this minute: wait, then A
+    assert env.slept and all(x <= config.ROUTE_MAX_WAIT_S + 0.25 for x in env.slept)
+    assert any(m.getMessage().startswith("all busy: judge_single waits") for m in caplog.records)
+
+
+def test_every_model_exhausted_for_the_day_fails_fast_without_calling(env, monkeypatch, caplog):
+    caplog.set_level(logging.WARNING, logger="rightstaff.routing")
+    for m in (A, B, C):
+        monkeypatch.setitem(config.MODEL_LIMITS, m, config.ModelLimits(100, 10**9, 2))
+    s = Script()
+    r = router(env, s)
+    for _ in range(6):
+        ask(r)
+    calls = len(s.calls)
+    with pytest.raises(DailyLimitReached, match=r"Daily free-tier limit reached for every model that can do this step \(scoring\)") as e:
+        ask(r)
+    assert "gemini" not in str(e.value) and "groq" not in str(e.value)               # no model names for people
+    assert len(s.calls) == calls and env.slept == []                   # no call, no wait
+    assert any(m.getMessage().startswith("fail fast: judge_single: every model is exhausted") for m in caplog.records)
+
+
+def test_the_providers_daily_limit_wins_over_our_counters_and_survives_a_restart(env):
+    s = Script(**{A: [Throttled("A: HTTP 429 (per day)", daily=True)]})
+    assert ask(router(env, s)).label == B                              # Google says the day is over (we counted 1)
+    fresh = ModelLimiter(env.path, clock=env.clock)                    # a restarted server, same database
+    assert fresh.check(A, 10)[0] == "exhausted"
+    s2 = Script()
+    assert Router(s2.client_for, limiter=fresh, sleep=env.sleep, clock=env.clock).parse(
+        model="route:judge_single", system="S", user="U", output_type=Out).label == B and A not in s2.calls
+
+
+def test_groq_headers_mark_a_model_exhausted_until_the_reset(env):
+    env.lim.observe_headers(C, {"x-ratelimit-remaining-requests": "0", "x-ratelimit-reset-requests": "2m59.56s"})
+    assert env.lim.check(C, 10)[0] == "exhausted"
+    assert parse_duration("2m59.56s") == pytest.approx(179.56) and parse_duration("7.66s") == pytest.approx(7.66)
+    assert parse_duration("350ms") == pytest.approx(0.35) and parse_duration(None) is None
+
+
+def test_a_request_too_big_for_a_model_skips_it(env, monkeypatch):
+    monkeypatch.setitem(config.ROUTES, "extract_web", [C, A])                    # groq first, 8K tokens per minute
+    s = Script()
+    out = router(env, s, max_tokens=2000).parse(model="route:extract_web", system="S", user="x" * 30_000,
+                                                output_type=Out)
+    assert out.label == A and C not in s.calls
+
+
+def test_concurrency_per_model_up_to_its_limit(env, monkeypatch):
+    monkeypatch.setattr(config, "_CONCURRENCY", {A: 1})
+    gate, started = threading.Event(), threading.Event()
+
+    def slow():
+        started.set()
+        gate.wait(5)
+        return Out(label="A slow")
+    s = Script(**{A: [slow]})
+    r = Router(s.client_for, limiter=env.lim, sleep=time.sleep, clock=env.clock)
+    results = []
+    t = threading.Thread(target=lambda: results.append(ask(r).label))
+    t.start()
+    started.wait(5)
+    assert ask(r).label == B                                           # A's one slot is taken
+    gate.set()
+    t.join(5)
+    assert results == ["A slow"]
+
+
+# --- Hedging (off by default) --------------------------------------------------------------------------------------
+
+def test_hedging_is_off_by_default_and_the_first_answer_wins_when_on(env, monkeypatch):
+    assert config.HEDGE_AFTER_S == 0
+    monkeypatch.setattr(config, "HEDGE_AFTER_S", 0.05)
+    gate = threading.Event()
+
+    def slow():
+        gate.wait(2)
+        return Out(label="A late")
+    s = Script(**{A: [slow]})
+    rec = timing.Recorder()
+    with timing.recording(rec):
+        out = Router(s.client_for, limiter=env.lim, sleep=time.sleep, clock=env.clock).parse(
+            model="route:judge_single", system="S", user="U", output_type=Out)
+    gate.set()
+    assert out.label == B and rec.counters["hedged"] == 1                # the duplicate on B answered first
+
+
+# --- Routes in config ---------------------------------------------------------------------------------------------
+
+def test_a_claude_model_at_the_top_of_a_route_works_with_no_code_change(env, monkeypatch):
+    monkeypatch.setitem(config.ROUTES, "plan", ["claude-sonnet-5-5", "gemini/gemini-3.8-flash"])
+    s = Script()
+    assert ask(router(env, s), "route:plan").label == "claude-sonnet-5-5"
+    assert models_of("claude-haiku-4-5-20251001") == ["claude-haiku-4-5-20251001"]
+
+
+def test_a_single_model_is_a_one_model_route(env):
+    s = Script(**{A: [Overloaded("busy")]})
+    with pytest.raises(LLMError, match="no model could answer"):
+        ask(router(env, s), A)
+    assert s.calls == [A] and env.slept == []
+
+
+# --- LIVE guard ---------------------------------------------------------------------------------------------------
+
+def test_real_providers_need_live(monkeypatch):
+    from core.llm import ClaudeLLM, GeminiLLM, GroqLLM
+    from judges.jev_judge import JevError, JevJudge
+    monkeypatch.setattr(config, "LIVE", False)
+    for client in (GeminiLLM(api_key="k"), GroqLLM(api_key="k")):
+        with pytest.raises(LLMError, match="LIVE=1"):
+            client._call("m", "S", "U", Out)
+    with pytest.raises(LLMError, match="LIVE=1"):
+        ClaudeLLM()._call("claude-haiku-4-5-20251001", "S", "U", Out)
+    with pytest.raises(JevError, match="LIVE=1"):
+        JevJudge(fallback=None, api_key="k")._post({})
+
+
+def test_routed_llm_records_the_answering_model_for_extraction(env, tmp_path, monkeypatch):
+    from extraction import extract as ex
+    from extraction import schemas
+    from extraction.validate import SourceDoc
+    monkeypatch.setattr(config, "EXTRACT_MODEL", "route:judge_single")
+    s = Script(**{A: [Throttled("429", retry_after=5)], B: [schemas.ProfileExtract(roles=[], projects=[], claims=[], certifications=[])]})
+    llm = RoutedLLM(router=router(env, s))
+    conn = db.connect(env.path)
+    cache = ex.ExtractionCache(conn)
+    out = ex.extract_all([SourceDoc("e1", "resume", "Jane Doe resume text", "Resume")], llm, cache)
+    assert not isinstance(out["e1"], Exception)
+    assert conn.execute("SELECT model FROM extraction_cache").fetchone()[0] == B

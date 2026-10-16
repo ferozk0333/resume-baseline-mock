@@ -39,9 +39,21 @@ def build_user_message(doc: SourceDoc) -> str:
     return f"Extract the facts from this {DOC_NAMES[doc.type]}.\n\n{wrap_document(tag, doc.text)}"
 
 
+def model_for(doc: SourceDoc) -> str:
+    """Resume and LinkedIn: EXTRACT_MODEL (route extract_document); READMEs and portfolio pages: EXTRACT_WEB_MODEL
+    (route extract_web) (specs/18 §2)."""
+    return config.EXTRACT_MODEL if doc.type in ("resume", "linkedin_pdf") else config.EXTRACT_WEB_MODEL
+
+
+def cache_model(model: str) -> str:
+    """The cache key names a route by its first model, so outputs saved before routing are still found."""
+    from core.routing import models_of
+    return models_of(model)[0]
+
+
 def extract_document(doc: SourceDoc, llm: StructuredLLM, model: str | None = None):
     return llm.parse(
-        model=model or config.EXTRACT_MODEL,
+        model=model or model_for(doc),
         system=load_prompt("extract_system"),
         user=build_user_message(doc),
         output_type=output_type(doc),
@@ -68,29 +80,34 @@ class ExtractionCache:
                                     (self.key(doc, model),)).fetchone()
         return output_type(doc).model_validate_json(row[0]) if row else None
 
-    def put(self, doc: SourceDoc, model: str, out) -> None:
+    def put(self, doc: SourceDoc, model: str, out, used: str | None = None) -> None:
+        """`used`: the model that answered (recorded); the key uses the requested model or route."""
         from core.db import now_iso
         with self._lock, self.conn:
             self.conn.execute("INSERT OR REPLACE INTO extraction_cache (key, model, output_json, created_at) "
-                              "VALUES (?, ?, ?, ?)", (self.key(doc, model), model, out.model_dump_json(), now_iso()))
+                              "VALUES (?, ?, ?, ?)", (self.key(doc, model), used or model, out.model_dump_json(), now_iso()))
 
 
 def extract_all(docs: list[SourceDoc], llm: StructuredLLM, cache: ExtractionCache | None = None) -> dict[str, object]:
     """evidence_id → extraction, or the LLMError that stopped it. Calls run in parallel."""
 
     def run(doc: SourceDoc):
-        model = config.EXTRACT_MODEL
+        from core.routing import last_model
+        model = model_for(doc)
         with timing.span(timing.EXTRACT, doc.type, model=model, chars=len(doc.text)) as t:
-            hit = cache.get(doc, model) if cache is not None else None
+            hit = cache.get(doc, cache_model(model)) if cache is not None else None
             if hit is not None:
                 t["cached"] = True
                 return doc.evidence_id, hit
+            from core.routing import clear_last
+            clear_last()
             try:
-                out = extract_document(doc, llm)
+                out = extract_document(doc, llm, model)
             except LLMError as exc:
                 return doc.evidence_id, exc
+            t["model"] = last_model(model)                # the model that answered
             if cache is not None:
-                cache.put(doc, model, out)
+                cache.put(doc, cache_model(model), out, used=t["model"])
             return doc.evidence_id, out
 
     with ThreadPoolExecutor(max_workers=config.EXTRACT_CONCURRENCY) as pool:

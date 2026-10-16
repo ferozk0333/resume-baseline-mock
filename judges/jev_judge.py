@@ -91,6 +91,7 @@ class JevJudge:
                  model: str | None = None, threshold: float | None = None, max_retries: int = 2,
                  backoff: float = 0.5):
         self.fallback = fallback
+        self._real = session is None
         self.session = session or requests.Session()
         self.api_key = api_key if api_key is not None else config.JEV_API_KEY
         self.model = model or config.JEV_MODEL
@@ -105,6 +106,8 @@ class JevJudge:
         return claude if key in self.CLAUDE_ONLY else [self.model, *claude]
 
     def _post(self, body: dict) -> dict:
+        if self._real and not config.LIVE:
+            raise JevError("Real Jev calls are off: set LIVE=1 to call providers (make live does).")
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         for attempt in range(self.max_retries + 1):
             try:

@@ -26,6 +26,13 @@ class LLMError(Exception):
     """A model call failed after retries, was refused, or never produced valid output."""
 
 
+def require_live(provider: str) -> None:
+    """Real provider calls need LIVE=1 (specs/18 §2 item 8): dev servers, scripts and tests never call one by accident."""
+    if not config.LIVE:
+        raise LLMError(f"Real {provider} calls are off: set LIVE=1 to call providers (make live does). "
+                       "Tests and the demo use fakes and recorded answers.")
+
+
 class RunawayOutput(LLMError):
     """The model started repeating the same few characters (e.g. tabs copied from a PDF layout)."""
 
@@ -104,6 +111,7 @@ class ClaudeLLM:
 
     def __init__(self, client: anthropic.Anthropic | None = None, max_tokens: int | None = None,
                  effort: str | None = None):
+        self._real = client is None
         self.client = client or default_client()
         self.max_tokens = max_tokens or config.EXTRACT_MAX_TOKENS
         self.effort = effort or None
@@ -126,14 +134,26 @@ class ClaudeLLM:
 
     def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
         from core.limits import claude_slots
+        from core.routing import Overloaded, Throttled
+        if self._real:
+            require_live("Claude")
         request = self._request(model, system, user, output_type)
         try:
-            with claude_slots, timing.span(timing.MODEL, "claude", model=model):
+            with claude_slots:                     # timed by the router (one span per model call, with its task)
                 if hasattr(self.client.messages, "stream"):
                     response = self._streamed(request)
                 else:
                     response = self.client.messages.parse(**request)
                 note_usage(response)
+        except anthropic.RateLimitError as exc:
+            after = exc.response.headers.get("retry-after") if getattr(exc, "response", None) is not None else None
+            raise Throttled(f"{model}: HTTP 429", retry_after=float(after) if after else None) from exc
+        except (anthropic.APITimeoutError, anthropic.APIConnectionError, anthropic.InternalServerError) as exc:
+            raise Overloaded(f"{model}: {exc.__class__.__name__}") from exc
+        except anthropic.APIStatusError as exc:
+            if exc.status_code in (503, 529):
+                raise Overloaded(f"{model}: HTTP {exc.status_code}") from exc
+            raise LLMError(f"{model} call failed: {exc.__class__.__name__}: {exc}") from exc
         except anthropic.APIError as exc:
             raise LLMError(f"{model} call failed: {exc.__class__.__name__}: {exc}") from exc
         if response.stop_reason == "refusal":
@@ -192,33 +212,33 @@ def strict_schema(schema: dict) -> dict:
 
 
 class GroqLLM:
-    """Structured call to Groq with strict JSON schema; same contract as ClaudeLLM.parse.
-
-    Each request is capped to fit the tier's tokens-per-minute (prompt + completion), 429s wait for
-    `retry-after`, and the same validation and runaway retries apply as for Claude.
-    """
+    """Structured call to Groq with strict JSON schema; same contract as ClaudeLLM.parse. One attempt: a 429 or
+    5xx/timeout is raised (Throttled / Overloaded) for the router, which moves on to the next model. Each request is
+    capped to fit the model's tokens per minute, and its rate-limit headers update the limiter."""
 
     def __init__(self, session=None, api_key: str | None = None, max_tokens: int | None = None,
-                 effort: str | None = None, max_429_retries: int = 6):
+                 effort: str | None = None):
         import requests
+        self._real = session is None
         self.session = session or requests.Session()
         self.api_key = api_key if api_key is not None else config.GROQ_API_KEY
         self.max_tokens = max_tokens or config.EXTRACT_MAX_TOKENS
         self.effort = effort or config.GROQ_REASONING_EFFORT
-        self.max_429_retries = max_429_retries
 
-    def _budget(self, system: str, user: str) -> int:
+    def _budget(self, model: str, system: str, user: str) -> int:
         est_input = (len(system) + len(user)) // 3 + 200            # conservative chars → tokens
-        return min(self.max_tokens, config.GROQ_TPM - est_input)
+        tpm = config.model_limits(model).tpm or config.GROQ_TPM
+        return min(self.max_tokens, tpm - est_input)
 
     def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
-        import time as _time
-        from core.limits import groq_slots
+        from core.routing import LIMITER, Overloaded, Throttled, Unusable, parse_duration
+        if self._real:
+            require_live("Groq")
         if not self.api_key:
-            raise LLMError("GROQ_API_KEY is not set in .env.")
-        budget = self._budget(system, user)
+            raise Unusable("GROQ_API_KEY is not set in .env.")
+        budget = self._budget(model, system, user)
         if budget < 500:
-            raise LLMError(f"input too long for one {model} request within GROQ_TPM={config.GROQ_TPM}")
+            raise Unusable(f"input too long for one {model} request within its tokens per minute")
         body = {"model": model.removeprefix(GROQ_PREFIX), "max_completion_tokens": budget, "temperature": 0,
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                 "response_format": {"type": "json_schema", "json_schema": {
@@ -227,41 +247,51 @@ class GroqLLM:
         if "gpt-oss" in model and self.effort:
             body["reasoning_effort"] = self.effort
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        for attempt in range(self.max_429_retries + 1):
-            with groq_slots, timing.span(timing.MODEL, "groq", model=model):
-                resp = self.session.post(config.GROQ_URL, json=body, headers=headers, timeout=120)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    usage = data.get("usage") or {}
-                    timing.note(input_tokens=int(usage.get("prompt_tokens") or 0),
-                                output_tokens=int(usage.get("completion_tokens") or 0))
-                    break
-            if resp.status_code == 429 and attempt < self.max_429_retries:
-                timing.count("groq_429")
-                _time.sleep(min(float(resp.headers.get("retry-after") or 5), 60))
-                continue
+        try:
+            resp = self.session.post(config.GROQ_URL, json=body, headers=headers, timeout=config.GROQ_TIMEOUT_S)
+        except requests.RequestException as exc:
+            raise Overloaded(f"{model}: no answer ({exc.__class__.__name__})") from exc
+        LIMITER.observe_headers(model, resp.headers or {})
+        if resp.status_code == 429:
+            timing.count("groq_429")
+            text = resp.text or ""
+            daily = "per day" in text.lower() or "(RPD)" in text or "(TPD)" in text
+            raise Throttled(f"{model}: HTTP 429", retry_after=parse_duration(resp.headers.get("retry-after")),
+                            daily=daily, reset_after=parse_duration(resp.headers.get("x-ratelimit-reset-requests")))
+        if resp.status_code >= 500:
+            raise Overloaded(f"{model}: HTTP {resp.status_code}")
+        if resp.status_code in (400, 404, 413):
+            raise Unusable(f"{model}: HTTP {resp.status_code}: {resp.text[:200]}")
+        if resp.status_code != 200:
             raise LLMError(f"{model} call failed: HTTP {resp.status_code}: {resp.text[:300]}")
+        data = resp.json()
+        usage = data.get("usage") or {}
+        timing.note(input_tokens=int(usage.get("prompt_tokens") or 0),
+                    output_tokens=int(usage.get("completion_tokens") or 0))
         choice = data["choices"][0]
         content = choice["message"].get("content") or ""
         if is_runaway(content[-400:]):
             raise RunawayOutput(f"{model} output started repeating {content[-40:]!r}")
         if choice.get("finish_reason") == "length":
-            raise LLMError(f"{model} output was cut off at {budget} tokens (GROQ_TPM={config.GROQ_TPM})")
+            raise LLMError(f"{model} output was cut off at {budget} tokens (its tokens-per-minute limit)")
         return output_type.model_validate_json(content)
 
     parse = ClaudeLLM.parse      # same retry rules (validation once, runaway once)
 
 
 class RoutedLLM:
-    """Sends each call to Claude, Gemini ("gemini/…") or Groq ("groq/…") by its model name."""
+    """Sends each call along its route (specs/18): a "route:<task>" list or a single model (Claude, "gemini/…",
+    "groq/…"), with immediate failover and fail fast (core/routing.py)."""
 
-    def __init__(self, max_tokens: int | None = None, effort: str | None = None):
+    def __init__(self, max_tokens: int | None = None, effort: str | None = None, router=None):
+        from core.routing import Router
         self.max_tokens, self.effort = max_tokens, effort
-        self._claude = self._groq = None
+        self._claude = self._groq = self._gemini = None
+        self.router = router or Router(self._for, max_tokens=max_tokens or config.EXTRACT_MAX_TOKENS)
 
     def _for(self, model: str):
         if is_gemini(model):
-            self._gemini = getattr(self, "_gemini", None) or GeminiLLM(max_tokens=self.max_tokens)
+            self._gemini = self._gemini or GeminiLLM(max_tokens=self.max_tokens)
             return self._gemini
         if is_groq(model):
             self._groq = self._groq or GroqLLM(max_tokens=self.max_tokens)
@@ -270,7 +300,7 @@ class RoutedLLM:
         return self._claude
 
     def parse(self, *, model: str, system: str, user: str, output_type: type[T]) -> T:
-        return self._for(model).parse(model=model, system=system, user=user, output_type=output_type)
+        return self.router.parse(model=model, system=system, user=user, output_type=output_type)
 
 
 # --- Gemini (Google AI Studio) -------------------------------------------------------------------------
@@ -290,114 +320,6 @@ def pacific_day():
     from datetime import datetime
     from zoneinfo import ZoneInfo
     return datetime.now(ZoneInfo("America/Los_Angeles")).date()
-
-
-def daily_limit_message(model: str) -> str:
-    from datetime import datetime, timedelta
-    from zoneinfo import ZoneInfo
-    now = datetime.now(ZoneInfo("America/Los_Angeles"))
-    reset = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    hours = (reset - now).total_seconds() / 3600
-    return (f"Daily free-tier limit for {model} reached. Its work stops here; other models keep going. Everything "
-            f"extracted and judged so far is saved: run again after midnight Pacific (in about {hours:.0f} h) and "
-            f"it continues where it stopped.")
-
-
-class RateLimiter:
-    """Requests and tokens per minute (in memory) and requests per day (SQLite, survives restarts), per model.
-
-    acquire() blocks until the request fits the per-minute limits, or raises DailyLimitReached.
-    """
-
-    def __init__(self, provider: str, rpm: int | None = None, tpm: int | None = None, rpd: int | None = None,
-                 db_path: str | None = None, clock=None, sleep=None, limits=None):
-        """Limits per model come from `limits(model) -> (rpm, tpm, rpd)`; rpm/tpm/rpd set one value for all."""
-        import threading
-        import time as _time
-        self.provider = provider
-        fixed = (rpm, tpm, rpd)
-        self.limits = limits if limits is not None else (lambda model: fixed)
-        self.db_path = db_path
-        self.clock = clock or _time.monotonic
-        self.sleep = sleep or _time.sleep
-        self._lock = threading.Lock()
-        self._recent: dict[str, list[tuple[float, int]]] = {}       # model → [(time, tokens)]
-
-    def _conn(self):
-        from core import db
-        return db.connect(self.db_path or config.DB_PATH)
-
-    def used_today(self, model: str) -> int:
-        conn = self._conn()
-        try:
-            row = conn.execute("SELECT requests FROM provider_usage WHERE provider = ? AND model = ? AND day = ?",
-                               (self.provider, model, pacific_day().isoformat())).fetchone()
-            return row[0] if row else 0
-        finally:
-            conn.close()
-
-    def _record(self, model: str, tokens: int) -> None:
-        conn = self._conn()
-        try:
-            with conn:
-                conn.execute("INSERT INTO provider_usage (provider, model, day, requests, tokens) VALUES (?, ?, ?, 1, ?) "
-                             "ON CONFLICT(provider, model, day) DO UPDATE SET requests = requests + 1, "
-                             "tokens = tokens + excluded.tokens",
-                             (self.provider, model, pacific_day().isoformat(), tokens))
-        finally:
-            conn.close()
-
-    def refund(self, model: str) -> None:
-        """Take back one request Google did not accept (503/5xx overloaded or no answer): it does not count today."""
-        conn = self._conn()
-        try:
-            with conn:
-                conn.execute("UPDATE provider_usage SET requests = MAX(requests - 1, 0) WHERE provider = ? AND model = ? "
-                             "AND day = ?", (self.provider, model, pacific_day().isoformat()))
-        finally:
-            conn.close()
-
-    def rpd(self, model: str) -> int:
-        return self.limits(model)[2]
-
-    def exhaust_today(self, model: str) -> None:
-        """The API said the daily quota is gone: remember it so later calls stop at once."""
-        conn = self._conn()
-        try:
-            with conn:
-                conn.execute("INSERT INTO provider_usage (provider, model, day, requests, tokens) VALUES (?, ?, ?, ?, 0) "
-                             "ON CONFLICT(provider, model, day) DO UPDATE SET requests = MAX(requests, excluded.requests)",
-                             (self.provider, model, pacific_day().isoformat(), self.rpd(model)))
-        finally:
-            conn.close()
-
-    def acquire(self, model: str, tokens: int) -> None:
-        rpm, tpm, rpd = self.limits(model)
-        if self.used_today(model) >= rpd:
-            raise DailyLimitReached(daily_limit_message(model))
-        while True:
-            with self._lock:
-                now = self.clock()
-                window = [(t, n) for t, n in self._recent.get(model, []) if now - t < 60]
-                self._recent[model] = window
-                fits = len(window) < rpm and sum(n for _, n in window) + tokens <= tpm
-                if fits or not window:
-                    window.append((now, tokens))
-                    break
-                wait = 60 - (now - window[0][0]) + 0.05
-            timing.count(f"{self.provider}_throttled")
-            self.sleep(max(wait, 0.05))
-        self._record(model, tokens)
-
-
-_GEMINI_LIMITER: RateLimiter | None = None
-
-
-def gemini_limiter() -> RateLimiter:
-    global _GEMINI_LIMITER
-    if _GEMINI_LIMITER is None:
-        _GEMINI_LIMITER = RateLimiter("gemini", limits=config.gemini_limits)       # per model
-    return _GEMINI_LIMITER
 
 
 def gemini_schema(schema: dict) -> dict:
@@ -421,32 +343,27 @@ def gemini_schema(schema: dict) -> dict:
 
 
 class GeminiLLM:
-    """Structured call to Gemini (generateContent with a JSON schema); same contract as ClaudeLLM.parse.
+    """Structured call to Gemini (generateContent with a JSON schema); same contract as ClaudeLLM.parse. One attempt:
+    a 429 (per minute or per day), 5xx or timeout is raised for the router, which moves on to the next model.
 
     The system prompt goes in systemInstruction and the document only in the user turn (CLAUDE.md rule 9).
     """
 
     RETRY_STATUSES = {500, 502, 503, 504}
-    OVERLOAD_RETRIES = 2              # 5xx / no answer: at most 2 retries, longer backoff, not counted toward the day
-    OVERLOAD_BACKOFF = 30.0           # seconds; 30 then 60
 
-    def __init__(self, session=None, api_key: str | None = None, max_tokens: int | None = None,
-                 limiter: RateLimiter | None = None, max_retries: int = 6, sleep=None):
+    def __init__(self, session=None, api_key: str | None = None, max_tokens: int | None = None):
         import requests
-        import time as _time
+        self._real = session is None
         self.session = session or requests.Session()
         self.api_key = api_key if api_key is not None else config.GEMINI_API_KEY
         self.max_tokens = max_tokens or config.EXTRACT_MAX_TOKENS
-        self.limiter = limiter
-        self.max_retries = max_retries
-        self.sleep = sleep or _time.sleep
 
     @staticmethod
-    def _retry_delay(data: dict) -> float:
+    def _retry_delay(data: dict) -> float | None:
         for d in (data.get("error") or {}).get("details", []):
             if "retryDelay" in d:
                 return float(str(d["retryDelay"]).rstrip("s") or 5)
-        return 5.0
+        return None
 
     @staticmethod
     def _is_daily(data: dict) -> bool:
@@ -454,11 +371,12 @@ class GeminiLLM:
         return "PerDay" in text or "per day" in text.lower()
 
     def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
-        from core.limits import gemini_slots
+        from core.routing import Overloaded, Throttled, Unusable
+        if self._real:
+            require_live("Gemini")
         if not self.api_key:
-            raise LLMError("GEMINI_API_KEY is not set in .env.")
+            raise Unusable("GEMINI_API_KEY is not set in .env.")
         name = model.removeprefix(GEMINI_PREFIX)
-        limiter = self.limiter or gemini_limiter()
         gen = {"responseMimeType": "application/json",
                "responseJsonSchema": gemini_schema(output_type.model_json_schema()),
                "temperature": 0, "maxOutputTokens": self.max_tokens}
@@ -466,45 +384,28 @@ class GeminiLLM:
             gen["thinkingConfig"] = {"thinkingLevel": config.GEMINI_THINKING_LEVEL}
         body = {"systemInstruction": {"parts": [{"text": system}]},
                 "contents": [{"role": "user", "parts": [{"text": user}]}], "generationConfig": gen}
-        estimate = (len(system) + len(user)) // 3 + self.max_tokens // 4
-        overloads = 0
-        for attempt in range(self.max_retries + 1):
-            limiter.acquire(name, estimate)
-            resp, data = None, {}
-            with gemini_slots, timing.span(timing.MODEL, "gemini", model=model):
-                try:
-                    resp = self.session.post(config.GEMINI_URL.format(model=name), json=body,
-                                             headers={"x-goog-api-key": self.api_key}, timeout=(10, 300))
-                    data = resp.json() if resp.text else {}
-                except requests.RequestException as exc:      # timeouts on a busy free tier: retry
-                    problem = f"no answer ({exc.__class__.__name__})"
-                if resp is not None and resp.status_code == 200:
-                    usage = data.get("usageMetadata") or {}
-                    timing.note(input_tokens=int(usage.get("promptTokenCount") or 0),
-                                output_tokens=int(usage.get("candidatesTokenCount") or 0)
-                                + int(usage.get("thoughtsTokenCount") or 0))
-                    break
-            if resp is not None:
-                problem = f"HTTP {resp.status_code}"
-                if resp.status_code == 429:
-                    timing.count("gemini_429")
-                    if self._is_daily(data):
-                        limiter.exhaust_today(name)
-                        raise DailyLimitReached(daily_limit_message(name))
-                elif resp.status_code not in self.RETRY_STATUSES:
-                    raise LLMError(f"{model} call failed: HTTP {resp.status_code}: {resp.text[:300]}")
-            rate_limited = resp is not None and resp.status_code == 429
-            if not rate_limited:                  # overloaded (5xx) or no answer: Google did not accept it
-                limiter.refund(name)
-                timing.count("gemini_overloaded")
-                overloads += 1
-                if overloads > self.OVERLOAD_RETRIES:
-                    raise LLMError(f"{model} is overloaded: {problem} after {overloads} attempts (not counted "
-                                   f"toward today's limit); try again later.")
-            if attempt == self.max_retries:
-                raise LLMError(f"{model} call failed after {attempt + 1} attempts: {problem}")
-            timing.count("gemini_retries")
-            self.sleep(self._retry_delay(data) if rate_limited else self.OVERLOAD_BACKOFF * overloads)
+        try:
+            resp = self.session.post(config.GEMINI_URL.format(model=name), json=body,
+                                     headers={"x-goog-api-key": self.api_key}, timeout=(10, config.GEMINI_TIMEOUT_S))
+            data = resp.json() if resp.text else {}
+        except requests.RequestException as exc:          # timeouts on a busy free tier: the next model takes it
+            timing.count("gemini_overloaded")
+            raise Overloaded(f"{model}: no answer ({exc.__class__.__name__})") from exc
+        if resp.status_code == 429:
+            timing.count("gemini_429")
+            daily = self._is_daily(data)
+            raise Throttled(f"{model}: HTTP 429 ({'per day' if daily else 'per minute'})",
+                            retry_after=self._retry_delay(data), daily=daily)
+        if resp.status_code in self.RETRY_STATUSES:
+            timing.count("gemini_overloaded")
+            raise Overloaded(f"{model}: HTTP {resp.status_code}")
+        if resp.status_code in (400, 404):
+            raise Unusable(f"{model}: HTTP {resp.status_code}: {resp.text[:200]}")
+        if resp.status_code != 200:
+            raise LLMError(f"{model} call failed: HTTP {resp.status_code}: {resp.text[:300]}")
+        usage = data.get("usageMetadata") or {}
+        timing.note(input_tokens=int(usage.get("promptTokenCount") or 0),
+                    output_tokens=int(usage.get("candidatesTokenCount") or 0) + int(usage.get("thoughtsTokenCount") or 0))
         candidate = (data.get("candidates") or [{}])[0]
         if candidate.get("finishReason") not in (None, "STOP"):
             if candidate.get("finishReason") == "MAX_TOKENS":

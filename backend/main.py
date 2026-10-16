@@ -40,7 +40,9 @@ log = logging.getLogger("rightstaff.api")
 def default_deps() -> Deps:
     from core.llm import RoutedLLM
     from judges.service import get_judge
-    models = [config.EXTRACT_MODEL, config.JUDGE_FALLBACK_MODEL, config.COMPLEXITY_MODEL, config.REASONING_MODEL]
+    from core.routing import models_of
+    models = [x for m in (config.EXTRACT_MODEL, config.JUDGE_FALLBACK_MODEL, config.COMPLEXITY_MODEL,
+                          config.REASONING_MODEL) for x in models_of(m)]
     if not config.ANTHROPIC_API_KEY and not all(m.startswith(("groq/", "gemini/")) for m in models):
         raise RuntimeError("ANTHROPIC_API_KEY is not set in .env (or set LLM_PROVIDER=gemini).")
     return Deps(str(config.DB_PATH), get_judge(), llm=RoutedLLM(effort=config.EXTRACT_EFFORT), extraction_cache=True,
@@ -523,6 +525,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                         c.execute("UPDATE candidates SET linkedin_url = ? WHERE id = ?", (profile_url, candidate_id))
             if res.get("awaiting_review"):
                 state.review_threads[candidate_id] = res["thread_id"]
+                if onboarding and not res["awaiting_review"].get("blocked"):
+                    prejudge_targets(candidate_id)                 # early start for the roles already picked
                 return {"_status": "done", "_message": "Ready for review", "candidate_id": candidate_id, "sources": added,
                         "warnings": res.get("warnings") or [], "blocked": res["awaiting_review"].get("blocked")}
             raise ValueError(res.get("blocked") or "Onboarding stopped before the review step.")
@@ -654,12 +658,26 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 raise HTTPException(409, "Pick at least one target role first.")
             return bad_request(cx.set_step, c, candidate_id, body.step)
 
+    def prejudge_targets(candidate_id: str) -> list[str]:
+        """Early start (specs/18 §2 item 7): role-specific judging for the picked roles, once the documents are read
+        and until Confirm. Never blocks the request."""
+        from market.baseline import resolve_baseline
+        with conn() as c:
+            if cx.onboarding(c, candidate_id)["step"] not in ("roles", "review"):
+                return []
+            bids = [resolve_baseline(c, t["baseline_id"]) for t in cx.targets(c, candidate_id)]
+        return state.pipeline.prejudge(candidate_id, bids) if bids else []
+
     @app.put("/candidates/{candidate_id}/targets", tags=["candidate"])
     def put_targets(candidate_id: str, body: TargetsIn):
-        """1–3 target roles, one primary (default: the first picked)."""
+        """1–3 target roles, one primary (default: the first picked). Once the documents are read, newly picked
+        roles start their judging at once."""
         with conn() as c:
             cand_or_404(c, candidate_id)
-            return bad_request(cx.set_targets, c, candidate_id, body.baseline_ids, body.primary)
+            out = bad_request(cx.set_targets, c, candidate_id, body.baseline_ids, body.primary)
+        if candidate_id in state.review_threads:
+            prejudge_targets(candidate_id)
+        return out
 
     def score_roles(candidate_id: str, roles: list[dict], kind: str = "baseline_scores") -> str:
         """Score each role baseline in turn (job-independent judgments are reused across roles). Only the primary

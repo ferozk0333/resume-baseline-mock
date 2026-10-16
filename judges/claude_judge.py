@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, create_model
 
 from core import config
+from core.routing import clear_last, last_model
 from core.llm import LLMError, RoutedLLM, StructuredLLM, is_gemini, is_groq
 from extraction.extract import load_prompt
 from extraction.validate import QuoteIndex
@@ -80,16 +81,30 @@ class ClaudeJudge:
 
     @staticmethod
     def model_for(key: str) -> str:
+        """The model or route ("route:<task>") for single questions of this family."""
         return config.COMPLEXITY_MODEL if key == "complexity" else config.JUDGE_FALLBACK_MODEL
 
+    @staticmethod
+    def batch_model_for(key: str) -> str:
+        return config.JUDGE_BATCH_MODEL or config.JUDGE_FALLBACK_MODEL
+
     def models_for(self, key: str) -> list[str]:
-        return [self.model_for(key)]
+        """Every model that may answer this family (saved judgments from any of them are reused): the route's
+        members, and for families asked in batches the batch route's too (complexity is never batched)."""
+        from core.routing import models_of
+        out = []
+        for m in (self.model_for(key),) if key == "complexity" else (self.model_for(key), self.batch_model_for(key)):
+            for x in models_of(m):
+                if x not in out:
+                    out.append(x)
+        return out
 
     def _judge(self, key: str, context: dict) -> Judgment:
         q = question(key)
         user = render_context(context)
         model = self.model_for(key)
         llm = self.complexity_llm if key == "complexity" else self.llm
+        clear_last()
         try:
             out = llm.parse(model=model, system=system_prompt(q), user=user, output_type=output_model(key))
         except LLMError as exc:
@@ -97,8 +112,9 @@ class ClaudeJudge:
         quote = out.quote.strip() or None
         if quote and (out.label == q.none_option or not QuoteIndex(user).contains(quote)):
             quote = None  # never store a quote that is not in the input
+        used = last_model(model)                       # the model that answered (failover may change it)
         return Judgment(label=out.label, quote=quote, reasoning=out.reasoning.strip() or None,
-                        method=method_of(model), model_version=model)
+                        method=method_of(used), model_version=used)
 
     def batch(self, key: str, contexts: list[dict]) -> list[Judgment | None]:
         """One call for several criteria that share the same candidate text (specs/09 §2.2).
@@ -112,12 +128,14 @@ class ClaudeJudge:
         criteria = "\n".join(f"{cid}: {_as_text(next(iter(o.values())) if len(o) == 1 else o)}"
                              for cid, o in zip(ids, own))
         user = f"{render_context(shared)}\n\n{wrap_tag('criteria', criteria)}"
-        model = self.model_for(key)
+        model = self.batch_model_for(key)
+        clear_last()
         try:
             out = self.llm.parse(model=model, system=batch_system_prompt(q), user=user,
                                  output_type=batch_output_model(key))
         except LLMError as exc:
             raise JudgeError(str(exc)) from exc
+        model = last_model(model)
         by_id = {a.criterion.strip(): a for a in out.answers}
         results: list[Judgment | None] = []
         for cid, ctx in zip(ids, contexts):
