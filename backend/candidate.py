@@ -306,7 +306,8 @@ def reading_progress(progress):
 
 
 def scoring_progress(progress, title: str, index: int, total: int):
-    """"AI Engineer: 7 of 19 areas checked", spread over the roles being scored."""
+    """Overall percentage across the roles being scored. The wait screen reads per-dimension progress from the saved
+    scores (`scoring_view`), so these lines never show internal counts."""
     from backend.tasks import SUBCATEGORY_COUNT
     span = 90 / total
     done = {"n": 0}
@@ -314,6 +315,5 @@ def scoring_progress(progress, title: str, index: int, total: int):
     def on_event(e):
         if len(e.path) == 2 and e.node == "save" and e.kind == "end":
             done["n"] += 1
-            progress.say("score", f"{title}: {done['n']} of {SUBCATEGORY_COUNT} areas checked",
-                         5 + span * index + span * done["n"] / SUBCATEGORY_COUNT)
+            progress.say("score", f"Scoring your {title} profile", 5 + span * index + span * done["n"] / SUBCATEGORY_COUNT)
     return on_event

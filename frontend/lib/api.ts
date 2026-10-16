@@ -312,3 +312,13 @@ export function postedAgo(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
   return days <= 0 ? "Posted today" : days === 1 ? "Posted yesterday" : `Posted ${days} days ago`;
 }
+export type WaitTip = { title: string; text: string; icon: string | null };
+export type ReadingSource = { type: "resume" | "linkedin_pdf" | "github" | "portfolio"; label: string;
+  status: "waiting" | "reading" | "done" | "failed"; error: string | null;
+  counts: { roles: number; projects: number; skills: number } | null };
+export type ReadingProgress = { sources: ReadingSource[]; stage: string; stage_label: string; percent: number; done: boolean;
+  error: string | null; typical_minutes: number | null };
+export type ScoringRole = { baseline_id: string; title: string; is_primary: boolean;
+  status: "waiting" | "scoring" | "ready" | "failed"; dimensions: Record<string, number> };
+export type ScoringProgress = { roles: ScoringRole[]; overall: number; line: string; all_ready: boolean; running: boolean;
+  typical_minutes: number | null };

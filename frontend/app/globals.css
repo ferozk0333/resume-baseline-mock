@@ -94,3 +94,12 @@
     @apply font-sans;
   }
 }
+/* Wait screens (specs/17): a small check "pop" when a source or role finishes. Used with motion-safe: only. */
+@theme {
+  --animate-pop: pop 260ms ease-out both;
+  @keyframes pop {
+    0% { transform: scale(0.6); opacity: 0; }
+    70% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+}

@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CircleAlert, Loader2, PartyPopper } from "lucide-react";
+import { Check, PartyPopper } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -11,11 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DetailsForm } from "@/components/app/candidate/details-form";
+import { GoodToKnow } from "@/components/app/candidate/good-to-know";
+import { ReadingWait, ScoringWait } from "@/components/app/candidate/wait-progress";
 import { EeatTip, RoleScoreCard } from "@/components/app/candidate/score-card";
 import { Review } from "@/components/app/onboarding/review";
 import { UploadForm } from "@/components/app/onboarding/upload-form";
-import { ProgressPanel } from "@/components/app/progress-panel";
-import { useTask, type TaskState } from "@/hooks/use-task";
 import { ApiError, get, post, put, STEP_LABELS, type ApplicationDetails, type Candidate, type OnboardingState,
   type OnboardingStep, type ProfileResponse, type ScoreCard, type Target } from "@/lib/api";
 import { useCurrentCandidate } from "@/lib/current-candidate";
@@ -149,9 +149,8 @@ function RolesStep({ state, reload, onContinue, onRetry }: { state: OnboardingSt
   onContinue: () => void; onRetry: () => void }) {
   const cid = state.candidate.id;
   const [picked, setPicked] = useState<Target[]>(state.targets);
-  const reading = useTask(state.onboarding.read_task_id, () => reload());
-  const done = reading.status === "done" || state.read_task?.status === "done";
-  const failed = reading.status === "error" || state.read_task?.status === "error";
+  const done = state.read_task?.status === "done";
+  const failed = state.read_task?.status === "error";
 
   async function save(next: Target[]) {
     const before = picked;
@@ -172,10 +171,11 @@ function RolesStep({ state, reload, onContinue, onRetry }: { state: OnboardingSt
       save([...picked, { baseline_id: id, title, is_primary: picked.length === 0 }]);
     } else toast.info("Pick up to 3 roles.");
   }
+  const makePrimary = (id: string) => save(picked.map((x) => ({ ...x, is_primary: x.baseline_id === id })));
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-      <Card>
+    <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <Card className="h-fit">
         <CardHeader>
           <CardTitle className="text-base">Which roles are you aiming for?</CardTitle>
           <CardDescription>Pick 1 to 3. We score your proof against each role. Your primary role leads your Home page.</CardDescription>
@@ -185,29 +185,20 @@ function RolesStep({ state, reload, onContinue, onRetry }: { state: OnboardingSt
             {state.roles.map((r) => {
               const t = picked.find((x) => x.baseline_id === r.baseline_id);
               return (
-                <button key={r.baseline_id} type="button" aria-pressed={!!t} onClick={() => toggle(r.baseline_id, r.title)}
-                  className={cn("flex items-center justify-between gap-2 rounded-lg border px-4 py-3 text-left text-sm transition-colors",
+                <div key={r.baseline_id} data-testid={`role-card-${r.baseline_id}`}
+                  className={cn("flex items-center gap-2 rounded-lg border pr-3 text-sm transition-colors",
                     t ? "border-primary bg-primary/5 ring-2 ring-primary/30" : "bg-white hover:bg-muted")}>
-                  <span className="font-medium">{r.title}</span>
+                  <button type="button" aria-pressed={!!t} onClick={() => toggle(r.baseline_id, r.title)}
+                    className="min-w-0 flex-1 rounded-lg px-4 py-3 text-left font-medium">{r.title}</button>
                   {t?.is_primary && <Badge>Primary</Badge>}
-                </button>
+                  {t && !t.is_primary && (
+                    <button type="button" onClick={() => makePrimary(r.baseline_id)} aria-label={`Make ${r.title} primary`}
+                      className="shrink-0 text-xs font-medium text-primary hover:underline">Make primary</button>
+                  )}
+                </div>
               );
             })}
           </div>
-          {picked.length > 1 && (
-            <fieldset className="space-y-1.5">
-              <legend className="text-sm font-medium">Primary role</legend>
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {picked.map((t) => (
-                  <label key={t.baseline_id} className="flex items-center gap-1.5 text-sm">
-                    <input type="radio" name="primary" checked={t.is_primary}
-                      onChange={() => save(picked.map((x) => ({ ...x, is_primary: x.baseline_id === t.baseline_id })))} />
-                    {t.title}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          )}
           <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
             {!done && !failed && picked.length > 0 && (
               <span className="text-sm text-muted-foreground">You can continue when your documents are read.</span>)}
@@ -215,34 +206,12 @@ function RolesStep({ state, reload, onContinue, onRetry }: { state: OnboardingSt
           </div>
         </CardContent>
       </Card>
-      <ReadingPanel task={reading} failed={failed} onRetry={onRetry}
-        message={state.read_task?.status === "error" ? state.read_task.error : null} />
-    </div>
-  );
-}
-
-function ReadingPanel({ task, failed, onRetry, message }: { task: TaskState; failed: boolean; onRetry: () => void;
-  message: string | null }) {
-  const done = task.status === "done";
-  return (
-    <Card aria-live="polite" className="h-fit">
-      <CardHeader className="flex flex-row items-center gap-2 space-y-0">
-        {failed ? <CircleAlert className="size-5 text-destructive" /> : done ? <Check className="size-5 text-emerald-600" />
-          : <Loader2 className="size-5 animate-spin text-primary" />}
-        <CardTitle className="text-base">{failed ? "We couldn't read your documents" : done ? "Your documents are read" : "Reading your documents"}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Reading progress"
-          aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(done ? 100 : task.percent)}>
-          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${done ? 100 : task.percent}%` }} />
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {failed ? (message ?? task.message) : done ? "Next, check what we found." : task.message ?? "Starting…"}
-        </p>
+      <div className="space-y-4">
+        <ReadingWait cid={cid} readTaskId={state.onboarding.read_task_id} onDone={reload} />
         {failed && <Button variant="outline" size="sm" onClick={onRetry}>Upload again</Button>}
-        {!done && !failed && <p className="text-xs text-muted-foreground">This takes a minute or two. Pick your roles meanwhile.</p>}
-      </CardContent>
-    </Card>
+        <GoodToKnow kind="reading" />
+      </div>
+    </div>
   );
 }
 
@@ -269,32 +238,34 @@ function ReviewStep({ cid, onScored }: { cid: string; onScored: () => void }) {
 function ScoresStep({ state, onContinue, onBack }: { state: OnboardingState; onContinue: () => void; onBack: () => void }) {
   const cid = state.candidate.id;
   const [cards, setCards] = useState<ScoreCard[] | null>(null);
+  // Back on this step after the scores were ready (a reload): straight to the results.
+  const [results, setResults] = useState(state.score_task?.status === "done"
+    && !Object.keys((state.score_task.result as { failed?: object } | null)?.failed ?? {}).length);
   const loadCards = useCallback(() => {
     get<ScoreCard[]>(`/candidates/${cid}/baseline-scores`).then(setCards).catch((e) => toast.error(e.message));
   }, [cid]);
-  const scoring = useTask(state.onboarding.score_task_id, () => loadCards());
-  const finished = scoring.status === "done" || state.score_task?.status === "done";
-  const failed = scoring.status === "error" || state.score_task?.status === "error";
-  useEffect(() => { if (finished) loadCards(); }, [finished, loadCards]);
+  useEffect(() => { if (results) loadCards(); }, [results, loadCards]);
   const waiting = cards?.some((c) => c.plan_status === "generating" || c.status === "running");
   useEffect(() => {                                       // the primary role's plan is written just after its score
     if (!waiting) return;
     const t = setInterval(loadCards, 2000);
     return () => clearInterval(t);
   }, [waiting, loadCards]);
+  const advance = useCallback(() => setResults(true), []);
 
-  if (failed) {
+  if (!results) {
     return (
-      <Card><CardContent className="space-y-3 py-6">
-        <p className="text-sm text-destructive">{state.score_task?.error ?? scoring.message ?? "Scoring stopped."}</p>
-        <Button variant="outline" onClick={onBack}>Back to review</Button>
-      </CardContent></Card>
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="space-y-3">
+          <ScoringWait cid={cid} onAdvance={advance} />
+          {state.score_task?.status === "error" && (
+            <Button variant="ghost" size="sm" onClick={onBack}>Back to review</Button>)}
+        </div>
+        <GoodToKnow kind="scoring" />
+      </div>
     );
   }
-  if (!finished || !cards) {
-    return <ProgressPanel title={`Scoring your profile for ${state.targets.length === 1 ? state.targets[0].title
-      : `${state.targets.length} roles`}`} task={scoring} />;
-  }
+  if (!cards) return <Skeleton className="h-96" />;
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">

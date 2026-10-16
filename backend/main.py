@@ -245,6 +245,10 @@ class TargetsIn(BaseModel):
     primary: str | None = None
 
 
+class RetryRolesIn(BaseModel):
+    baseline_ids: list[str] | None = None
+
+
 class TargetIn(BaseModel):
     baseline_id: str
 
@@ -489,6 +493,10 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             github=github or None, portfolio_url=portfolio_url or None, certifications=certs, references=refs,
             name=cand["name"], target_role=cand["target_role"], candidate_id=candidate_id)
         task_id = tasks.create("onboard", candidate_id)
+        from backend import wait_screens as ws               # the reading wait screen lists these (specs/17)
+        added = ws.added_sources({"linkedin_pdf": inputs.linkedin_pdf, "github": inputs.github,
+                                  "portfolio": inputs.portfolio_url})
+        tasks.event(task_id, "queued", "Waiting to start", 0, result_json={"sources": added})
         if onboarding:
             from backend import candidate as cx
             with conn() as c:
@@ -509,7 +517,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                         c.execute("UPDATE candidates SET linkedin_url = ? WHERE id = ?", (profile_url, candidate_id))
             if res.get("awaiting_review"):
                 state.review_threads[candidate_id] = res["thread_id"]
-                return {"_status": "done", "_message": "Ready for review", "candidate_id": candidate_id,
+                return {"_status": "done", "_message": "Ready for review", "candidate_id": candidate_id, "sources": added,
                         "warnings": res.get("warnings") or [], "blocked": res["awaiting_review"].get("blocked")}
             raise ValueError(res.get("blocked") or "Onboarding stopped before the review step.")
         tasks.submit(task_id, work)
@@ -608,6 +616,30 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                     "details": {"saved_at": d["saved_at"], "dismissed_at": d["dismissed_at"]},
                     "roles": [{"baseline_id": k, "title": v} for k, v in cx.role_baselines(c).items()]}
 
+    @app.get("/candidates/{candidate_id}/reading-progress", tags=["candidate"])
+    def reading_progress(candidate_id: str):
+        """The document-reading wait: each added source's status and what was found in it. From saved data only."""
+        from backend import wait_screens as ws
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            ob = cx.onboarding(c, candidate_id)
+            return ws.reading_view(c, candidate_id, tasks.get(ob["read_task_id"]) if ob.get("read_task_id") else None)
+
+    @app.get("/candidates/{candidate_id}/scoring-progress", tags=["candidate"])
+    def scoring_progress(candidate_id: str):
+        """The scoring wait: per role, a status and a fill per dimension (no internal counts)."""
+        from backend import wait_screens as ws
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            ob = cx.onboarding(c, candidate_id)
+            return ws.scoring_view(c, candidate_id, tasks.get(ob["score_task_id"]) if ob.get("score_task_id") else None)
+
+    @app.get("/config/wait-tips", tags=["candidate"])
+    def wait_tips():
+        """"Good to know" tips for the two waits, from config/wait_tips.yaml."""
+        from backend import wait_screens as ws
+        return ws.tips()
+
     @app.put("/candidates/{candidate_id}/onboarding", tags=["candidate"])
     def put_onboarding(candidate_id: str, body: OnboardingStepIn):
         with conn() as c:
@@ -628,6 +660,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         role's plan is written now; the others are "deferred" until their plan is first opened. A baseline score
         never applies the candidate to a job (Apply does)."""
         task_id = tasks.create(kind, candidate_id)
+        tasks.event(task_id, "queued", "Waiting to start", 0, result_json={"roles": [t["baseline_id"] for t in roles]})
 
         def work(progress):
             progress.say("prepare_match", "Getting your scores ready…", 3)
@@ -637,36 +670,52 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                     state.pipeline.confirm_review(thread, {"cancel": True})
                 except Exception:                       # noqa: BLE001 - the review thread only held the pause
                     log.exception("closing the review thread failed")
-            runs, paused = {}, None
+            runs, failed, paused = {}, {}, None
             from market.baseline import resolve_baseline
-            for i, t in enumerate(roles):
-                with conn() as c:
-                    bid = resolve_baseline(c, t["baseline_id"])
-                progress.say("score", f"{t['title']}: getting started", 5 + 90 * i / len(roles))
-                res = state.pipeline.score(candidate_id, bid, plan=t["is_primary"],
-                                           on_event=cx.scoring_progress(progress, t["title"], i, len(roles)))
-                if not res.get("run_id"):
-                    raise ValueError(res.get("blocked") or "Scoring did not start.")
-                runs[t["baseline_id"]] = res["run_id"]
-                paused = paused or res.get("paused")
-            return {"runs": runs, "paused": paused, "_message": paused or "Your scores are ready"}
+            for i, t in enumerate(roles):               # one role failing never stops the others
+                progress.say("score", f"Scoring your {t['title']} profile", 5 + 90 * i / len(roles))
+                try:
+                    with conn() as c:
+                        bid = resolve_baseline(c, t["baseline_id"])
+                    res = state.pipeline.score(candidate_id, bid, plan=t["is_primary"],
+                                               on_event=cx.scoring_progress(progress, t["title"], i, len(roles)))
+                    if not res.get("run_id"):
+                        raise ValueError(res.get("blocked") or "Scoring did not start.")
+                    runs[t["baseline_id"]] = res["run_id"]
+                    paused = paused or res.get("paused")
+                except Exception as exc:                # noqa: BLE001 - shown as "Couldn't finish" with Retry
+                    log.exception("scoring %s failed", t["baseline_id"])
+                    failed[t["baseline_id"]] = clean_error(exc)
+            if not runs:
+                raise ValueError(next(iter(failed.values()), "Scoring did not start."))
+            return {"runs": runs, "failed": failed, "paused": paused, "roles": [t["baseline_id"] for t in roles],
+                    "_message": paused or ("Some roles couldn't finish" if failed else "Your scores are ready")}
         tasks.submit(task_id, work)
         return task_id
 
     @app.post("/candidates/{candidate_id}/baseline-scores", response_model=TaskOut, status_code=202, tags=["candidate"])
-    def baseline_scores(candidate_id: str):
-        """"Confirm profile": score every target role (primary first). 409 when the profile can't be scored."""
+    def baseline_scores(candidate_id: str, body: RetryRolesIn | None = None):
+        """"Confirm profile": score every target role (primary first). 409 when the profile can't be scored.
+        With `baseline_ids` ("Retry" on the wait screen): score only those roles again; the others keep their run."""
         with conn() as c:
             cand_or_404(c, candidate_id)
             roles = cx.targets(c, candidate_id)
             if not roles:
                 raise HTTPException(409, "Pick at least one target role first.")
+            retry = body is not None and body.baseline_ids is not None
+            if retry:
+                roles = [t for t in roles if t["baseline_id"] in set(body.baseline_ids)]
+                if not roles:
+                    raise HTTPException(422, "None of these is one of your target roles.")
             blocker = scoring_blocker(store.load_profile(c, candidate_id))
             if blocker:
                 raise HTTPException(409, blocker)
         task_id = score_roles(candidate_id, roles)
         with conn() as c:
-            cx.set_step(c, candidate_id, "scores", score_task_id=task_id, confirmed_at=db.now_iso())
+            if retry:
+                cx.set_step(c, candidate_id, "scores", score_task_id=task_id)
+            else:
+                cx.set_step(c, candidate_id, "scores", score_task_id=task_id, confirmed_at=db.now_iso())
         return {"task_id": task_id}
 
     @app.get("/candidates/{candidate_id}/baseline-scores", tags=["candidate"])

@@ -37,7 +37,7 @@ async function firstRun(page: Page, name: string, prefix: string, mobile = false
   await expect(page.getByRole("button", { name: "Save and exit" }).or(page.getByRole("link", { name: "Save and exit" }))).toBeVisible();
   await page.getByRole("group", { name: "Roles" }).getByRole("button", { name: /Data Scientist/ }).click();
   await page.getByRole("group", { name: "Roles" }).getByRole("button", { name: /AI Engineer/ }).click();
-  await expect(page.getByRole("group", { name: "Roles" }).getByRole("button", { name: /Data Scientist/ })).toContainText("Primary");
+  await expect(page.getByTestId("role-card-baseline-data-scientist-entry")).toContainText("Primary");
   await expect(page.getByText("Your documents are read", { exact: true })).toBeVisible({ timeout: 30_000 });
   await shot(page, `${prefix}2-roles`);
   if (mobile) await noSideScroll(page);
@@ -138,7 +138,8 @@ test("first run at 390 px: every step fits; Skip for now leaves the finish card 
   await expect(page.getByText("Finish your profile")).toBeVisible();
   await shot(page, "mobile-7-home");
   await noSideScroll(page);
-  await page.getByRole("button", { name: "Dismiss" }).click();
+  await Promise.all([page.waitForResponse((r) => r.url().includes("/application-details/dismiss")),
+    page.getByRole("button", { name: "Dismiss" }).click()]);
   await page.reload();
   await expect(page.getByText("Next best action")).toBeVisible();
   await expect(page.getByText("Finish your profile")).toHaveCount(0);

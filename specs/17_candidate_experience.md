@@ -42,7 +42,7 @@ A stepper at the top with 5 steps, every step resumable. "Save and exit" is alwa
 | # | Step | Content | Required |
 |---|---|---|---|
 | 1 | Add your proof | Resume (required). LinkedIn PDF, GitHub username, portfolio URL, certifications, references, demo video links (optional). Each optional source shows a one-line "why": e.g. LinkedIn → "Confirms your resume (Trust)"; GitHub → "Shows real work (Expertise, Trust)"; reference → "A manager reference is the strongest proof (Trust)". | resume |
-| 2 | Target roles | Shown **while extraction runs** (progress bar with plain-language stages, no model names). Pick 1–3 of the available role baselines. Mark one as **primary** (default: the first picked). | ≥1 role |
+| 2 | Target roles | Shown **while extraction runs** (progress bar with plain-language stages, no model names). Pick 1–3 of the available role baselines. Mark one as **primary** (default: the first picked) with a single control: a "Primary" pill on the primary card and a "Make primary" link on the other selected cards (no separate radio row). | ≥1 role |
 | 3 | Review | Existing review screen (extracted roles, projects, claims, Add back, edits). "Confirm profile" ends this step. | confirm |
 | 4 | Your baseline scores | Scoring runs for every selected role. Then results (§3.1). Recommendations are saved. | — |
 | 5 | Finish your profile (optional) | Application details (§3.2). Buttons "Save" and "Skip for now". | no |

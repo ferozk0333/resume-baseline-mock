@@ -113,8 +113,8 @@ def test_progress_lines_are_plain_language(env):
     t = api.post(f"/candidates/{cid}/baseline-scores").json()["task_id"]
     api.tasks.wait(t)
     msgs = [e["message"] for e in api.tasks.events_after(t, 0)]
-    assert any(m.startswith("Data Scientist: 19 of 19 areas checked") for m in msgs), msgs
-    assert not any("judg" in m.lower() or "model" in m.lower() for m in msgs), msgs
+    assert "Scoring your Data Scientist profile" in msgs, msgs
+    assert not any("judg" in m.lower() or "model" in m.lower() or " of 19" in m for m in msgs), msgs
 
 
 def test_roles_chosen_during_extraction_are_scored_primary_first(env):

@@ -135,6 +135,13 @@ the browser ("Demo: viewing as … · Switch profile" in the header). With no pr
 
 Home, job detail and the apply sheet make no model calls.
 
+**Wait screens.** Reading the documents shows each source added (Resume, LinkedIn, GitHub, Portfolio) with its
+status and what was found in it; scoring shows one row per role with four segments (Experience, Expertise,
+Authority, Trust) that fill as checks finish, "Ready" per role, Retry for a role that couldn't finish (the others
+carry on), then "Your scores are ready". Both read saved data only (`/candidates/{id}/reading-progress`,
+`/scoring-progress`). A "Good to know" card rotates tips from `config/wait_tips.yaml` (editable); it pauses on hover
+or focus, stops once you use the arrows, and stays still with reduced motion.
+
 ## Models
 Claude is the default for extraction, fallback judging, complexity and the plan. Any of these can run on
 Groq instead by naming a Groq model with a `groq/` prefix, e.g. `EXTRACT_MODEL=groq/openai/gpt-oss-120b`
