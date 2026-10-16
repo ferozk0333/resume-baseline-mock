@@ -18,6 +18,9 @@ test("upload a JD → steps 2–4 → publish → candidate applies", async ({ p
   await page.goto("/recruiter");
   await expect(page.getByRole("table", { name: "Open jobs" })).toContainText("Data Scientist");
   await page.screenshot({ path: "e2e/.tmp/job-0-jobs-page.png" });
+  await page.getByRole("table", { name: "Open jobs" }).getByRole("cell", { name: "Northwind Analytics" }).click();   // whole row
+  await expect(page).toHaveURL(/\/recruiter\/jobs\/[^/]+$/);
+  await page.goto("/recruiter");
   await page.getByRole("link", { name: "Create job" }).click();
   await page.getByLabel("File").setInputFiles(JD_PDF);
   await page.screenshot({ path: "e2e/.tmp/job-1-start.png" });

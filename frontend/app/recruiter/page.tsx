@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { del, get, post, WORKPLACE, type JobForm, type JobRow, type JobStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+const href = (j: JobRow) => (j.status === "draft" ? `/recruiter/jobs/${j.id}/edit` : `/recruiter/jobs/${j.id}`);
 const TABS: { key: JobStatus; label: string }[] = [{ key: "open", label: "Open" }, { key: "draft", label: "Drafts" },
   { key: "closed", label: "Closed" }];
 
@@ -81,9 +82,9 @@ export default function JobsPage() {
             </TableHeader>
             <TableBody>
               {shown.map((j) => (
-                <TableRow key={j.id}>
+                <TableRow key={j.id} onClick={() => router.push(href(j))} className="cursor-pointer hover:bg-muted/50">
                   <TableCell className="font-medium">
-                    <Link href={j.status === "draft" ? `/recruiter/jobs/${j.id}/edit` : `/recruiter/jobs/${j.id}`} className="hover:underline">
+                    <Link href={href(j)} className="hover:underline" onClick={(e) => e.stopPropagation()}>
                       {j.title || "Untitled job"}
                     </Link>
                     {j.has_draft && <Badge variant="outline" className="ml-2 text-[10px]">unsaved edit</Badge>}
@@ -97,7 +98,7 @@ export default function JobsPage() {
                       {j.status === "draft" && j.step ? `Draft · step ${j.step} of 4` : j.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="relative">
+                  <TableCell className="relative" onClick={(e) => e.stopPropagation()}>
                     <Button size="icon-sm" variant="ghost" aria-label={`Actions for ${j.title || "draft"}`}
                       onClick={(e) => { e.stopPropagation(); setMenu(menu === j.id ? null : j.id); }}><MoreHorizontal /></Button>
                     {menu === j.id && (

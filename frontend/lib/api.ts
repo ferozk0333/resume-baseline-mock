@@ -236,7 +236,7 @@ export type MarketVersion = { id: string; role: string; level: string; version: 
     thresholds: Record<string, unknown> } };
 export type MarketRole = { key: string; title: string; manual_baseline: string; source: "manual" | "market";
   active: MarketVersion | null; latest: MarketVersion | null; postings: number; companies: number;
-  configured: { companies: number; placeholders: number }; levels: Record<string, number> };
+  configured: { companies: number; placeholders: number; fetchable: number }; levels: Record<string, number> };
 export type MarketLabel = { version: number; date: string; baseline_id: string; test: boolean; label: string };
 export type RunBaselines = { role: string | null; role_title?: string; current: "standard" | "market";
   current_version?: number | null; standard: { baseline_id: string; label: string } | null; market: MarketLabel | null };

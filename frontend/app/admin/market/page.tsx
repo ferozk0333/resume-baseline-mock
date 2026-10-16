@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApiError, get, post, put, type MarketPosting, type MarketRole, type MarketVersion, type Suggestion } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+type FetchResult = { boards: number; seen: number; new: number; excluded_titles: number; closed: number; errors: string[];
+  skipped: number };
 type Overview = { roles: MarketRole[]; allow_test_versions: boolean; thresholds: Record<string, number> };
 
 /** Market baselines (specs/15): per role, postings in the window, versions, and the Manual/Market toggle. */
@@ -21,6 +23,7 @@ export default function MarketPage() {
   const [data, setData] = useState<Overview | null>(null);
   const [role, setRole] = useState<string>("ai_engineer");
   const [busy, setBusy] = useState<string | null>(null);
+  const [fetched, setFetched] = useState<(FetchResult & { role: string }) | null>(null);
   const [switching, setSwitching] = useState<{ role: string; to: string; candidates: number; calls: number } | null>(null);
   const load = useCallback(() => { get<Overview>("/market/roles").then(setData).catch((e) => toast.error(e.message)); }, []);
   useEffect(() => { load(); }, [load]);
@@ -92,11 +95,21 @@ export default function MarketPage() {
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" disabled={busy !== null}
-              onClick={() => run("fetch", () => post(`/market/${r.key}/fetch`).then((o) => toast.info(JSON.stringify(o))))}>
-              <Download /> Fetch now</Button>
+              title={r.configured.fetchable ? undefined : "No public job boards configured yet"}
+              onClick={() => run("fetch", () => post<FetchResult>(`/market/${r.key}/fetch`).then((o) => setFetched({ role: r.key, ...o })))}>
+              {busy === "fetch" ? <Loader2 className="animate-spin" /> : <Download />} Fetch now</Button>
             <AddPosting role={r} onAdded={load} />
             <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => run("fx", () => post(`/market/${r.key}/fixtures`), "Test fixtures loaded")}>
               <FlaskConical /> Load test fixtures</Button>
+            {fetched?.role === r.key && (
+              <p role="status" aria-label="Fetch result" className={cn("w-full rounded-md px-2.5 py-1.5 text-xs",
+                fetched.errors.length ? "bg-red-50 text-red-800" : fetched.boards ? "bg-emerald-50 text-emerald-900" : "bg-amber-50 text-amber-900")}>
+                {fetched.boards === 0 && !fetched.errors.length
+                  ? `Nothing to fetch: none of the ${r.configured.companies} companies has a public job board set yet (${fetched.skipped} skipped: placeholders or manual). Add the real companies in config/market_sources.yaml (source greenhouse, lever or ashby with its board id), or use Add postings.`
+                  : `Read ${fetched.boards} board${fetched.boards === 1 ? "" : "s"}: ${fetched.new} new posting${fetched.new === 1 ? "" : "s"}, ${fetched.seen - fetched.new} already known, ${fetched.excluded_titles} other titles left out, ${fetched.closed} no longer listed, ${fetched.skipped} skipped.`}
+                {fetched.errors.map((e) => <span key={e} className="block">{e}</span>)}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>

@@ -935,7 +935,9 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                             "levels": mstore.level_counts(c, key),
                             "companies": len({p["company"] for p in rows}),
                             "configured": {"companies": len(r.companies),
-                                           "placeholders": sum(c2.placeholder for c2 in r.companies)}})
+                                           "placeholders": sum(c2.placeholder for c2 in r.companies),
+                                           "fetchable": sum(1 for c2 in r.companies if not c2.placeholder and
+                                                            c2.source != "manual" and c2.source_id)}})
             return {"roles": out, "allow_test_versions": mb.allow_test_versions(c),
                     "thresholds": {"WINDOW_DAYS": config.WINDOW_DAYS, "REQ_SHARE": config.REQ_SHARE,
                                    "PREF_SHARE": config.PREF_SHARE, "MARGIN": config.MARGIN,

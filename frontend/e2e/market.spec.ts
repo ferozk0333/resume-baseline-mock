@@ -6,6 +6,8 @@ test("market baseline from the test fixtures", async ({ page }) => {
   page.on("pageerror", (e) => problems.push(e.message));
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/admin/market");
+  await page.getByRole("button", { name: "Fetch now" }).click();               // placeholders only: says so
+  await expect(page.getByRole("status", { name: "Fetch result" })).toContainText("Nothing to fetch");
   await page.getByRole("button", { name: "Load test fixtures" }).click();
   await expect(page.getByRole("region", { name: "Postings in the window" })).toContainText("Lumenfield");
   await page.getByRole("button", { name: "Recompute without a model" }).click();
