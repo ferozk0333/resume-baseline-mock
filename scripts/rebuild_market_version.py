@@ -1,7 +1,7 @@
 """Rebuild a role's Market version from cached extractions after name merges were approved (no model calls),
 publish it when it differs materially, and print Manual vs Market.
 
-    .venv/bin/python scripts/rebuild_market_version.py --role ai_engineer [--db data/demo.db] [--no-publish]
+    .venv/bin/python scripts/rebuild_market_version.py --role ai_engineer [--db data/demo.db (default)] [--no-publish]
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from market import normalize, sources  # noqa: E402
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--role", default="ai_engineer")
-    ap.add_argument("--db", default=str(config.DB_PATH))
+    ap.add_argument("--db", default="data/demo.db")
     ap.add_argument("--no-publish", action="store_true")
     args = ap.parse_args()
     conn = db.connect(args.db)
