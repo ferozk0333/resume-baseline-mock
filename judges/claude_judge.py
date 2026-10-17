@@ -66,7 +66,7 @@ def batch_system_prompt(q: Question) -> str:
             "Return one entry per criterion, in the order given.")
 
 
-ITEM_FAMILIES = {"complexity", "work_sample_relevant"}      # batched per item (GROUPED_ITEM_JUDGING)
+ITEM_FAMILIES = {"complexity"}      # batched per item (GROUPED_ITEM_JUDGING)
 
 
 def split_shared(contexts: list[dict]) -> tuple[dict, list[dict]]:

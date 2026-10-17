@@ -169,4 +169,8 @@ ask if wanted.
     ("Weather Forecast: Fetches real-time weather.") stay in the description. A lead-in ending in ":" is never a
     bullet. On the live profile: 17 bullets (14 before; the LLM writes 38, mostly by rewording prose, which the
     verbatim parser does not do).
+31. **Proof density depends on where text lands: repo description counts as artifact (1.0), README bullets as bullet
+    (0.5)** [OPEN]. Found in the README gate (Phase 3): the README parser put "what was built" text in the repository
+    description and proof density rose from 0.407 to 0.613 on the same evidence. PARSE_README is parked (off); the
+    parser code and the recorded gate data (data/readme_gate_jev.json, data/readme-gate-live.db) are kept.
 

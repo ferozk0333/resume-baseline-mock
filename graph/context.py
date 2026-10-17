@@ -232,9 +232,10 @@ def _capped(profile: Profile, baseline: Baseline, evidence: dict) -> Profile:
 
 # Question families whose unmatched criteria go to Claude in one call per candidate and baseline (specs/09 §2.2).
 BATCH_KEYS = {"skill_evidence", "applied_level", "tool_evidence"}
-# GROUPED_ITEM_JUDGING (specs/18 item 10): these families too, one call per family over all items, same schema, a
-# quote required above the lowest label, each failed item retried alone; complexity keeps "reason first".
-ITEM_BATCH_KEYS = {"complexity", "work_sample_relevant"}
+# GROUPED_ITEM_JUDGING (specs/18 item 10, narrowed in review): complexity in one call over all items, same schema, a
+# quote required above the lowest label, each failed item retried alone, reasons first. Work-sample relevance stays on
+# Jev (multi-question requests) with its fallback.
+ITEM_BATCH_KEYS = {"complexity"}
 
 
 def _batched(ctx: Ctx, asks: list[Ask]) -> dict[tuple[str, str], Judgment | None]:

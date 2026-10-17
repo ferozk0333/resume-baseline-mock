@@ -27,7 +27,7 @@ def test_flags_are_off_by_default():
     assert config.MAX_REPOS == 8
 
 
-def test_grouped_item_judging_batches_complexity_and_work_samples(tmp_path, monkeypatch):
+def test_grouped_item_judging_batches_complexity_only(tmp_path, monkeypatch):
     def run(on: bool):
         monkeypatch.setattr(config, "GROUPED_ITEM_JUDGING", on)
         path = str(tmp_path / f"g{on}.db")
@@ -35,9 +35,11 @@ def test_grouped_item_judging_batches_complexity_and_work_samples(tmp_path, monk
         cid, _ = ARCHETYPES["strong_ds"](conn)
         judge = FakeJudge(script=quoted)
         Pipeline(Deps(path, judge, today=TODAY, planner=None)).score(cid, DS, plan=False)
-        return {k for k, _ in judge.batches}
-    assert not run(False) & {"complexity", "work_sample_relevant"}
-    assert {"complexity", "work_sample_relevant"} <= run(True)
+        return {k for k, _ in judge.batches}, {k for g in judge.groups for k in g}, \
+            [k for k, _ in judge.calls].count("work_sample_relevant")
+    off, on = run(False), run(True)
+    assert "complexity" not in off[0] and "complexity" in on[0]
+    assert "work_sample_relevant" not in on[0] and on[2] == off[2]           # work samples: unchanged path
     fields = list(batch_output_model("complexity").model_fields["answers"].annotation.__args__[0].model_fields)
     assert fields.index("reasoning") < fields.index("label")                      # complexity: reason first
 

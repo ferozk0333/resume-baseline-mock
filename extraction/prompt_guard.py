@@ -70,31 +70,68 @@ def parse_score(content: str) -> float:
 
 
 class GroqGuard:
-    """One request per chunk; the 22M model when the 86M one is busy or failing."""
+    """One request per chunk through the shared router limiter (requests and tokens per minute and per day for each
+    guard model, from config.MODEL_LIMITS); Groq's x-ratelimit-* headers and retry-after win. The 22M model when the
+    86M one is out of quota or failing. Background only: waiting for a free minute never holds up reading."""
 
-    def __init__(self, session=None, api_key: str | None = None):
+    MAX_WAIT_S = 90.0
+
+    def __init__(self, session=None, api_key: str | None = None, limiter=None, sleep=None):
         import requests
+        import time
+        from core.routing import LIMITER
         self._real = session is None
         self.session = session or requests.Session()
         self.api_key = api_key if api_key is not None else config.GROQ_API_KEY
+        self.limiter = limiter or LIMITER
+        self.sleep = sleep or time.sleep
+        self.calls = 0
 
     def score(self, chunk: str) -> tuple[float, str]:
         from core.llm import require_live
+        from core.routing import parse_duration
         if self._real:
             require_live("Groq")
-        last = None
-        for model in config.PROMPT_GUARD_MODELS:
-            body = {"model": model.removeprefix("groq/"), "messages": [{"role": "user", "content": chunk}]}
-            try:
-                resp = self.session.post(config.GROQ_URL, json=body, timeout=15,
-                                         headers={"Authorization": f"Bearer {self.api_key}"})
+        tokens = len(chunk) // 3 + 20
+        waited, last = 0.0, None
+        while True:
+            soonest = None
+            for model in config.PROMPT_GUARD_MODELS:
+                state, wait = self.limiter.check(model, tokens)
+                if state != "ok":
+                    if state == "busy":
+                        soonest = wait if soonest is None else min(soonest, wait)
+                    continue
+                if not self.limiter.take(model, tokens):
+                    continue
+                try:
+                    self.calls += 1
+                    resp = self.session.post(config.GROQ_URL, json={"model": model.removeprefix("groq/"),
+                                                                     "messages": [{"role": "user", "content": chunk}]},
+                                             timeout=15, headers={"Authorization": f"Bearer {self.api_key}"})
+                except Exception as exc:                   # noqa: BLE001 - try the other model
+                    self.limiter.refund(model, tokens)
+                    last = exc
+                    continue
+                finally:
+                    self.limiter.release(model)
+                self.limiter.observe_headers(model, getattr(resp, "headers", None) or {})
+                if resp.status_code == 429:
+                    text = (resp.text or "").lower()
+                    self.limiter.exhaust(model, parse_duration(resp.headers.get("retry-after")) or 5.0, "429",
+                                         daily="per day" in text or "(rpd)" in text or "(tpd)" in text)
+                    last = GuardError(f"{model}: HTTP 429")
+                    continue
                 if resp.status_code != 200:
+                    if resp.status_code >= 500:
+                        self.limiter.refund(model, tokens)
                     last = GuardError(f"{model}: HTTP {resp.status_code}")
                     continue
                 return parse_score(resp.json()["choices"][0]["message"]["content"]), model
-            except Exception as exc:                         # noqa: BLE001 - a screen never fails anything
-                last = exc
-        raise GuardError(str(last))
+            if soonest is None or waited + soonest > self.MAX_WAIT_S:
+                raise GuardError(str(last or "every guard model is out of quota"))
+            self.sleep(soonest)                            # a background thread: reading never waits on this
+            waited += soonest
 
 
 def _cached(conn, h: str) -> tuple[float, str] | None:

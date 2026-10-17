@@ -113,3 +113,53 @@ def test_groq_guard_fails_over_to_the_small_model_and_needs_live():
     from core.llm import LLMError
     with pytest.raises(LLMError):
         pg.GroqGuard(api_key="k").score("text")                                 # real session: LIVE guard
+
+
+class FakeLimiter:
+    def __init__(self, states):
+        self.states, self.taken, self.exhausted = dict(states), [], []
+
+    def check(self, model, tokens):
+        return self.states.get(model, ("ok", 0.0))
+
+    def take(self, model, tokens):
+        self.taken.append(model)
+        return True
+
+    def release(self, model):
+        pass
+
+    def refund(self, model, tokens=0):
+        pass
+
+    def observe_headers(self, model, headers):
+        pass
+
+    def exhaust(self, model, seconds, reason, daily=False):
+        self.exhausted.append((model, seconds, daily))
+        self.states[model] = ("exhausted", seconds)
+
+
+class HeaderSession(Session):
+    def post(self, url, json=None, headers=None, timeout=None):
+        self.models.append(json["model"])
+        status, content = self.responses.pop(0)
+        return FakeResponse(status, {"choices": [{"message": {"content": content}}]},
+                            headers={"retry-after": "7"} if status == 429 else {})
+
+
+def test_guard_goes_through_the_limiter_and_honours_retry_after():
+    lim = FakeLimiter({})
+    s = HeaderSession((429, ""), (200, "0.2"))
+    g = pg.GroqGuard(session=s, api_key="k", limiter=lim, sleep=lambda x: None)
+    assert g.score("text") == (0.2, "groq/meta-llama/llama-prompt-guard-2-22m")
+    assert lim.exhausted == [("groq/meta-llama/llama-prompt-guard-2-86m", 7.0, False)]   # retry-after honoured
+
+
+def test_guard_waits_for_a_free_minute_then_gives_up_unscreened():
+    slept = []
+    lim = FakeLimiter({m: ("busy", 30.0) for m in config.PROMPT_GUARD_MODELS})
+    g = pg.GroqGuard(session=HeaderSession(), api_key="k", limiter=lim, sleep=slept.append)
+    with pytest.raises(pg.GuardError):
+        g.score("text")
+    assert slept == [30.0, 30.0, 30.0] and lim.taken == []                      # waited within 90 s, no call

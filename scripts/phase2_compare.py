@@ -66,15 +66,14 @@ def estimate() -> None:
         w = sum(1 for a in live if a.key == "work_sample_relevant")
         grouped["complexity_single"] += c
         grouped["work_sample_jev"] += w
-        grouped["batches_on"] += (1 if c >= 2 else c) + (1 if w >= 2 else w)
+        grouped["batches_on"] += (1 if c >= 2 else c)
         routine["route_single"] += sum(1 for a in live if a.route == "claude" or a.key == "complexity")
     print("GROUPED_ITEM_JUDGING")
     print(f"  off: {grouped['complexity_single']} complexity calls (route judge_single, one per item) and "
           f"{grouped['work_sample_jev']} work-sample questions to Jev (grouped per item)")
-    print(f"  on:  {grouped['batches_on']} batched calls in all (complexity on its route, work samples on route "
-          "judge_grouped), plus one retry per item whose quote fails; the work-sample family moves from Jev to the "
-          "LLM route under this flag")
-    print("  a live comparison asks every complexity and work-sample item once more (nothing saved for batched answers)\n")
+    print(f"  on:  {grouped['batches_on']} batched complexity calls, plus one retry per item whose quote fails; "
+          "work samples unchanged (Jev)")
+    print(f"  a live comparison asks every complexity item once more: {grouped['batches_on']} batched calls\n")
     from parser_gates import latest_live_candidate
     live_cid = latest_live_candidate(conn)
     repos = conn.execute("SELECT COUNT(*) FROM projects WHERE candidate_id = ? AND own_commits IS NOT NULL AND "
