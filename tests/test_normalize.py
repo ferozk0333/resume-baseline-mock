@@ -158,7 +158,7 @@ def test_normalized_text_is_stored_by_file_hash(tmp_path, monkeypatch):
     assert documents.extract_text("again.pdf", data, conn) == first
     row = conn.execute("SELECT normalizer FROM document_texts WHERE file_sha256 = ?",
                        (documents.sha256(data),)).fetchone()
-    assert row["normalizer"] == documents.NORMALIZER
+    assert row["normalizer"] == documents.normalizer()
 
 
 def test_quotes_from_the_normalized_text_pass_the_check():

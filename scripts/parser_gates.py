@@ -251,7 +251,8 @@ def profiles_section(work_db: str) -> tuple[list[str], dict]:
         control, control_miss = res.get("final"), len(judge.misses)
         li_out, li_final, li_miss, delta = "no LinkedIn", control, 0, 0.0
         export = STRESS / f"{pf.id}_linkedin_export.pdf"
-        entry = {"control": control, "parser": control, "cid": cid, "run": res.get("run_id"), "misses": []}
+        entry = {"control": control, "parser": control, "cid": cid, "run": res.get("run_id"), "misses": [],
+                 "control_cid": cid}
         if pf.sections.get("LinkedIn") and export.exists():
             data = export.read_bytes()
             text = normalize_document(export.name, data)
@@ -268,7 +269,7 @@ def profiles_section(work_db: str) -> tuple[list[str], dict]:
                 li_final, li_miss = res2.get("final"), len(judge2.misses)
                 delta = (li_final - control) if li_final is not None and control is not None else None
                 entry = {"control": control, "parser": li_final, "cid": cid2, "run": res2.get("run_id"),
-                         "misses": judge2.misses}
+                         "misses": judge2.misses, "control_cid": cid}
             else:
                 li_final, delta = None, None
         rd_final, rd_miss = None, None
@@ -315,9 +316,37 @@ def ranking(results: dict) -> list[str]:
     return out
 
 
+STUFFER = re.compile(r"^[A-Z]{2}2$|_padded$")      # the keyword stuffer (ID 2) and padded variants
+
+
+def evidence_texts(conn, cid: str) -> set[str]:
+    """Everything a judge can read about a candidate: roles, bullets, projects, claims, certifications, references."""
+    p = store.load_profile(conn, cid)
+    out = {f"role:{r.title}|{r.employer}" for r in p.roles} | {f"bullet:{b.text}" for b in p.all_bullets()}
+    out |= {f"project:{x.name}|{x.description or ''}" for x in p.projects}
+    out |= {f"claim:{c.name_raw}" for c in p.claims} | {f"cert:{c.name}" for c in p.certifications}
+    return out | {f"ref:{r.relationship}|{r.statement}" for r in p.references}
+
+
+def no_gain_gate(conn, results: dict) -> list[str]:
+    """Permanent acceptance gate (spec 18 wrap-up): a keyword-stuffer (ID 2) or padded profile must not gain from a
+    change unless its own evidence text changed. results: pid → {control, parser, control_cid, cid}."""
+    out = []
+    for pid, r in sorted(results.items()):
+        if not STUFFER.search(pid) or r.get("control") is None or r.get("parser") is None:
+            continue
+        gain = r["parser"] - r["control"]
+        changed = bool(r.get("control_cid")) and evidence_texts(conn, r["control_cid"]) != evidence_texts(conn, r["cid"])
+        ok = gain <= 1e-9 or changed
+        why = "its evidence text changed" if changed and gain > 1e-9 else "no gain" if gain <= 1e-9 else \
+            "gained with the same evidence text"
+        out.append(f"- No gain without new evidence, {pid}: {gain:+.2f} ({why}) → {'PASS' if ok else 'FAIL'}")
+    return out
+
+
 def design_checks(conn, results: dict) -> list[str]:
     from graph.pipeline import run_scores
-    out = ["**DESIGN checks** (parser runs):", ""]
+    out = ["**DESIGN checks** (parser runs):", "", *no_gain_gate(conn, results)]
     scores = {pid: run_scores(conn, r["run"]) for pid, r in results.items() if r.get("run")}
     if "DS4" in results and "DS4_padded" in results:
         out.append(f"- DS4 vs DS4_padded: {fmt(results['DS4']['parser'])} vs {fmt(results['DS4_padded']['parser'])}")

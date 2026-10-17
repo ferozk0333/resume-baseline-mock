@@ -187,7 +187,7 @@ human reviewers: don't send real personal data on the free tier.
 - Logs (`rightstaff.routing`): `failover: <task> <model> → <next> (<why>)`, `all busy: …`, `fail fast: …`. Runs record
   calls per task per model (`calls_by_task`) and failovers in their timings.
 
-### Code-first extraction (specs/18, phase 3; PARSE_LINKEDIN on, the other flags off)
+### Code-first extraction (specs/18, phase 3; PARSE_LINKEDIN on; README and resume parsing parked)
 - **Design:** code builds the structure, Jev decides what is unclear, the LLM is the fallback. Every field is a
   verbatim span of the source, so the usual quote check, claim, award and publication rules apply unchanged.
 - **`PARSE_LINKEDIN`** (on by default): a parser for LinkedIn's "Save to PDF" layout (sidebar + main column, font
@@ -201,7 +201,7 @@ human reviewers: don't send real personal data on the free tier.
 - **Confidence gate:** a document goes to the LLM when it doesn't look like the expected layout, a role has no dates,
   more than `PARSER_MAX_UNCLEAR` lines stay unclear, reading order looks scrambled, or a Jev label is below
   `JEV_CONFIDENCE_THRESHOLD`. Every item records how it was read (`method`: parser | jev | llm).
-- **`REMOVE_HIDDEN_TEXT`:** white or near-background text (against what is drawn under it), text under 4 pt and
+- **`REMOVE_HIDDEN_TEXT`** (on): white or near-background text (against what is drawn under it), text under 4 pt and
   off-page text are removed before reading; what was removed is kept for Admin
   (`GET /admin/candidates/{id}/extraction`, which also lists the parser log).
 - **Review opens early:** each source is saved into the profile as soon as it is read (in the usual order, so the
@@ -216,7 +216,7 @@ human reviewers: don't send real personal data on the free tier.
   per document (`prompts/bullet_skills_system.txt`, the judge fallback model) lists skill and tool names from bullets
   that matched no vocabulary; names not written exactly as in their bullet are dropped.
 
-### Fewer calls, more model families (specs/18 phase 2; all flags off)
+### Fewer calls, more model families (specs/18 phase 2; all flags off, parked — see docs/spec18_summary.md)
 - **`GROUPED_ITEM_JUDGING`:** complexity and work-sample questions in one batched call per family (same schema, a
   quote required above the lowest label, each failed item retried alone; complexity reasons first).
 - **`REPO_CAP`** (`MAX_REPOS` 8): read and judge only the repositories most relevant to the role (then latest push,
@@ -228,7 +228,7 @@ human reviewers: don't send real personal data on the free tier.
   (Gemma: no thinking setting). `scripts/phase2_compare.py --estimate` states the calls per flag; `--run FLAG` (LIVE)
   compares on vs off on the test profiles.
 
-### Prompt-injection screen (specs/18 phase 4; `PROMPT_GUARD` off)
+### Prompt-injection screen (specs/18 phase 4; `PROMPT_GUARD` on)
 Llama Prompt Guard 2 on Groq (86M, then 22M; 512-token window, so overlapping chunks), in the background: never
 blocks reading, never changes a score, never shown to recruiters. Visible text above `PROMPT_GUARD_THRESHOLD` is logged
 for Admin; hidden text stays removed and, when also flagged, the candidate sees "We ignored hidden text in your …".

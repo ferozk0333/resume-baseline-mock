@@ -1,6 +1,8 @@
 """Phase 3: document, GitHub and portfolio ingest (no network)."""
 import pytest
 
+from core import config
+
 from ingest import documents, github, portfolio
 from tests.helpers import FakeResponse, FakeSession, SAMPLE_RESUME_LINES, make_docx, make_pdf
 
@@ -33,10 +35,13 @@ def test_corrupt_and_unsupported_files():
         documents.extract_text("cv.txt", b"hello")
 
 
-def test_hidden_pdf_text_is_still_extracted():
-    # White text is invisible but extractable; the prompt must treat it as data (05).
+def test_hidden_pdf_text_is_removed_by_default(monkeypatch):
+    # White-on-white text is removed before reading (specs/18 wrap-up: REMOVE_HIDDEN_TEXT on).
     text = documents.extract_text("cv.pdf", make_pdf(SAMPLE_RESUME_LINES, hidden=["secret line"]))
-    assert "secret line" in text
+    assert "secret line" not in text and "Built a churn model" in text
+    # With the flag off it is extracted, and the prompt treats it as data (05).
+    monkeypatch.setattr(config, "REMOVE_HIDDEN_TEXT", False)
+    assert "secret line" in documents.extract_text("cv.pdf", make_pdf(SAMPLE_RESUME_LINES, hidden=["secret line"]))
 
 
 # --- GitHub ----------------------------------------------------------------------------

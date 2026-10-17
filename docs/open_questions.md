@@ -173,4 +173,22 @@ ask if wanted.
     (0.5)** [OPEN]. Found in the README gate (Phase 3): the README parser put "what was built" text in the repository
     description and proof density rose from 0.407 to 0.613 on the same evidence. PARSE_README is parked (off); the
     parser code and the recorded gate data (data/readme_gate_jev.json, data/readme-gate-live.db) are kept.
+32. **Parked flags (spec 18 wrap-up; code kept, flags off).**
+    - `PARSE_README`: see 31; claims 93 vs 132 (LLM), bullets 17 vs 38; AI Engineer +0.98, APM job +1.81 vs a
+      partitioned control (fails ±1).
+    - `PARSE_RESUME` (shadow, no shadow calls): stress set 0 wrong after tightening (table PDFs always fall back).
+    - `PARTITIONED_BATCHES`: labels drifted in both directions (23 changes on the 16 profiles: 18 up, 5 down); the
+      keyword-stuffer and padded profiles gained with unchanged evidence (AI2 +2.5, DS4_padded +1.5, PM2 +0.6) — fails
+      the no-gain gate (item 33's gate).
+    - `GROUPED_ITEM_JUDGING` (complexity only): 15 complexity labels changed in both directions; PM2 +2.25 with
+      unchanged evidence — fails the no-gain gate.
+    - `GEMMA_JUDGE`, `GROQ_JUDGE`: built, not compared live. Gemma 4 31B answered but returned many HTTP 500/503s.
+    - `REPO_CAP` (MAX_REPOS 8): untested on a profile with more than 8 repositories (the test profiles have at most 4).
+33. **Judge labels are sometimes generous with loosely related quotes, in the current batched route too** (e.g.
+    "Formulated and statistically validated 30+ business hypotheses" credited for Prioritization). Candidate fixes:
+    quote-source check, result check against outcome labels, Jev verification, a human-labelled gold set to measure
+    agreement [OPEN, for spec 19]. Not built now (no QUOTE_VALIDATION flag).
+34. **Permanent acceptance gate** (decided): in every on/off comparison (`scripts/parser_gates.py`,
+    `scripts/phase2_compare.py`), a keyword-stuffer profile (ID 2) or a padded variant must not gain from a change unless
+    its own evidence text changed; it is part of the DESIGN checks.
 

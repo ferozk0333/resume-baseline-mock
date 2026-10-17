@@ -206,8 +206,8 @@ def run_combo(flags: list[str], fresh: set[str] | None = None, pids: list[str] |
         if on.get("paused"):
             print(f"Stopped at the daily limit: {on['paused']}")
             break
-    results = {pid: {"control": e["off"], "parser": e["on"], "run": e["on_run"], "cid": e["on_cid"]}
-               for pid, e in done.items() if e.get("on_run")}
+    results = {pid: {"control": e["off"], "parser": e["on"], "run": e["on_run"], "cid": e["on_cid"],
+                     "control_cid": e.get("off_cid")} for pid, e in done.items() if e.get("on_run")}
     report = ranking(results) + [""] + design_checks(conn, results)
     (out_path.with_suffix(".md")).write_text("\n".join(report) + "\n")
     print("\n".join(report))
@@ -253,7 +253,7 @@ def run(flag: str) -> None:
             for k in j0.keys() & j1.keys():
                 agree[k[0]]["same" if j0[k] == j1[k] else "different"] += 1
         results[p["pid"]] = {"control": out[False]["final"], "parser": out[True]["final"], "run": out[True]["run"],
-                             "cid": out[True]["cid"]}
+                             "cid": out[True]["cid"], "control_cid": out[False]["cid"]}
     lines = [f"# {flag}: on vs off on the test profiles", "", "| profile | off | on | Δ |", "|---|---|---|---|"]
     lines += [f"| {pid} | {r['control']:.1f} | {r['parser']:.1f} | {r['parser'] - r['control']:+.2f} |"
               for pid, r in results.items() if r["control"] is not None and r["parser"] is not None]

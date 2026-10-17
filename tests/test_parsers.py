@@ -526,3 +526,23 @@ Compared to an unregularized baseline:
         "Built a feature store over Kafka streams.", "Deployed the model behind an API gateway.",
         "Model | PR-AUC\nXGBoost | 0.83"]
     assert p.bullets[0].source.quote.startswith("**1. Data processing:**")
+
+
+def test_no_gain_gate_for_keyword_stuffers_and_padded_profiles(tmp_path):
+    """Spec 18 wrap-up: ID 2 or a padded variant must not gain unless its own evidence text changed."""
+    from parser_gates import no_gain_gate
+    from extraction.records import RoleRec
+    conn = db.init_app_db(str(tmp_path / "n.db"))
+    same_a, same_b, other = (store.create_candidate(conn, n) for n in ("a", "b", "c"))
+    for cid, title in ((same_a, "Data Analyst"), (same_b, "Data Analyst"), (other, "Data Scientist")):
+        p = store.load_profile(conn, cid)
+        p.roles.append(RoleRec(title=title, employer="Acme", industry=None, start_date=None, end_date=None,
+                               is_current=True, team_size=None, quote=title, evidence_id=None))
+        store.save_profile(conn, cid, p)
+    lines = no_gain_gate(conn, {
+        "AI2": {"control": 54.6, "parser": 57.1, "control_cid": same_a, "cid": same_b},        # same text: FAIL
+        "DS4_padded": {"control": 72.4, "parser": 73.9, "control_cid": same_a, "cid": other},  # text changed: PASS
+        "PM2": {"control": 46.2, "parser": 46.0, "control_cid": same_a, "cid": same_b},        # no gain: PASS
+        "PM1": {"control": 87.7, "parser": 89.7, "control_cid": same_a, "cid": same_b}})       # not a stuffer
+    assert [ln.rsplit("→ ", 1)[1] for ln in lines] == ["FAIL", "PASS", "PASS"]
+    assert "gained with the same evidence text" in lines[0]

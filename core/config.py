@@ -286,12 +286,12 @@ PLAN_MAX_TOKENS = 16_000
 EXTRACT_CONCURRENCY = 16        # resume, LinkedIn, portfolio and READMEs at once (specs/09 §2.5); Claude cap applies
 
 # Code-first extraction (specs/18 §4). A parsed document is used only when its confidence gate passes; otherwise the
-# whole document goes to the LLM. PARSE_LINKEDIN is on (Phase 3 review); the others are off by default.
+# whole document goes to the LLM. PARSE_LINKEDIN is on (Phase 3 review); README and resume parsing are parked (off).
 PARSE_README = _env("PARSE_README", "0") == "1"          # README blocks kept by rule or Jev; no LLM call
 PARSE_LINKEDIN = _env("PARSE_LINKEDIN", "1") == "1"      # LinkedIn "Save to PDF" layout parser
 PARSE_RESUME = _env("PARSE_RESUME", "off")               # off | shadow (runs after the LLM, logged, never used)
 PARSE_SHADOW_CALLS = _env("PARSE_SHADOW_CALLS", "0") == "1"   # shadow parser may ask Jev / the small claims call
-REMOVE_HIDDEN_TEXT = _env("REMOVE_HIDDEN_TEXT", "0") == "1"   # white-on-white, tiny or off-page text (spec item 20)
+REMOVE_HIDDEN_TEXT = _env("REMOVE_HIDDEN_TEXT", "1") == "1"   # white-on-white, tiny or off-page text (spec item 20)
 PARSER_MAX_UNCLEAR = int(_env("PARSER_MAX_UNCLEAR", "3"))     # more unclear lines after Jev → LLM fallback
 README_MAX_CHARS = int(_env("README_MAX_CHARS", "1500"))       # kept README blocks, verbatim, as the description
 README_TABLE_MAX_ROWS = int(_env("README_TABLE_MAX_ROWS", "10"))   # data rows in a kept results table (one bullet)
@@ -309,7 +309,7 @@ GROQ_JUDGE = _env("GROQ_JUDGE", "0") == "1"                        # Groq in rou
 # Prompt-injection screen (specs/18 Phase 4; default off). Llama Prompt Guard 2 on Groq: a 512-token context window
 # (https://console.groq.com/docs/model/llama-prompt-guard-2-86m), so text is screened in chunks. Background only:
 # never blocks reading, never changes a score, never shown to recruiters.
-PROMPT_GUARD = _env("PROMPT_GUARD", "0") == "1"
+PROMPT_GUARD = _env("PROMPT_GUARD", "1") == "1"   # on (spec 18 wrap-up); needs LIVE=1 to call Groq
 PROMPT_GUARD_MODELS = [m.strip() for m in _env("PROMPT_GUARD_MODELS", "groq/meta-llama/llama-prompt-guard-2-86m,"
                                                 "groq/meta-llama/llama-prompt-guard-2-22m").split(",") if m.strip()]
 PROMPT_GUARD_THRESHOLD = float(_env("PROMPT_GUARD_THRESHOLD", "0.5"))
