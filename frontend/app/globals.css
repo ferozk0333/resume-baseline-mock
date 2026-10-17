@@ -78,6 +78,7 @@
   --field-foreground: #1f2329;
   --placeholder: #71757d;
   --readonly: #f4f5f7;
+  --header-h: 3.5rem;            /* set to the site header's real height (it wraps on narrow screens) */
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);

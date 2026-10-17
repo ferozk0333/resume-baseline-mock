@@ -45,7 +45,7 @@ export function SectionMenu({ entries, variant = "side" }: { entries: MenuEntry[
     );
   }
   return (
-    <nav aria-label="Review sections" data-testid="section-menu" className="sticky top-20 hidden lg:block">
+    <nav aria-label="Review sections" data-testid="section-menu" className="sticky top-[calc(var(--header-h)+1rem)] hidden lg:block">
       <ul className="space-y-0.5">
         {entries.map((e) => (
           <li key={e.id}>

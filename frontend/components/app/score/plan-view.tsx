@@ -95,7 +95,7 @@ export function PlanView({ id, onBack }: { id: string; onBack?: () => void }) {
             </TableHeader>
             <TableBody>
               {run.gaps.map((g) => (
-                <TableRow key={g.subcategory} id={`gap-${g.subcategory}`} className="scroll-mt-20 target:bg-amber-50">
+                <TableRow key={g.subcategory} id={`gap-${g.subcategory}`} className="scroll-mt-[calc(var(--header-h)+1rem)] target:bg-amber-50">
                   <TableCell className="font-medium whitespace-normal">
                     {g.label}
                     {(bench?.peer_signals.dimensions[g.dimension]?.signals ?? []).filter((s) => s.subcategory === g.subcategory).map((s) => (

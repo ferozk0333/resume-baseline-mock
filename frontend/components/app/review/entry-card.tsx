@@ -61,7 +61,7 @@ export function EntryCard({ id, title, org, dates, meta, sources = [], checkDate
   return (
     <article id={`card-${id}`} tabIndex={-1} data-testid={testId ?? "entry-card"} data-editing={isEditing || undefined}
       aria-label={`${kindLabel}: ${heading}`}
-      className={cn("scroll-mt-28 rounded-lg border bg-card outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring",
+      className={cn("scroll-mt-[calc(var(--header-h)+1rem)] rounded-lg border bg-card outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring",
         isEditing && "border-primary ring-2 ring-primary/20", checkDates && !isEditing && "border-amber-300")}>
       <header className="flex items-start gap-2 px-3 py-2.5">
         <button type="button" className="flex min-w-0 flex-1 items-start gap-2 rounded text-left" aria-expanded={shown}

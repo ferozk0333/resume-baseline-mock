@@ -167,7 +167,7 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
 function Section({ id, title, description, aside, children }: { id: string; title: string; description?: string;
   aside?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section id={id} tabIndex={-1} aria-labelledby={`${id}-title`} className="scroll-mt-32 space-y-3 rounded-xl border bg-card p-4 outline-none sm:p-5">
+    <section id={id} tabIndex={-1} aria-labelledby={`${id}-title`} className="scroll-mt-[calc(var(--header-h)+1rem)] space-y-3 rounded-xl border bg-card p-4 outline-none sm:p-5">
       <div>
         <h2 id={`${id}-title`} className="flex flex-wrap items-baseline gap-x-2 text-base font-semibold">{title}{aside}</h2>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}

@@ -93,7 +93,7 @@ function Profile() {
         </CardContent>
       </Card>
 
-      <section id="application-details" className="scroll-mt-20 space-y-3">
+      <section id="application-details" className="scroll-mt-[calc(var(--header-h)+1rem)] space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-lg font-semibold">Application details</h2>
           {details.saved_at ? <Badge variant="secondary">Saved {new Date(details.saved_at).toLocaleDateString()}</Badge>

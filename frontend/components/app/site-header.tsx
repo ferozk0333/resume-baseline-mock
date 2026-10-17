@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isWorkspace } from "@/components/app/app-main";
@@ -22,6 +22,16 @@ function useTaskCount(active: boolean, path: string) {
 
 export function SiteHeader() {
   const path = usePathname();
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {                      // the header wraps on narrower screens: sticky content sits below its real height
+    const el = ref.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty("--header-h", `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   // Admin: market pipeline, role baselines and the demo tools (the old "Score a profile" page and its flow).
   const mode = path.startsWith("/recruiter") ? "recruiter"
     : /^\/(admin|baselines|candidates)(\/|$)/.test(path) ? "admin" : "candidate";
@@ -40,21 +50,21 @@ export function SiteHeader() {
     : href === "/admin/demo" ? path.startsWith("/admin/demo") || path.startsWith("/candidates")
     : path.startsWith(href);
   return (
-    <header className="sticky top-0 z-30 border-b bg-white/90 backdrop-blur">
-      <div className={cn("mx-auto flex min-h-14 flex-wrap items-center gap-x-6 gap-y-1 py-2",
+    <header ref={ref} className="sticky top-0 z-30 border-b bg-white">
+      <div className={cn("mx-auto flex min-h-14 flex-wrap items-center gap-x-4 gap-y-1 py-2 lg:flex-nowrap xl:gap-x-6",
         isWorkspace(path) ? "px-4" : "max-w-6xl px-4 sm:px-6")}>
         <Link href={mode === "recruiter" ? "/recruiter" : mode === "admin" ? "/admin/market" : "/"} className="text-base font-semibold tracking-tight">
           Right<span className="text-primary">Staff</span>
         </Link>
         {(
-          <nav aria-label="Main" className="order-3 flex w-full flex-wrap items-center gap-1 text-sm sm:order-none sm:w-auto">
+          <nav aria-label="Main" className="order-3 flex w-full flex-wrap items-center gap-1 text-sm sm:order-none sm:w-auto lg:flex-nowrap">
             {nav.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
                 aria-current={active(n.href) ? "page" : undefined}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  "rounded-md px-2.5 py-1.5 whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground xl:px-3",
                   active(n.href) && "bg-muted text-foreground",
                 )}
               >
@@ -66,7 +76,7 @@ export function SiteHeader() {
             ))}
           </nav>
         )}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1 lg:flex-nowrap xl:gap-x-4">
           {mode === "candidate" && <ViewingAs />}
           <div role="group" aria-label="View" className="flex rounded-lg border bg-muted p-0.5 text-sm">
             {([["candidate", "/", "Candidate"], ["recruiter", "/recruiter", "Recruiter"], ["admin", "/admin/market", "Admin"]] as const).map(([m, href, label]) => (
