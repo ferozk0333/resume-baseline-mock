@@ -151,6 +151,8 @@ def score(path: str, cid: str, baseline: str, today: dt.date, judge):
 
 
 def labeller_for(scenario: str):
+    if scenario == "recorded":                         # Jev's answers from the live gate, replayed (no call)
+        return RecordedLabeller(JEV_RECORD)
     """Offline stand-ins for Jev, to bound the estimate: 'max' keeps every unclear block (as results: they become
     bullets, the most judging) and confirms every name; 'min' answers nothing (the offline parse)."""
     if scenario == "max":
@@ -179,7 +181,7 @@ def estimate() -> None:
         res = score(str(WORK), cid0, ROLES[label], run_date(conn, run_id), j)
         print(f"Control {label}: current {rec:.2f}, rebuilt {res.get('final') or 0:.2f}, unrecorded "
               f"{len(j.misses) + len(j.route_misses)}")
-    for scenario in ("min", "max"):
+    for scenario in (("recorded",) if JEV_RECORD.exists() else ("min", "max")):
         lab = labeller_for(scenario)
         counting = {"requests": 0, "questions": 0}
 
@@ -192,8 +194,9 @@ def estimate() -> None:
         cid, merged, parsed = build(conn, f"readme gate {scenario}", orig, readme)
         bullets = sum(len(r.extract.projects[0].bullets) for r in parsed.values() if r.extract is not None)
         ok = sum(1 for r in parsed.values() if r.extract is not None)
-        print(f"\nScenario {scenario}: {ok} of {len(parsed)} READMEs parsed, {bullets} bullets from result blocks; Jev for "
-              f"parsing: {counting['requests']} request(s), {counting['questions']} question(s)")
+        print(f"\nScenario {scenario}: {ok} of {len(parsed)} READMEs parsed, {bullets} bullets; Jev for parsing: "
+              f"{counting['requests']} request(s), {counting['questions']} question(s)"
+              + (f", {lab.counts.unanswered} not in the recording" if scenario == "recorded" else ""))
         union: set = set()
         for label, run_id in runs.items():
             j = ReplayJudge(conn, (orig,))

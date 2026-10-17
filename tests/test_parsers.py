@@ -490,3 +490,39 @@ def test_resume_gate_falls_back_on_table_pdfs_and_wrapped_titles():
         data = path.read_bytes()
     res = parse_resume("t.pdf", data, normalize_document("t.pdf", data), VOCAB, NoLabeller())
     assert res.extract is None and res.report.reasons[0].startswith("table layout in a PDF")
+
+
+def test_build_steps_become_bullets_and_lead_ins_are_dropped():
+    readme = """# fraud-model
+Detects fraudulent card payments from transaction data with a tuned gradient boosting model.
+
+## How it was built
+**1. Data processing:** A processing job cleans the data. It writes train and test splits.
+
+**2. Training:** Four algorithms were tuned with Bayesian search on PR-AUC.
+
+## Features
+- Live scoring: Scores each payment in under 50 ms.
+- Alerts: Flags risky payments to the review queue.
+
+## Implementation
+- Built a feature store over Kafka streams.
+- Deployed the model behind an API gateway.
+
+## Results
+Compared to an unregularized baseline:
+
+| Model | PR-AUC |
+|---|---|
+| XGBoost | 0.83 |
+"""
+    res = parse_readme(repo(readme), VOCAB, NoLabeller())
+    p = res.extract.projects[0]
+    assert "Detects fraudulent card payments" in p.description and "processing job" not in p.description
+    assert "Live scoring: Scores each payment" in p.description                 # a feature list stays description
+    assert [b.text for b in p.bullets] == [
+        "1. Data processing: A processing job cleans the data. It writes train and test splits.",
+        "2. Training: Four algorithms were tuned with Bayesian search on PR-AUC.",
+        "Built a feature store over Kafka streams.", "Deployed the model behind an API gateway.",
+        "Model | PR-AUC\nXGBoost | 0.83"]
+    assert p.bullets[0].source.quote.startswith("**1. Data processing:**")

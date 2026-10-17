@@ -224,8 +224,12 @@ def _parse(repo, vocab, labeller, report: Report) -> ParseResult:
         return ParseResult(None, report)
 
     kept = [b for b in bs if b.verdict in ("built", "result")]
-    built = [b for b in kept if b.verdict == "built"]
-    results = [b for b in kept if b.verdict == "result"]
+    # Build steps (a list, or paragraphs that open with a bold step label: "**1. Data processing:** …") become bullets
+    # like results, so the outcome and ownership judges see them as they see LLM bullets; other "what was built"
+    # text is the description.
+    steps = [b for b in kept if b.verdict == "built" and is_steps(b)]
+    built = [b for b in kept if b.verdict == "built" and not is_steps(b)]
+    results = [b for b in kept if b.verdict == "result" or b in steps]
     parts, used = [], 0
     if repo.description:
         parts.append(repo.description.strip())
@@ -244,7 +248,10 @@ def _parse(repo, vocab, labeller, report: Report) -> ParseResult:
     methods: dict[int, str] = {}
     bullets = []
     for b in results:
-        for text, quote in units(b):
+        pairs = units(b)
+        if b in steps and b.kind != "list" and pairs:          # a step paragraph is one bullet, as an LLM writes it
+            pairs = [(" ".join(t for t, _ in pairs), b.raw.replace("\n", " ").strip())]
+        for text, quote in pairs:
             bullet = schemas.Bullet(text=text, source=src(quote, f"repository, bullet {len(bullets) + 1}"))
             bullets.append(bullet)
             methods[id(bullet)] = b.by
@@ -285,6 +292,27 @@ def _parse(repo, vocab, labeller, report: Report) -> ParseResult:
 _MARKER = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
 
 
+_STEP_LABEL = re.compile(r"^\s*\*\*\s*\d+[.)]\s*[^*]{2,60}\*\*")          # "**1. Data processing:** …"
+_DONE = {"built", "ran", "wrote", "led", "made", "set", "cut", "won", "drove", "grew", "taught", "rebuilt", "began",
+         "brought", "chose", "found", "held", "kept", "met", "ran", "sold", "spent", "took", "won", "fed", "fit"}
+
+
+def _accomplishment(item: str) -> bool:
+    """A list item that says what was done ("Built parameterized pipelines…", "Used lookup activities…"), not a
+    feature or component ("Weather Forecast: Fetches real-time weather.")."""
+    m = re.match(r"\W*([A-Za-z]+)", _clean(item))
+    word = m.group(1).casefold() if m else ""
+    return word in _DONE or (word.endswith("ed") and len(word) > 4)
+
+
+def is_steps(b: Block) -> bool:
+    """Build steps: numbered bold step paragraphs, or a list whose every item is an accomplishment."""
+    if b.kind == "list":
+        items = [x for x in b.raw.splitlines() if _MARKER.match(x)]
+        return bool(items) and all(_accomplishment(_MARKER.sub("", x)) for x in items)
+    return bool(_STEP_LABEL.match(b.raw))
+
+
 def units(b: Block) -> list[tuple[str, str]]:
     """A result block as (bullet text, quote) pairs: one per list item or sentence; a table is one bullet. The quote
     is the source as written; the text drops Markdown marks only."""
@@ -315,9 +343,15 @@ def units(b: Block) -> list[tuple[str, str]]:
         out = [(_clean(i), i) for i in items]
     else:
         joined = " ".join(x.strip() for x in lines)
+        parts: list[str] = []
         for sentence in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"“(*])", joined):
-            out.append((_clean(sentence), sentence.strip()))
-    return [(t, q) for t, q in out if len(t.split()) >= 3]
+            if parts and re.fullmatch(r"\**\d+[.)]", parts[-1].strip()):
+                parts[-1] = f"{parts[-1]} {sentence}"      # "**1. Data processing:** …": the number opens the step
+            else:
+                parts.append(sentence)
+        out += [(_clean(x), x.strip()) for x in parts]
+    # A lead-in that only introduces what follows ("Compared to an unregularized baseline:") is not a bullet.
+    return [(t, q) for t, q in out if len(t.split()) >= 3 and not t.rstrip().endswith(":")]
 
 
 def top_languages(repo, n: int = 3) -> list[str]:

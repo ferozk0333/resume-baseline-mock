@@ -163,4 +163,10 @@ ask if wanted.
     check 4 Jev answered below the threshold both times (0.28 and 0.24); the Flash-Lite fallback said "yes" for DS4 and
     "no" three minutes later for DS4_padded, so identical text scored differently. Reusing the first answer makes scores
     consistent but hides that the model is unsure; re-asking shows the variance. To decide.
+30. **README build steps become bullets** (after the README live gate) — my interpretation; please confirm. In a
+    "what was built" section, a numbered bold step ("**1. Data processing:** …") is one bullet, and a list whose items
+    all open with a past-tense action ("Built…", "Used…") becomes one bullet per item; feature and component lists
+    ("Weather Forecast: Fetches real-time weather.") stay in the description. A lead-in ending in ":" is never a
+    bullet. On the live profile: 17 bullets (14 before; the LLM writes 38, mostly by rewording prose, which the
+    verbatim parser does not do).
 
