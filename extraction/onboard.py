@@ -306,6 +306,9 @@ class ProgressiveSave:
     def _apply(self, conn, doc: SourceDoc, result) -> None:
         profiles, sub = validate_results(conn, [doc], {doc.evidence_id: result}, self.today, set_status=False)
         with store.candidate_lock(self.candidate_id):
+            if self.started:                             # what the candidate deleted in Review stays deleted
+                from extraction.deletions import keep_deleted_out
+                profiles = [keep_deleted_out(conn, self.candidate_id, p) for p in profiles]
             current = store.load_profile(conn, self.candidate_id) if self.started else self.forms
             merged, merge_report = merge_profiles([current, *profiles])
             remap = {**merge_report.role_remap, **merge_report.project_remap}

@@ -33,8 +33,9 @@ def wait_shadow(timeout: float = 60) -> None:
 
 
 class Parsers:
-    def __init__(self, db_path: str | None = None, labeller=None, vocab=None):
+    def __init__(self, db_path: str | None = None, labeller=None, vocab=None, llm=None):
         self.db_path = db_path
+        self.llm = llm                                  # the small claims call (shadow, PARSE_SHADOW_CALLS only)
         self.labeller = labeller if labeller is not None else default_labeller()
         self._vocab = vocab
 
@@ -89,10 +90,11 @@ class Parsers:
         from extraction.parse.compare import compare_profiles
         from extraction.parse.resume import parse_resume
         from extraction.validate import validate_extraction
-        labeller = self.labeller if config.PARSE_SHADOW_CALLS else NoLabeller()
+        calls = config.PARSE_SHADOW_CALLS
+        labeller = self.labeller if calls else NoLabeller()
         try:
             res = parse_resume(Path(doc.file_path).name, Path(doc.file_path).read_bytes(), doc.text, self.vocab,
-                               labeller)
+                               labeller, llm=self.llm if calls else None)
             reference, _ = validate_extraction(doc, llm_result)
             comparison = None
             if res.extract is not None:

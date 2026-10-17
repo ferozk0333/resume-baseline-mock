@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import re
 
+from pydantic import BaseModel
+
+from core import config
 from extraction import schemas
 from extraction.parse import dates, sections
 from extraction.parse.claims import Vocabulary, award_sentences, find_names, guess_kind, split_skills_text
@@ -41,10 +44,49 @@ def title_score(text: str) -> int:
     return len(words & TITLE_WORDS)
 
 
-def parse_resume(filename: str, data: bytes, source: str, vocab: Vocabulary, labeller) -> ParseResult:
+def parse_resume(filename: str, data: bytes, source: str, vocab: Vocabulary, labeller, llm=None) -> ParseResult:
+    """`llm`: the small claims call (item 18c) for bullets with no vocabulary name; None = not made."""
     report = Report("resume")
     with Timer(report, labeller):
-        return _parse(filename, data, source, vocab, labeller, report)
+        return _parse(filename, data, source, vocab, labeller, report, llm)
+
+
+class NamedSkill(BaseModel):
+    name: str
+    bullet: int                          # the bullet's number in the list sent
+
+
+class SkillNames(BaseModel):
+    names: list[NamedSkill]
+
+
+def bullet_claims(llm, bullets: list[tuple[str, str]], report: Report) -> list[tuple[str, str]]:
+    """Spec item 18c: one small call per document over the bullets that matched no vocabulary name. Returns
+    (name, bullet location) for names that appear verbatim in their bullet; anything else is dropped (the model may
+    only copy, never write). A failed call adds nothing (the vocabulary and Jev claims stand)."""
+    from core.llm import LLMError
+    from core.text import wrap_tag
+    from extraction.extract import load_prompt
+    if not bullets:
+        return []
+    numbered = "\n".join(f"{i + 1}. {text}" for i, (text, _) in enumerate(bullets))
+    report.llm_calls += 1
+    try:
+        out = llm.parse(model=config.JUDGE_FALLBACK_MODEL, system=load_prompt("bullet_skills_system"),
+                        user=f"List the skills and tools in these resume bullets.\n\n{wrap_tag('bullets', numbered)}",
+                        output_type=SkillNames)
+    except LLMError as exc:
+        report.notes.append(f"claims call failed: {exc.__class__.__name__}")
+        return []
+    found, dropped = [], 0
+    for n in out.names:
+        if 1 <= n.bullet <= len(bullets) and n.name.strip() and n.name.strip() in bullets[n.bullet - 1][0]:
+            found.append((n.name.strip(), bullets[n.bullet - 1][1]))
+        else:
+            dropped += 1
+    if dropped:
+        report.notes.append(f"claims call: {dropped} name(s) not written exactly as in their bullet, dropped")
+    return found
 
 
 def _groups(lines, body: float):
@@ -127,10 +169,12 @@ def _role_parts(pieces: list[str]) -> tuple[str | None, str | None, int]:
     return title, employer, unclear
 
 
-def _parse(filename, data, source, vocab, labeller, report: Report) -> ParseResult:
+def _parse(filename, data, source, vocab, labeller, report: Report, llm=None) -> ParseResult:
     layout = read_layout(filename, data)
     lines = logical_lines(layout, source)
     body = layout.body_size
+    if layout.kind == "pdf" and _table_like(layout):
+        report.fail("table layout in a PDF (dates and entries in separate cells; not reliable yet)")
     groups = _groups(lines, body)
     found = {k for keys, _ in groups for k in keys}
     if not found & {"experience", "projects"}:
@@ -152,8 +196,17 @@ def _parse(filename, data, source, vocab, labeller, report: Report) -> ParseResu
         if key in ("experience", "projects"):
             for it in _items(glines):
                 if not it["head"]:
-                    unclear += [(f"line_{id(b)}", b, "", "") for b in it["body"][:1]]
+                    report.fail("bullets with no role or project above them")
                     continue
+                head_text = it["head"][0].text
+                if head_text.rstrip().endswith(".") and len(head_text.split()) >= 4 and not dates.find_any(head_text):
+                    report.fail("a role or project header reads like a sentence")
+                if key == "projects" and len(it["head"]) > 1 and (
+                        not all(dates.find_any(h.text) for h in it["head"][1:])
+                        or any(h.text[:1].islower() or h.text.startswith(("(", "-")) for h in it["head"][1:])):
+                    report.fail("a project title wraps onto a second line (narrow column)")
+                if key == "experience" and len(it["head"]) > 2:
+                    report.fail("a role header runs over three or more lines")
                 pieces, rng = _pieces(it["head"])
                 texts = [b.text for b in it["body"]]
                 if key == "experience" and (rng is not None or title_score(" ".join(pieces))):
@@ -184,7 +237,8 @@ def _parse(filename, data, source, vocab, labeller, report: Report) -> ParseResu
                     cells = hl.cells or [hl.text]
                     lead = hl.bold_lead
                     only_date = dates.find_any(lead) is not None and len(dates.find_any(lead).raw) >= len(lead) - 3
-                    if lead and not hl.bold and len(lead) >= 3 and not only_date:
+                    used_lead = bool(lead and not hl.bold and len(lead) >= 3 and not only_date)
+                    if used_lead:
                         cells = [lead]                    # the bold name before its description or dates
                     # In a table the first cell may be the dates: the name is the first cell that is not one.
                     raw = next((c for c in cells if not (dates.find_any(c) and len(dates.find_any(c).raw) >= len(c) - 3)),
@@ -197,6 +251,8 @@ def _parse(filename, data, source, vocab, labeller, report: Report) -> ParseResu
                             re.search(r"[·|,–—(-]\s*$", name[:r.span[0]]):
                         name = name[:r.span[0]]           # "Name · Sep 2025"; a year in a name stays ("Hackathon 2025")
                     name = name.strip(" *—–-|,")
+                    if not used_lead and not hl.bold and re.search(r"\s[—–]\s", name):
+                        report.fail("a project name may include its description (no bold name to tell them apart)")
                     i = len(out.projects) + 1
                     p = schemas.Project(kind="project", name=name, description=None, url=None,
                                         start=rng.start if rng else None, end=rng.end if rng else None,
@@ -239,13 +295,50 @@ def _parse(filename, data, source, vocab, labeller, report: Report) -> ParseResu
         a = answers.get(k)
         if a is not None and a.trusted and a.label == "yes":
             claim(guess_kind(f.text, vocab), f.text, where, "jev", bullet_ref=where)
-    unmatched = [b for b, _ in bullets_all if not find_names(b.text, vocab)]
-    if unmatched:
+    unmatched = [(b.text, where) for b, where in bullets_all if not find_names(b.text, vocab)]
+    if unmatched and llm is not None:
+        for name, where in bullet_claims(llm, unmatched, report):
+            claim(guess_kind(name, vocab), name, where, "llm", bullet_ref=where)
+    elif unmatched:
         report.notes.append(f"{len(unmatched)} bullet(s) with no vocabulary name: the small claims call would read "
-                            "them (not made in shadow mode without PARSE_SHADOW_CALLS)")
+                            "them (not made without PARSE_SHADOW_CALLS)")
+    missing = _not_in_source(out, source)
+    if missing:
+        report.fail(f"{missing} item(s) whose text is not in the source")
     report.items = {"roles": len(out.roles), "bullets": len(bullets_all), "projects": len(out.projects),
                     "claims": len(out.claims), "certifications": len(out.certifications)}
     return ParseResult(out if report.ok else None, report, methods)
+
+
+def _table_like(layout) -> bool:
+    """A table resume in a PDF: most text sits indented in a right-hand cell while the left edge holds only headings
+    and dates (a sidebar holds content instead), or rows start with a dates cell (resumes put dates last)."""
+    def date_only(t):
+        r = dates.find_any(t)
+        return r is not None and len(r.raw) >= len(t.strip()) - 3
+    if sum(1 for ln in layout.lines if len(ln.cells) > 1 and date_only(ln.cells[0])) >= 2:
+        return True
+    for page in sorted({ln.page for ln in layout.lines}):
+        lines = [ln for ln in layout.lines if ln.page == page]
+        x = min(ln.x0 for ln in lines)
+        right = [ln for ln in lines if ln.x0 >= x + 60]
+        left = [ln for ln in lines if ln.x0 < x + 60]
+        if len(lines) < 8 or len(right) < 0.6 * len(lines) or not left:
+            continue
+        marks = [ln for ln in left if sections.match(ln.text) or (dates.find_any(ln.text) and len(ln.text.split()) <= 4)]
+        if marks and len(marks) >= 0.6 * len(left) - 2:
+            return True
+    return False
+
+
+def _not_in_source(out: schemas.ProfileExtract, source: str) -> int:
+    """Items the quote check would drop: the parser read something that is not in the source text (a lost or garbled
+    line). Any such item sends the document to the LLM rather than leaving a gap."""
+    from extraction.validate import QuoteIndex
+    index = QuoteIndex(source)
+    quotes = [x.source.quote for x in [*out.roles, *out.projects, *out.claims, *out.certifications]]
+    quotes += [b.source.quote for x in [*out.roles, *out.projects] for b in x.bullets]
+    return sum(1 for q in quotes if not index.contains(q))
 
 
 def _cert_or_pub(ln, key: str, out, methods) -> None:

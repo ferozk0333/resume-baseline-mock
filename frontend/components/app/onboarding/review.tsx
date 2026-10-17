@@ -35,6 +35,7 @@ export function Review({ data, onChange, onConfirm, confirming, confirmLabel = "
 
   const skills = claims.filter((c) => c.kind !== "award");
   const pending = data.pending ?? [];
+  const mentions = data.mentions ?? [];
   return (
     <div className="space-y-6">
       {pending.length > 0 && (
@@ -57,6 +58,21 @@ export function Review({ data, onChange, onConfirm, confirming, confirmLabel = "
             <ul className="list-disc pl-4">{data.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
           </AlertDescription>
         </Alert>
+      )}
+
+      {mentions.length > 0 && (
+        <ul className="space-y-1.5" data-testid="mentions" aria-label="Deleted items another document mentions">
+          {mentions.map((m) => (
+            <li key={m.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-white px-3 py-2 text-sm">
+              <span>{m.source} also mentions <span className="font-medium">{m.label}</span></span>
+              <span className="text-xs text-muted-foreground">(you deleted it)</span>
+              <Button variant="outline" size="sm" className="ml-auto"
+                onClick={() => apply({ op: "add_back", item: "mention", id: m.id }, "Added back")}>
+                <Undo2 /> Add back
+              </Button>
+            </li>
+          ))}
+        </ul>
       )}
 
       <Section title="Roles" description="Your work experience. Edit anything that was read wrongly.">

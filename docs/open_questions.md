@@ -132,10 +132,9 @@ ask if wanted.
 20. **Production cost of early start for abandoned onboardings** [OPEN]. Role-specific judging starts as soon as the
     documents are read (specs/18 §2 item 7), so an onboarding that is never confirmed still spends its judge calls.
     Accepted for the demo; to decide before production (e.g. start only after Review opens, or cap per day).
-21. **README description (specs/18 item 22)** — my interpretation; please confirm. The repository's own description
-    (GitHub API) comes first, then the kept README blocks, verbatim, up to `README_MAX_CHARS` (1500). The LLM wrote
-    README bullets; the parser writes no bullets. Claims: the repository's main languages (up to 3 with ≥10% of the
-    code, so vendored files don't add 20 languages) and vocabulary names in kept blocks that Jev confirms.
+21. **README description and bullets (specs/18 item 22).** Decided in the Phase 3 review: "what was built" blocks →
+    description (GitHub description first, ≤1,500 characters); "result/outcome" blocks → bullets, one per sentence,
+    list item or table row (a table's header row is skipped), verbatim; language claims capped at the top 3.
 22. **Shadow mode makes no calls by default** — my interpretation; please confirm. With `PARSE_SHADOW_CALLS=0` the
     shadow résumé parser asks neither Jev (paid) nor the small claims call (free-tier quota the real run needs);
     those names are counted, not asked. Turn it on to measure the full route.
@@ -145,11 +144,17 @@ ask if wanted.
     LinkedIn's export layout keeping all information (every skill under Top Skills; issue date and credential ID
     under each certificate), which a real export does not show. (c) Gate 26 counts an extra item as allowed when it
     is verbatim in the source ("no extra items that aren't in the source").
-24. **Early Review merges in the usual order** — my interpretation; please confirm. A source finished early waits for
-    the ones before it (resume, LinkedIn, repos, portfolio), so the final profile is identical to today's. An item the
-    candidate deletes in Review can come back if a later source names it again.
-25. **Award sentences in a summary** — added after the first gate run (a general rule, as the extraction prompt
-    asks): "Recognized with the X Fellowship…" in a summary is an award claim. Please confirm.
+24. **Early Review merges in the usual order.** A source finished early waits for the ones before it (resume,
+    LinkedIn, repos, portfolio), so the final profile is identical to today's. Deleted items stay deleted (Phase 3
+    review): matched by normalized name (roles by the merge's similarity rule), shown as "LinkedIn also mentions X ·
+    Add back". The memory lasts until the next upload.
+25. **Award sentences in a summary** are a parser rule only; the shared extraction prompt was not changed in
+    spec 18 (confirmed in the Phase 3 review).
 26. **Skill vs tool for unknown names** uses a code heuristic (display only; kind changes no score). The Jev Choice
     for unknowns (item 19) is not built.
+27. **Table PDFs fall back** (Phase 3 review): a resume PDF laid out as a table (dates in their own cell) goes to the
+    LLM, as do a project title wrapped onto a second line, a header that reads like a sentence, bullets with no role or
+    project above them and any item not found in the source. DOCX tables are still parsed (14 of 16 correct, 0 wrong).
+28. **Replays prefer the candidate's own answers.** The same text judged for two candidates can get different answers
+    (a low-confidence Jev label falls back to an LLM); DS4 replayed 74.7 instead of 74.8 for that reason. Fixed.
 

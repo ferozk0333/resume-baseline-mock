@@ -63,6 +63,8 @@ export type ProfileResponse = {
   sources: { id: string; type: string; status: string; text: string | null }[];
   /** Sources still being read while Review is open (specs/18 Phase 3); Confirm waits for them. */
   pending?: { type: string; label: string }[]; reading?: boolean;
+  /** Deleted in Review, then named again by a source read later: never re-added, offered with "Add back". */
+  mentions?: { id: string; item_type: string; label: string; source: string }[];
 };
 
 export type Judgment = { question: string; subject_type: string; subject: string; label: string | null;

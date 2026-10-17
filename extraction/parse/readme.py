@@ -2,9 +2,10 @@
 
 The README is split into blocks. Code decides the clear ones (code, badges and images, and setup / install /
 license / contributing sections are dropped; overview, features, architecture and results are kept); Jev decides
-the rest ("describes what was built" / "a result or outcome" are kept; setup and other are dropped). The kept
-blocks, verbatim and in order, become the project description (after the repository's own description, capped
-at README_MAX_CHARS). Claims: the repository languages from the GitHub API, and vocabulary names inside kept
+the rest ("describes what was built" / "a result or outcome" are kept; setup and other are dropped). Kept "what
+was built" blocks, verbatim and in order, become the project description (after the repository's own description,
+capped at README_MAX_CHARS); kept "result or outcome" blocks become the project's bullets, one per sentence, list
+item or table row, verbatim (Phase 3 review), so the outcome and impact judges see them as they see LLM bullets. Claims: the repository languages from the GitHub API, and vocabulary names inside kept
 blocks that Jev confirms the candidate used. Too many blocks still unclear after Jev → the README goes to the LLM.
 """
 from __future__ import annotations
@@ -54,6 +55,7 @@ class Block:
     kind: str                     # prose | list | table | code
     verdict: str | None = None    # built | result | setup | other (None = unclear)
     by: str = "parser"            # parser | jev
+    raw: str = ""                 # the block's lines as written (Markdown marks kept): bullet quotes come from here
 
 
 _IMG = re.compile(r"!\[[^\]]*\]\([^)]*\)|<img\b[^>]*>|\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)")
@@ -75,14 +77,15 @@ def blocks(readme: str) -> list[Block]:
     removed; a line left empty by that is dropped."""
     out: list[Block] = []
     heading, cur, kind, fence = "", [], None, False
+    raw_lines: list[str] = []
     readme = re.sub(r"<!--.*?-->", "", readme, flags=re.S)
 
     def flush():
-        nonlocal cur, kind
+        nonlocal cur, kind, raw_lines
         text = "\n".join(cur).strip()
         if text:
-            out.append(Block(text, heading, kind or "prose"))
-        cur, kind = [], None
+            out.append(Block(text, heading, kind or "prose", raw="\n".join(raw_lines)))
+        cur, kind, raw_lines = [], None, []
 
     lines = readme.splitlines()
     for i, raw in enumerate(lines):
@@ -123,6 +126,7 @@ def blocks(readme: str) -> list[Block]:
             flush()
         kind = kind or this
         cur.append(line)
+        raw_lines.append(raw.rstrip())
     if fence:
         flush()
     flush()
@@ -216,11 +220,13 @@ def _parse(repo, vocab, labeller, report: Report) -> ParseResult:
         return ParseResult(None, report)
 
     kept = [b for b in bs if b.verdict in ("built", "result")]
+    built = [b for b in kept if b.verdict == "built"]
+    results = [b for b in kept if b.verdict == "result"]
     parts, used = [], 0
     if repo.description:
         parts.append(repo.description.strip())
         used = len(parts[0])
-    for b in kept:
+    for b in built:
         room = config.README_MAX_CHARS - used
         if room <= 40:
             break
@@ -229,12 +235,18 @@ def _parse(repo, vocab, labeller, report: Report) -> ParseResult:
             parts.append(text)
             used += len(text) + 2
     description = "\n\n".join(parts) or None
-    by_jev = any(b.by == "jev" for b in kept)
+    by_jev = any(b.by == "jev" for b in built)
 
     methods: dict[int, str] = {}
+    bullets = []
+    for b in results:
+        for text, quote in units(b):
+            bullet = schemas.Bullet(text=text, source=src(quote, f"repository, bullet {len(bullets) + 1}"))
+            bullets.append(bullet)
+            methods[id(bullet)] = b.by
     project = schemas.Project(kind="project", name=repo.name, description=description, url=repo.html_url, start=None,
-                              end=None, role_index=None, bullets=[], source=src(f"Repository: {repo.full_name}",
-                                                                                "repository"))
+                              end=None, role_index=None, bullets=bullets, source=src(f"Repository: {repo.full_name}",
+                                                                                     "repository"))
     methods[id(project)] = "jev" if by_jev else "parser"
     claims: list[schemas.Claim] = []
     for lang in top_languages(repo):
@@ -261,8 +273,37 @@ def _parse(repo, vocab, labeller, report: Report) -> ParseResult:
                                                         or not answers[f"uses_{i}"].trusted))
     if unconfirmed:
         report.notes.append(f"{unconfirmed} vocabulary name(s) not confirmed by Jev: left out")
-    report.items = {"projects": 1, "claims": len(claims), "kept_blocks": len(kept), "blocks": len(bs)}
+    report.items = {"projects": 1, "bullets": len(bullets), "claims": len(claims), "kept_blocks": len(kept),
+                    "blocks": len(bs)}
     return ParseResult(schemas.PortfolioExtract(projects=[project], claims=claims), report, methods)
+
+
+_MARKER = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
+
+
+def units(b: Block) -> list[tuple[str, str]]:
+    """A result block as (bullet text, quote) pairs: one per list item, table row (not the header) or sentence. The
+    quote is the source as written; the text drops Markdown marks only."""
+    out: list[tuple[str, str]] = []
+    lines = [x for x in b.raw.splitlines() if x.strip()]
+    if b.kind == "table":
+        rows = [x for x in lines if not re.fullmatch(r"\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?", x.strip())]
+        for row in rows[1:]:                                  # the first row is the header
+            cells = [_clean(c) for c in row.strip().strip("|").split("|")]
+            out.append((" | ".join(c for c in cells if c), row.strip()))
+    elif b.kind == "list":
+        items: list[str] = []
+        for x in lines:
+            if _MARKER.match(x) or not items:
+                items.append(_MARKER.sub("", x).strip())
+            else:
+                items[-1] += " " + x.strip()                  # an item's wrapped line
+        out = [(_clean(i), i) for i in items]
+    else:
+        joined = " ".join(x.strip() for x in lines)
+        for sentence in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"“(*])", joined):
+            out.append((_clean(sentence), sentence.strip()))
+    return [(t, q) for t, q in out if len(t.split()) >= 3]
 
 
 def top_languages(repo, n: int = 3) -> list[str]:

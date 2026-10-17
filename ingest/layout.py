@@ -62,6 +62,7 @@ class Layout:
     columns: int = 1                            # most columns seen on one page
     page_width: float = 612.0
     footers: int = 0                            # "Page N of M" lines (LinkedIn's export has one per page)
+    tables: int = 0                             # rows read across table cells (dates in one cell, the entry in another)
 
     @property
     def body_size(self) -> float:
@@ -423,6 +424,7 @@ def read_docx(data: bytes) -> Layout:
     out = Layout("docx")
     for block in document.iter_inner_content():
         if isinstance(block, docx.table.Table):
+            out.tables += len(block.rows)
             for row in block.rows:
                 seen = set()
                 for i, c in enumerate(row.cells):

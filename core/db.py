@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -165,6 +165,15 @@ CREATE TABLE IF NOT EXISTS document_texts (
   created_at TEXT,
   hidden_json TEXT,               -- hidden text removed before extraction (REMOVE_HIDDEN_TEXT; for Admin only)
   PRIMARY KEY (file_sha256, normalizer)
+);
+
+CREATE TABLE IF NOT EXISTS deleted_items (   -- deleted in Review while sources are read: not re-added by a later one
+  id TEXT PRIMARY KEY, candidate_id TEXT, item_type TEXT, key TEXT, label TEXT, payload TEXT, created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS suppressed_items ( -- a later source named a deleted item: "LinkedIn also mentions X · Add back"
+  id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, item_type TEXT, key TEXT, label TEXT, payload TEXT,
+  restored INTEGER DEFAULT 0, created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS parser_runs (     -- code-first extraction per document (specs/18 §4): used or shadow
@@ -615,6 +624,10 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
     (24, [*(f"ALTER TABLE {t} ADD COLUMN method TEXT" for t in ("roles", "projects", "bullets", "claims",
                                                                  "certifications")),
           "ALTER TABLE document_texts ADD COLUMN hidden_json TEXT", PARSER_RUNS]),
+    (25, ["CREATE TABLE IF NOT EXISTS deleted_items (id TEXT PRIMARY KEY, candidate_id TEXT, item_type TEXT, key TEXT, "
+          "label TEXT, payload TEXT, created_at TEXT)",
+          "CREATE TABLE IF NOT EXISTS suppressed_items (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, "
+          "item_type TEXT, key TEXT, label TEXT, payload TEXT, restored INTEGER DEFAULT 0, created_at TEXT)"]),
 ]
 
 

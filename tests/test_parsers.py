@@ -144,7 +144,15 @@ pip install -r requirements.txt
 ```
 
 ## Results
-PR-AUC 0.81 on a held-out month; the top decile catches 46% of churners.
+PR-AUC **0.81** on a held-out month; the top decile catches 46% of churners. Used weekly by 3 retention managers.
+
+- Cut manual review time
+  from 6 hours to 1 a week.
+- Two teams adopted it.
+
+| Model | PR-AUC |
+|---|---|
+| XGBoost tuned with Optuna | 0.81 |
 
 ## Odd heading
 We ran the model each Monday for the retention team.
@@ -173,13 +181,31 @@ def test_readme_blocks_by_rule_and_jev_for_the_unclear_one():
     assert res.report.ok
     desc = res.extract.projects[0].description
     assert desc.startswith("Churn model\n\nPredicts which members will cancel")
-    assert "PR-AUC 0.81" in desc and "We ran the model each Monday" in desc          # kept by rule, by Jev
-    assert "pip install" not in desc and "MIT" not in desc and "shields.io" not in desc
+    assert "We ran the model each Monday" in desc                                      # "built", kept by Jev
+    assert "PR-AUC" not in desc and "pip install" not in desc and "MIT" not in desc and "shields.io" not in desc
+    bullets = res.extract.projects[0].bullets                                         # results: one per sentence/item/row
+    assert [b.text for b in bullets] == [
+        "PR-AUC 0.81 on a held-out month; the top decile catches 46% of churners.",
+        "Used weekly by 3 retention managers.", "Cut manual review time from 6 hours to 1 a week.",
+        "Two teams adopted it.", "XGBoost tuned with Optuna | 0.81"]
+    assert bullets[0].source.quote == "PR-AUC **0.81** on a held-out month; the top decile catches 46% of churners."
+    assert {res.method_of(b) for b in bullets} == {"parser"}
     assert res.method_of(res.extract.projects[0]) == "jev"
     claims = {c.name: res.method_of(c) for c in res.extract.claims}
     assert claims["Python"] == "parser" and claims.get("XGBoost") == "jev" and "Dockerfile" not in claims
     assert any(k.startswith("block_") for k in seen)
     assert [b.kind for b in blocks(README)][:2] == ["prose", "code"]
+
+
+def test_readme_bullets_pass_the_quote_check_and_reach_the_repo_project():
+    from extraction.validate import repo_profile
+    rp = repo()
+    res = parse_readme(rp, VOCAB, FakeLabeller(lambda a: ("built", 0.9) if a.kind == "choice" else ("no", 0.9)))
+    profile, report = repo_profile(SourceDoc("g", "github_repo", rp.as_text(), "repo", repo=rp), res.extract,
+                                   method_of=res.method_of)
+    project = profile.projects[0]
+    assert report.dropped == 0 and len(project.bullets) == 5 and project.description.startswith("Churn model")
+    assert {b.method for b in project.bullets} == {"parser"} and project.is_github
 
 
 def test_readme_low_confidence_or_too_many_unclear_blocks_fall_back():
@@ -391,3 +417,67 @@ def test_admin_extraction_endpoint_lists_parser_runs_and_hidden_text(tmp_path, m
         out = api.get(f"/admin/candidates/{cid}/extraction").json()
     assert out["documents"][0]["hidden_text"][0]["text"] == "secret"
     assert out["parser_runs"][0]["outcome"] == "parsed"
+
+
+class ClaimsLLM:
+    """The small claims call (item 18c): one real name and one the model rewrote (must be dropped)."""
+
+    def __init__(self):
+        self.calls = []
+
+    def parse(self, *, model, system, user, output_type):
+        from extraction.parse.resume import SkillNames
+        self.calls.append(user)
+        assert output_type is SkillNames and "<bullets>" in user
+        return SkillNames.model_validate({"names": [{"name": "Metabase", "bullet": 1},
+                                                    {"name": "Metabase BI", "bullet": 1}]})
+
+
+SHADOW_RESUME = ["Ada Lovelace", "ada@example.com", "EXPERIENCE", "Data Analyst | Acme Retail    Jan 2023 - Present",
+                 "- Set up Metabase views that the sales team reads every Monday morning.",
+                 "- Built a churn model in Python and scikit-learn that cut churn 12%.", "SKILLS",
+                 "Languages: SQL, Tableau"]
+
+
+def test_shadow_calls_are_off_by_default_and_on_ask_jev_and_the_claims_call(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "PARSE_RESUME", "shadow")
+    pdf = tmp_path / "cv.pdf"
+    pdf.write_bytes(make_pdf(SHADOW_RESUME))
+    text = normalize_document("cv.pdf", pdf.read_bytes())
+    asked = []
+    lab = FakeLabeller(lambda a: (asked.append(a.key), ("yes", 0.9))[1])
+    llm = ClaimsLLM()
+    doc = SourceDoc("ev", "resume", text, "Resume", file_path=str(pdf))
+    empty = schemas.ProfileExtract(roles=[], projects=[], claims=[], certifications=[])
+
+    monkeypatch.setattr(config, "PARSE_SHADOW_CALLS", False)
+    Parsers(None, lab, VOCAB, llm=llm).shadow(doc, empty)
+    wait_shadow()
+    assert asked == [] and llm.calls == []                       # no Jev, no LLM without PARSE_SHADOW_CALLS
+
+    res = parse_resume("cv.pdf", pdf.read_bytes(), text, VOCAB, lab, llm=llm)
+    claims = {c.name: res.method_of(c) for c in res.extract.claims}
+    assert claims["Python"] == "jev" and claims["scikit-learn"] == "jev"          # vocabulary names, Jev-confirmed
+    assert claims["Metabase"] == "llm" and "Metabase BI" not in claims       # verbatim only
+    assert len(llm.calls) == 1 and "Metabase views" in llm.calls[0] and "churn model" not in llm.calls[0]
+    assert res.report.llm_calls == 1
+
+    monkeypatch.setattr(config, "PARSE_SHADOW_CALLS", True)
+    Parsers(None, lab, VOCAB, llm=llm).shadow(doc, empty)
+    wait_shadow()
+    assert len(llm.calls) == 2
+
+
+def test_resume_gate_falls_back_on_table_pdfs_and_wrapped_titles():
+    from render_test_profiles import resume_pdf_table
+    import tempfile
+    md = ("**Ada Lovelace**\nData Analyst · ada@example.com\n\n**Experience**\n\n"
+          "**Data Analyst** — Acme Retail, Seattle, WA · Jan 2023 – Present\n- Built a churn model in Python.\n"
+          "- Automated weekly sales reports with SQL.\n\n**Analytics Intern** — Beta Corp, Austin, TX · Jun 2022 – Aug 2022\n"
+          "- Cleaned survey data with pandas.\n\n**Skills**\nPython, SQL, pandas")
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "t.pdf"
+        resume_pdf_table(md, path)
+        data = path.read_bytes()
+    res = parse_resume("t.pdf", data, normalize_document("t.pdf", data), VOCAB, NoLabeller())
+    assert res.extract is None and res.report.reasons[0].startswith("table layout in a PDF")

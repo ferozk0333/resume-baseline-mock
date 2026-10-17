@@ -55,6 +55,18 @@ PROFILES = ROOT / "rightstaff-test-profiles" / "profiles"
 EXPECTED = "1 > {3, 4} > 2 > 5"
 
 
+def db_copy(src: Path, dst: Path) -> None:
+    """A consistent copy of a live database (the running server's recent writes may still be in its WAL file)."""
+    import sqlite3
+    if dst.exists():
+        dst.unlink()
+    a, b = sqlite3.connect(str(src)), sqlite3.connect(str(dst))
+    with b:
+        a.backup(b)
+    a.close()
+    b.close()
+
+
 def counting():
     """No Jev offline: answers nothing, counts the requests and questions a live run would send."""
     return FakeLabeller(lambda a: None)
@@ -66,12 +78,12 @@ def fmt(v, d=1):
 
 # --- Rebuilding profiles from saved dicts ------------------------------------------------------------------------
 
-def score(db_path: str, cid: str, baseline_id: str, today: dt.date):
+def score(db_path: str, cid: str, baseline_id: str, today: dt.date, prefer: tuple[str, ...] = ()):
     from graph.context import Deps
     from graph.pipeline import Pipeline
     from judges.replay_judge import ReplayJudge
     conn = db.connect(db_path)
-    judge = ReplayJudge(conn)
+    judge = ReplayJudge(conn, prefer)
     conn.close()
     res = Pipeline(Deps(db_path, judge, planner=None, today=today), print_timings=False).score(cid, baseline_id,
                                                                                              plan=False)
@@ -183,6 +195,7 @@ def readme_section(conn, live_cid: str | None) -> tuple[list[str], dict]:
         if r.ok:
             stats["llm_calls_saved"] += 1
             stats["parser_claims"] += len(res.extract.claims)
+            stats["parser_bullets"] = stats.get("parser_bullets", 0) + len(res.extract.projects[0].bullets)
             desc = res.extract.projects[0].description or ""
             lines.append(f"| {repo.name[:38]} | parsed | {r.items.get('kept_blocks')} / {r.items.get('blocks')} | "
                          f"{r.unclear} | {lab.counts.questions} | {len(res.extract.claims)} / {llm_claims} | {len(desc)} |")
@@ -195,8 +208,8 @@ def readme_section(conn, live_cid: str | None) -> tuple[list[str], dict]:
             f"{statistics.median(stats['seconds']) * 1000:.0f} ms. LLM calls saved: {stats['llm_calls_saved']}. "
             f"With Jev live: {stats['would_ask']} question(s) in {stats['requests']} request(s).", "",
             f"Claims: parser {stats['parser_claims']} (languages from the API; vocabulary names need Jev) vs LLM "
-            f"{stats['llm_claims']}; the LLM also wrote {stats['llm_bullets']} README bullets, the parser writes the "
-            "kept blocks as the description instead.", "", *lines, ""]
+            f"{stats['llm_claims']}. Bullets: LLM {stats['llm_bullets']}, parser {stats.get('parser_bullets', 0)} (one per "
+            "sentence, list item or table row of the kept result blocks; 'what was built' blocks go to the description).", "", *lines, ""]
     return out, stats
 
 
@@ -215,7 +228,8 @@ def profiles_section(work_db: str) -> tuple[list[str], dict]:
         pid = profile_id(conn, a["candidate_id"])
         run = conn.execute("SELECT started_at, baseline_id FROM runs WHERE id = ?", (a["run_id"],)).fetchone()
         rec, _ = final_of(conn, a["run_id"])
-        rows[pid] = {"baseline": run[1], "today": dt.date.fromisoformat(run[0][:10]), "recorded": rec.final}
+        rows[pid] = {"baseline": run[1], "today": dt.date.fromisoformat(run[0][:10]), "recorded": rec.final,
+                     "original": a["candidate_id"]}
     out = ["## 2. The 16 test profiles (PARSE_LINKEDIN)", "",
            "Each profile is rebuilt as a new candidate and scored with replayed judgments. *Control*: today's demo "
            "profile (structured parse) — must reproduce the recorded score. *Parser*: the same, with the LinkedIn "
@@ -233,7 +247,7 @@ def profiles_section(work_db: str) -> tuple[list[str], dict]:
             continue
         info = rows[pf.id]
         cid = load_profile_file(conn, path)
-        res, judge = score(work_db, cid, info["baseline"], info["today"])
+        res, judge = score(work_db, cid, info["baseline"], info["today"], (info["original"],))
         control, control_miss = res.get("final"), len(judge.misses)
         li_out, li_final, li_miss, delta = "no LinkedIn", control, 0, 0.0
         export = STRESS / f"{pf.id}_linkedin_export.pdf"
@@ -250,7 +264,7 @@ def profiles_section(work_db: str) -> tuple[list[str], dict]:
                                                 info["today"], parsed.method_of)
                     return li, text
                 cid2 = load_profile_file(conn, path, linkedin=read)
-                res2, judge2 = score(work_db, cid2, info["baseline"], info["today"])
+                res2, judge2 = score(work_db, cid2, info["baseline"], info["today"], (info["original"],))
                 li_final, li_miss = res2.get("final"), len(judge2.misses)
                 delta = (li_final - control) if li_final is not None and control is not None else None
                 entry = {"control": control, "parser": li_final, "cid": cid2, "run": res2.get("run_id"),
@@ -266,7 +280,7 @@ def profiles_section(work_db: str) -> tuple[list[str], dict]:
                 stats_rd[r.report.outcome] += 1
                 return r
             cid3 = load_profile_file(conn, path, readme=rd)
-            res3, judge3 = score(work_db, cid3, info["baseline"], info["today"])
+            res3, judge3 = score(work_db, cid3, info["baseline"], info["today"], (info["original"],))
             rd_final, rd_miss = res3.get("final"), len(judge3.misses)
             readme_rows.append(f"| {pf.id} | {fmt(control)} | {fmt(rd_final)} | {len(judge3.misses)} | "
                                f"{stats_rd['parsed']} parsed, {stats_rd['fallback']} fell back |")
@@ -439,7 +453,7 @@ def main() -> None:
     ap.add_argument("--skip-profiles", action="store_true")
     args = ap.parse_args()
     work = Path(tempfile.mkdtemp(prefix="gates-")) / "gates.db"
-    shutil.copy(args.db, work)
+    db_copy(Path(args.db), work)
     conn = db.connect(str(work))
     live = args.live_candidate or latest_live_candidate(conn)
     uploads = find_uploads(conn)

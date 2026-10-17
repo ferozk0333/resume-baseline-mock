@@ -187,12 +187,15 @@ human reviewers: don't send real personal data on the free tier.
 - Logs (`rightstaff.routing`): `failover: <task> <model> → <next> (<why>)`, `all busy: …`, `fail fast: …`. Runs record
   calls per task per model (`calls_by_task`) and failovers in their timings.
 
-### Code-first extraction (specs/18, phase 3; flags off by default)
+### Code-first extraction (specs/18, phase 3; PARSE_LINKEDIN on, the other flags off)
 - **Design:** code builds the structure, Jev decides what is unclear, the LLM is the fallback. Every field is a
   verbatim span of the source, so the usual quote check, claim, award and publication rules apply unchanged.
-- **`PARSE_LINKEDIN`:** a parser for LinkedIn's "Save to PDF" layout (sidebar + main column, font tiers read from the
-  document). **`PARSE_README`:** README blocks kept by rule (overview, features, architecture, results) or by Jev;
-  setup, install, licence, badges and code are dropped; the kept text becomes the repository's description.
+- **`PARSE_LINKEDIN`** (on by default): a parser for LinkedIn's "Save to PDF" layout (sidebar + main column, font
+  tiers read from the document). A real export shows less than the profile: only the top 3 skills, certificate names
+  without issuer, date or credential ID, and no projects; the parser reads what the export shows, as the LLM does. **`PARSE_README`:** README blocks kept by rule (overview, features, architecture, results) or by Jev;
+  setup, install, licence, badges and code are dropped. Kept "what was built" text becomes the repository's
+  description (after its GitHub description, ≤1,500 characters); kept results become the project's bullets, one per
+  sentence, list item or table row, verbatim.
   **`PARSE_RESUME=shadow`:** the résumé is still read by the LLM; afterwards the parser reads it too and the
   comparison is logged (`parser_runs`); nothing from it is shown or scored.
 - **Confidence gate:** a document goes to the LLM when it doesn't look like the expected layout, a role has no dates,
@@ -204,8 +207,14 @@ human reviewers: don't send real personal data on the free tier.
 - **Review opens early:** each source is saved into the profile as soon as it is read (in the usual order, so the
   final profile is the one a single merge gives); Review opens once the resume is read, shows "Still reading
   LinkedIn…" per pending source, and Confirm waits for every source. Early-start judging runs again per source.
+  An item deleted in Review is never re-added by a later source: Review shows "LinkedIn also mentions X · Add back".
 - **Gates:** `scripts/parser_gates.py` (offline; replays recorded judgments, `judges/replay_judge.py`) writes
   `timings/parser_gates.md`. `scripts/render_test_profiles.py --stress` renders the layout stress set.
+  `scripts/readme_live_gate.py --estimate` counts the calls of the README gate on the latest live profile; `--run`
+  (LIVE=1, after approval) runs it.
+- **Shadow calls** (`PARSE_SHADOW_CALLS=1`): Jev confirms vocabulary skills inside résumé bullets, and one small call
+  per document (`prompts/bullet_skills_system.txt`, the judge fallback model) lists skill and tool names from bullets
+  that matched no vocabulary; names not written exactly as in their bullet are dropped.
 
 ## Tests
 ```bash

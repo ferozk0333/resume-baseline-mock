@@ -247,10 +247,10 @@ EXTRACT_MAX_TOKENS = 12_000     # a dense one-page resume needs ~7.3k (phase 9);
 PLAN_MAX_TOKENS = 16_000
 EXTRACT_CONCURRENCY = 16        # resume, LinkedIn, portfolio and READMEs at once (specs/09 §2.5); Claude cap applies
 
-# Code-first extraction (specs/18 §4). Every flag is off by default: off = today's LLM extraction exactly.
-# A parsed document is used only when its confidence gate passes; otherwise the whole document goes to the LLM.
+# Code-first extraction (specs/18 §4). A parsed document is used only when its confidence gate passes; otherwise the
+# whole document goes to the LLM. PARSE_LINKEDIN is on (Phase 3 review); the others are off by default.
 PARSE_README = _env("PARSE_README", "0") == "1"          # README blocks kept by rule or Jev; no LLM call
-PARSE_LINKEDIN = _env("PARSE_LINKEDIN", "0") == "1"      # LinkedIn "Save to PDF" layout parser
+PARSE_LINKEDIN = _env("PARSE_LINKEDIN", "1") == "1"      # LinkedIn "Save to PDF" layout parser
 PARSE_RESUME = _env("PARSE_RESUME", "off")               # off | shadow (runs after the LLM, logged, never used)
 PARSE_SHADOW_CALLS = _env("PARSE_SHADOW_CALLS", "0") == "1"   # shadow parser may ask Jev / the small claims call
 REMOVE_HIDDEN_TEXT = _env("REMOVE_HIDDEN_TEXT", "0") == "1"   # white-on-white, tiny or off-page text (spec item 20)

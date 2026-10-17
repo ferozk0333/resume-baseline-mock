@@ -147,3 +147,61 @@ def test_early_start_asked_again_while_running_runs_once_more(tmp_path, monkeypa
     gate.set()
     pipe.wait_for_prejudge("c")
     assert started == ["b", "b"]
+
+
+def test_an_item_deleted_in_review_is_not_added_back_by_a_later_source(tmp_path, monkeypatch):
+    from core import config
+    from extraction import deletions
+    monkeypatch.setattr(config, "UPLOAD_DIR", tmp_path / "up")
+    path = str(tmp_path / "d.db")
+    conn = db.init_app_db(path)
+    cid, docs, _ = ingest(conn, inputs())
+    saver = ProgressiveSave(path, cid, docs, form_profile(conn, cid, inputs()),
+                            needs_extraction={d.evidence_id for d in docs_to_extract(docs)})
+    saver.start()
+    resume, linkedin = docs
+    saver.done(resume.evidence_id, sample_resume_extract())
+    profile = store.load_profile(conn, cid)
+    tableau = next(c for c in profile.claims if c.name_raw == "Tableau")
+    analyst = next(r for r in profile.roles if r.title == "Data Analyst")
+    for table, item in (("claims", tableau), ("roles", analyst)):              # what the API's delete does
+        deletions.remember(conn, cid, table, item.id)
+        store.delete_item(conn, table, item.id)
+    li = li_extract()
+    li.claims.append(schemas.Claim(kind="tool", name="Tableau", bullet_ref=None,
+                                   source=schemas.Source(quote="Looker", location="top skills")))
+    saver.done(linkedin.evidence_id, li)
+    after = store.load_profile(conn, cid)
+    assert "Tableau" not in [c.name_raw for c in after.claims]                   # not re-added
+    assert "Data Analyst" not in [r.title for r in after.roles]                  # nor the role LinkedIn also lists
+    assert "Looker" in [c.name_raw for c in after.claims]                        # the rest of LinkedIn joined
+    found = deletions.mentions(conn, cid)
+    assert sorted((m["source"], m["label"]) for m in found) == [("LinkedIn", "Data Analyst at Acme Retail"),
+                                                               ("LinkedIn", "Tableau")]
+    deletions.add_back(conn, cid, next(m["id"] for m in found if m["label"] == "Tableau"))
+    assert "Tableau" in [c.name_raw for c in store.load_profile(conn, cid).claims]
+    assert [m["label"] for m in deletions.mentions(conn, cid)] == ["Data Analyst at Acme Retail"]
+
+
+def test_review_api_offers_add_back_for_a_mention(env):  # noqa: F811
+    api = env.api
+    gated = GatedLLM({"resume": sample_resume_extract(), "linkedin_pdf": li_extract()})
+    api.app.state.rs.deps.llm = gated
+    cid = api.post("/candidates", json={"name": "Ada"}).json()["id"]
+    files = {"resume": ("cv.pdf", make_pdf(SAMPLE_RESUME_LINES), "application/pdf"),
+             "linkedin_pdf": ("li.pdf", make_pdf(LI_LINES * 2), "application/pdf")}
+    read = api.post(f"/candidates/{cid}/onboard", data={"onboarding": "true"}, files=files).json()["task_id"]
+    for _ in range(300):
+        if api.get(f"/candidates/{cid}/reading-progress").json().get("review_ready"):
+            break
+        threading.Event().wait(0.05)
+    role = next(r for r in api.get(f"/candidates/{cid}/profile").json()["profile"]["roles"] if r["title"] == "Data Analyst")
+    assert api.patch(f"/candidates/{cid}/profile", json={"op": "delete", "item": "role", "id": role["id"]}).status_code == 200
+    gated.release.set()
+    api.tasks.wait(read)
+    prof = api.get(f"/candidates/{cid}/profile").json()
+    assert "Data Analyst" not in [r["title"] for r in prof["profile"]["roles"]]
+    assert [(m["source"], m["label"]) for m in prof["mentions"]] == [("LinkedIn", "Data Analyst at Acme Retail")]
+    prof = api.patch(f"/candidates/{cid}/profile", json={"op": "add_back", "item": "mention",
+                                                         "id": prof["mentions"][0]["id"]}).json()
+    assert "Data Analyst" in [r["title"] for r in prof["profile"]["roles"]] and prof["mentions"] == []

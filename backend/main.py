@@ -329,9 +329,10 @@ class EmailEdit(BaseModel):
 
 class ProfileEdit(BaseModel):
     """One review edit. `item` is role | project | bullet? (bullets go with their role/project) | claim |
-    certification; `op` add | edit | delete | add_back (add_back uses `id` of a dropped item)."""
+    certification; `op` add | edit | delete | add_back (add_back uses `id` of a dropped item, or of a mention: an item
+    the candidate deleted that a later source named again)."""
     op: Literal["add", "edit", "delete", "add_back"]
-    item: Literal["role", "project", "claim", "certification", "dropped"]
+    item: Literal["role", "project", "claim", "certification", "dropped", "mention"]
     id: str | None = None
     data: dict = Field(default_factory=dict)
 
@@ -556,6 +557,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 item["review_reasons"] = [REVIEW_MESSAGES.get(r, r) for r in item["review_reasons"]]
             from backend import candidate as cx
             from backend import wait_screens as ws
+            from extraction.deletions import mentions as deletion_mentions
             ob = cx.onboarding(c, candidate_id)
             read_task = tasks.get(ob["read_task_id"]) if ob.get("read_task_id") else None
             pending = ws.pending_sources(c, candidate_id, read_task)
@@ -565,6 +567,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 # Review opens once the resume is read; these sources are still being read (Confirm waits for them).
                 "pending": pending,
                 "reading": bool(read_task and read_task["status"] in ("queued", "running")),
+                # Deleted in Review, then named again by a source read later: shown with "Add back", never re-added.
+                "mentions": deletion_mentions(c, candidate_id),
                 "dropped": store.list_dropped(c, candidate_id),
                 "warnings": [public_warning(e) for e in evidence if e["status"] == "failed" and e["error"]],
                 "sources": [{"id": e["id"], "type": e["type"], "status": e["status"], "text": e["raw_text"]}
@@ -588,7 +592,12 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                              "certification": "certifications"}.get(edit.item)
                     if table is None or not edit.id:
                         raise ValueError("delete needs an item type and id")
+                    from extraction import deletions
+                    deletions.remember(c, candidate_id, table, edit.id)   # a later source won't add it back
                     store.delete_item(c, table, edit.id)
+                elif edit.item == "mention":
+                    from extraction import deletions
+                    deletions.add_back(c, candidate_id, edit.id or "")
                 elif edit.op == "add_back" or edit.item == "dropped":
                     store.restore_dropped(c, edit.id)
                 elif edit.item == "role":

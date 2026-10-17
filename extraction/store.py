@@ -304,6 +304,8 @@ def reset_candidate_evidence(conn: sqlite3.Connection, candidate_id: str) -> Non
     with conn:
         conn.execute("DELETE FROM evidence_items WHERE candidate_id = ?", (candidate_id,))
         conn.execute("DELETE FROM dropped_items WHERE candidate_id = ?", (candidate_id,))
+        conn.execute("DELETE FROM deleted_items WHERE candidate_id = ?", (candidate_id,))       # a new read starts over
+        conn.execute("DELETE FROM suppressed_items WHERE candidate_id = ?", (candidate_id,))
 
 
 # --- Review-step edits (every edited or added row is source = user_edit) ---------------------------

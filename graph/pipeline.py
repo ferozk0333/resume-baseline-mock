@@ -156,7 +156,7 @@ def _extract(deps: Deps):
                                 needs_extraction={d.evidence_id for d in to_extract}, today=deps.today,
                                 on_ready=deps.on_source_ready)
         saver.start()
-        parsers = Parsers(deps.db_path, deps.labeller) if Parsers.any_on() else None
+        parsers = Parsers(deps.db_path, deps.labeller, llm=deps.llm) if Parsers.any_on() else None
         cache_conn = db.connect(deps.db_path) if deps.extraction_cache and not rerun else None
         try:
             if to_extract:
