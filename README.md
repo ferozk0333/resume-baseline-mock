@@ -187,6 +187,26 @@ human reviewers: don't send real personal data on the free tier.
 - Logs (`rightstaff.routing`): `failover: <task> <model> → <next> (<why>)`, `all busy: …`, `fail fast: …`. Runs record
   calls per task per model (`calls_by_task`) and failovers in their timings.
 
+### Code-first extraction (specs/18, phase 3; flags off by default)
+- **Design:** code builds the structure, Jev decides what is unclear, the LLM is the fallback. Every field is a
+  verbatim span of the source, so the usual quote check, claim, award and publication rules apply unchanged.
+- **`PARSE_LINKEDIN`:** a parser for LinkedIn's "Save to PDF" layout (sidebar + main column, font tiers read from the
+  document). **`PARSE_README`:** README blocks kept by rule (overview, features, architecture, results) or by Jev;
+  setup, install, licence, badges and code are dropped; the kept text becomes the repository's description.
+  **`PARSE_RESUME=shadow`:** the résumé is still read by the LLM; afterwards the parser reads it too and the
+  comparison is logged (`parser_runs`); nothing from it is shown or scored.
+- **Confidence gate:** a document goes to the LLM when it doesn't look like the expected layout, a role has no dates,
+  more than `PARSER_MAX_UNCLEAR` lines stay unclear, reading order looks scrambled, or a Jev label is below
+  `JEV_CONFIDENCE_THRESHOLD`. Every item records how it was read (`method`: parser | jev | llm).
+- **`REMOVE_HIDDEN_TEXT`:** white or near-background text (against what is drawn under it), text under 4 pt and
+  off-page text are removed before reading; what was removed is kept for Admin
+  (`GET /admin/candidates/{id}/extraction`, which also lists the parser log).
+- **Review opens early:** each source is saved into the profile as soon as it is read (in the usual order, so the
+  final profile is the one a single merge gives); Review opens once the resume is read, shows "Still reading
+  LinkedIn…" per pending source, and Confirm waits for every source. Early-start judging runs again per source.
+- **Gates:** `scripts/parser_gates.py` (offline; replays recorded judgments, `judges/replay_judge.py`) writes
+  `timings/parser_gates.md`. `scripts/render_test_profiles.py --stress` renders the layout stress set.
+
 ## Tests
 ```bash
 .venv/bin/python -m pytest -q                       # offline: FakeJudge and fixtures, no API calls
@@ -212,3 +232,5 @@ afterwards, and writes a timing table, token counts and an estimated Claude cost
   dual-licensed **AGPL-3.0** or Artifex commercial. Fine for this local mock; a hosted or
   distributed product would need the commercial licence or a different parser.
 - Everything else in `requirements.txt` is under a permissive licence (MIT, BSD or Apache-2.0).
+- The code-first parsers (specs/18 phase 3) add no dependency: they use PyMuPDF and python-docx already listed, and
+  their own date parser. OpenResume (AGPL) informed the ideas only; no code was copied.

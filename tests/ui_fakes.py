@@ -4,9 +4,36 @@ from graph.context import Deps
 from judges.fake_judge import FakeJudge
 from judges.questions import QUESTIONS
 from scoring.plan import Action, Plan
+from extraction import schemas
 from tests.helpers import FakeLLM, sample_resume_extract
 
 CALLS = {"judge": 0, "planner": 0}
+
+# Early Review (specs/18 phase 3): this LinkedIn PDF takes the fake reader a few seconds, so Review opens with
+# "Still reading LinkedIn…" and its items appear when it finishes.
+SLOW_LINKEDIN_LINES = ["SLOW-LINKEDIN Priya Natarajan", "Data Analyst at Acme Retail", "Seattle, Washington",
+                       "Top Skills", "Looker", "Licenses & certifications", "Google Data Analytics Certificate",
+                       "Experience", "Acme Retail", "Data Analyst", "January 2023 - Present"]
+SLOW_SECONDS = 6.0
+
+
+def slow_linkedin_extract() -> schemas.ProfileExtract:
+    src = lambda q, loc: schemas.Source(quote=q, location=loc)  # noqa: E731
+    return schemas.ProfileExtract(
+        roles=[], projects=[],
+        claims=[schemas.Claim(kind="tool", name="Looker", bullet_ref=None, source=src("Looker", "top skills"))],
+        certifications=[schemas.Certification(name="Google Data Analytics Certificate", issuer=None, date=None,
+                                              credential_id=None, verify_url=None,
+                                              source=src("Google Data Analytics Certificate", "certifications"))])
+
+
+class SlowLinkedIn(FakeLLM):
+    def parse(self, *, model, system, user, output_type):
+        if "SLOW-LINKEDIN" in user:
+            import time
+            time.sleep(SLOW_SECONDS)
+            return slow_linkedin_extract()
+        return super().parse(model=model, system=system, user=user, output_type=output_type)
 
 
 def best(q, c):
@@ -42,5 +69,5 @@ def make_deps() -> Deps:
     if os.getenv("JOB_EXTRACT_LIVE") == "1":                # reading job descriptions with JOB_EXTRACT_MODEL (demo)
         from core.llm import RoutedLLM
         job_llm = RoutedLLM(max_tokens=config.EXTRACT_MAX_TOKENS)
-    return Deps(str(config.DB_PATH), FakeJudge(script=best), llm=FakeLLM({"resume": sample_resume_extract()}),
+    return Deps(str(config.DB_PATH), FakeJudge(script=best), llm=SlowLinkedIn({"resume": sample_resume_extract()}),
                 planner=AlwaysPlanner(), writer=writer, job_llm=job_llm)

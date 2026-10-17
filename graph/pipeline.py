@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -25,10 +26,10 @@ from langgraph.types import Command, interrupt
 from core import config, db, timing
 from core.db import new_id, now_iso
 from extraction import schemas, store
-from extraction.extract import ExtractionCache, extract_all, output_type
+from extraction.extract import ExtractionCache, extract_all
 from extraction.onboard import (
-    NO_RESUME_MESSAGE, CertificationForm, OnboardingInputs, ReferenceForm, Upload, docs_to_extract,
-    finish_onboarding, form_profile, ingest, validate_results,
+    NO_RESUME_MESSAGE, CertificationForm, OnboardingInputs, ReferenceForm, Upload, docs_to_extract, form_profile,
+    ingest,
 )
 from extraction.records import scoring_blocker
 from extraction.validate import SourceDoc
@@ -115,7 +116,8 @@ def doc_to_state(doc: SourceDoc) -> dict:
 
 
 def doc_from_state(d: dict) -> SourceDoc:
-    return SourceDoc(d["evidence_id"], d["type"], d["text"], d["label"], Repo(**d["repo"]) if d.get("repo") else None)
+    return SourceDoc(d["evidence_id"], d["type"], d["text"], d["label"], Repo(**d["repo"]) if d.get("repo") else None,
+                     d.get("file_path"))
 
 
 # --- Onboarding nodes ------------------------------------------------------------------------
@@ -136,37 +138,48 @@ def _ingest(deps: Deps):
 
 
 def _extract(deps: Deps):
+    """Read every document (in code first for the flagged sources, specs/18 §4) and save each source into the
+    profile as soon as it is read, so Review can open while the rest is still being read (specs/18 Phase 3)."""
     def node(state: RunState) -> dict:
-        docs = docs_to_extract([doc_from_state(d) for d in state["docs"]])
+        from extraction.onboard import ProgressiveSave
+        from extraction.parse.run import Parsers
+        docs = [doc_from_state(d) for d in state["docs"]]
+        to_extract = docs_to_extract(docs)
         # A re-run for an existing candidate ("Re-run extraction") always asks the model again.
         rerun = bool((state.get("inputs") or {}).get("candidate_id"))
-        conn = db.connect(deps.db_path) if deps.extraction_cache and not rerun else None
+        conn = db.connect(deps.db_path)
         try:
-            results = extract_all(docs, deps.llm, ExtractionCache(conn) if conn else None) if docs else {}
+            forms = form_profile(conn, state["candidate_id"], inputs_from_state(state["inputs"]))
         finally:
-            if conn is not None:
-                conn.close()
-        return {"extractions": {eid: ({"error": str(r)} if isinstance(r, Exception) else {"ok": r.model_dump()})
-                                for eid, r in results.items()}}
+            conn.close()
+        saver = ProgressiveSave(deps.db_path, state["candidate_id"], docs, forms,
+                                needs_extraction={d.evidence_id for d in to_extract}, today=deps.today,
+                                on_ready=deps.on_source_ready)
+        saver.start()
+        parsers = Parsers(deps.db_path, deps.labeller) if Parsers.any_on() else None
+        cache_conn = db.connect(deps.db_path) if deps.extraction_cache and not rerun else None
+        try:
+            if to_extract:
+                extract_all(to_extract, deps.llm, ExtractionCache(cache_conn) if cache_conn else None,
+                            parsers=parsers, on_done=saver.done)
+        finally:
+            if cache_conn is not None:
+                cache_conn.close()
+        result = saver.finish(state.get("warnings", []))
+        # Uploaded bytes are no longer needed in state.
+        return {"warnings": result.warnings, "blocked": result.blocked, "inputs": {}, "docs": [], "extractions": {}}
     return node
 
 
 def _validate(deps: Deps):
+    """Every source is already checked and saved (as it was read); this step only confirms what blocks scoring."""
     def node(state: RunState) -> dict:
-        docs = [doc_from_state(d) for d in state["docs"]]
-        by_id = {d.evidence_id: d for d in docs}
-        results: dict[str, object] = {}
-        for eid, r in state.get("extractions", {}).items():
-            results[eid] = RuntimeError(r["error"]) if "error" in r else output_type(by_id[eid]).model_validate(r["ok"])
         conn = db.connect(deps.db_path)
         try:
-            forms = form_profile(conn, state["candidate_id"], inputs_from_state(state["inputs"]))
-            profiles, report = validate_results(conn, docs, results, deps.today)
-            result = finish_onboarding(conn, state["candidate_id"], forms, profiles, report, state.get("warnings", []))
+            blocker = scoring_blocker(store.load_profile(conn, state["candidate_id"]))
         finally:
             conn.close()
-        # Uploaded bytes are no longer needed in state.
-        return {"warnings": result.warnings, "blocked": result.blocked, "inputs": {}, "docs": [], "extractions": {}}
+        return {"blocked": blocker}
     return node
 
 
@@ -501,6 +514,8 @@ class Pipeline:
         self.recorders: dict[str, timing.Recorder] = {}     # thread_id → timings (onboarding + scoring)
         self.early: dict[str, Future] = {}                   # thread_id → job-independent judgments job
         self.prejudged: dict[tuple[str, str], Future] = {}   # (candidate, baseline) → early role-specific judgments
+        self._again: set[tuple[str, str]] = set()           # asked again while running: run once more
+        self._prejudge_lock = threading.Lock()
 
     @staticmethod
     def _cfg(thread_id: str) -> dict:
@@ -579,17 +594,30 @@ class Pipeline:
         return res
 
     def prejudge(self, candidate_id: str, baseline_ids: list[str]) -> list[str]:
-        """Start early role-specific judgments for these baselines (one background job each, not repeated while one
-        runs). Returns the baselines started."""
+        """Start early role-specific judgments for these baselines (one background job each). Asked again while a job
+        runs (a new source was read), that job runs once more when it ends, for what the new source added; answers
+        already saved are reused, so only new or changed items are asked. Returns the baselines started or queued."""
         started = []
         for bid in dict.fromkeys(baseline_ids):
-            job = self.prejudged.get((candidate_id, bid))
-            if job is not None and not job.done():
-                continue
-            self.prejudged[(candidate_id, bid)] = BACKGROUND.submit(timing.bind(early_role_judgments), self.deps,
-                                                                   candidate_id, bid)
+            key = (candidate_id, bid)
+            with self._prejudge_lock:
+                job = self.prejudged.get(key)
+                if job is not None and not job.done():
+                    self._again.add(key)
+                    started.append(bid)
+                    continue
+                self.prejudged[key] = BACKGROUND.submit(timing.bind(self._prejudge_job), candidate_id, bid)
             started.append(bid)
         return started
+
+    def _prejudge_job(self, candidate_id: str, baseline_id: str) -> int:
+        key, total = (candidate_id, baseline_id), 0
+        while True:
+            total = early_role_judgments(self.deps, candidate_id, baseline_id)
+            with self._prejudge_lock:
+                if key not in self._again:
+                    return total
+                self._again.discard(key)
 
     def wait_for_prejudge(self, candidate_id: str, timeout: float = 300) -> dict[str, int]:
         return {bid: job.result(timeout) for (cid, bid), job in list(self.prejudged.items()) if cid == candidate_id}

@@ -143,6 +143,7 @@ class SourceDoc:
     text: str
     label: str                       # human-readable, used in warnings
     repo: object | None = None       # ingest.github.Repo for github_repo
+    file_path: str | None = None     # the saved upload (resume, LinkedIn PDF): parsers read its layout
 
 
 @dataclass
@@ -166,6 +167,8 @@ class ValidationReport:
     merged: int = 0
     role_remap: dict[str, str] = field(default_factory=dict)      # merged-away id → surviving id
     project_remap: dict[str, str] = field(default_factory=dict)
+    failed: list[str] = field(default_factory=list)               # evidence ids whose extraction failed
+    sources: dict[str, tuple] = field(default_factory=dict)       # evidence id → (profile, its own report)
 
     @property
     def dropped(self) -> int:
@@ -216,7 +219,7 @@ def certification_rec(c: schemas.Certification, evidence_id: str | None,
 
 
 def _bullets(raw: list[schemas.Bullet], index: QuoteIndex, doc: SourceDoc, report: ValidationReport,
-             owner: str, parent_type: str, parent_id: str) -> list[BulletRec]:
+             owner: str, parent_type: str, parent_id: str, method_of=None) -> list[BulletRec]:
     out = []
     for b in raw:
         if not index.contains(b.source.quote):
@@ -224,7 +227,13 @@ def _bullets(raw: list[schemas.Bullet], index: QuoteIndex, doc: SourceDoc, repor
                         f"a bullet under {owner}")
             continue
         out.append(bullet_rec(b, doc.evidence_id))
+        out[-1].method = _method(method_of, b)
     return out
+
+
+def _method(method_of, item) -> str:
+    """How an item was read: the parser's record (parser | jev), else the LLM (specs/18 §4)."""
+    return (method_of(item) if method_of is not None else None) or "llm"
 
 
 # --- Claim lists and publications listed as certifications ------------------------------------
@@ -307,6 +316,7 @@ def validate_extraction(
     doc: SourceDoc,
     extract: schemas.ProfileExtract | schemas.PortfolioExtract,
     today: date | None = None,
+    method_of=None,
 ) -> tuple[Profile, ValidationReport]:
     """Keep items whose quote is in the source text; record the rest as DroppedItems."""
     today = today or config.today()
@@ -323,7 +333,8 @@ def validate_extraction(
             drop("role", r, f"{r.title}" + (f" at {r.employer}" if r.employer else ""), f"role '{r.title}'")
             continue
         rec = role_rec(r, doc.evidence_id, today)
-        rec.bullets = _bullets(r.bullets, index, doc, report, f"'{rec.title}'", "role", rec.id)
+        rec.method = _method(method_of, r)
+        rec.bullets = _bullets(r.bullets, index, doc, report, f"'{rec.title}'", "role", rec.id, method_of)
         profile.roles.append(rec)
         role_ids[i] = rec.id
 
@@ -333,7 +344,8 @@ def validate_extraction(
             continue
         rec = project_rec(p, doc.evidence_id, today,
                           role_id=role_ids.get(p.role_index) if p.role_index is not None else None)
-        rec.bullets = _bullets(p.bullets, index, doc, report, f"'{rec.name}'", "project", rec.id)
+        rec.method = _method(method_of, p)
+        rec.bullets = _bullets(p.bullets, index, doc, report, f"'{rec.name}'", "project", rec.id, method_of)
         profile.projects.append(rec)
 
     bullets = profile.all_bullets()
@@ -350,6 +362,7 @@ def validate_extraction(
             if part.kind == "award":
                 part = part.model_copy(update={"name": award_name(part.name, part.source.quote)})
             profile.claims.append(claim_rec(part, doc.evidence_id, _link_claim(part, bullets)))
+            profile.claims[-1].method = _method(method_of, c)
 
     for c in getattr(extract, "certifications", []):
         if not index.contains(c.source.quote):
@@ -359,8 +372,10 @@ def validate_extraction(
             pub = schemas.Project(kind="publication", name=c.name, description=None, url=c.verify_url, start=c.date,
                                   end=c.date, role_index=None, bullets=[], source=c.source)
             profile.projects.append(project_rec(pub, doc.evidence_id, today))
+            profile.projects[-1].method = _method(method_of, c)
             continue
         profile.certifications.append(certification_rec(c, doc.evidence_id))
+        profile.certifications[-1].method = _method(method_of, c)
 
     report.kept = (len(profile.roles) + len(profile.projects) + len(profile.all_bullets())
                    + len(profile.claims) + len(profile.certifications))
@@ -368,8 +383,9 @@ def validate_extraction(
 
 
 def repo_profile(doc: SourceDoc, readme_extract: schemas.PortfolioExtract | None,
-                 today: date | None = None) -> tuple[Profile, ValidationReport]:
-    """A GitHub repo becomes one project from API metadata; its README adds bullets and tool claims."""
+                 today: date | None = None, method_of=None) -> tuple[Profile, ValidationReport]:
+    """A GitHub repo becomes one project from API metadata; its README adds bullets and tool claims.
+    A parsed README (PARSE_README) brings the kept README text as the description instead of bullets."""
     repo = doc.repo
     pushed = date.fromisoformat(repo.pushed_at[:10]) if repo.pushed_at else None
     created = date.fromisoformat(repo.created_at[:10]) if repo.created_at else None
@@ -378,13 +394,15 @@ def repo_profile(doc: SourceDoc, readme_extract: schemas.PortfolioExtract | None
         start_date=created.replace(day=1) if created else None,
         end_date=pushed.replace(day=1) if pushed else None,
         quote=f"Repository: {repo.full_name}", evidence_id=doc.evidence_id,
-        is_fork=repo.is_fork, own_commits=repo.own_commits,
+        is_fork=repo.is_fork, own_commits=repo.own_commits, method="parser",
     )
     profile, report = Profile(projects=[project]), ValidationReport()
     if readme_extract is not None:
-        sub, report = validate_extraction(doc, readme_extract, today)
+        sub, report = validate_extraction(doc, readme_extract, today, method_of)
         for p in sub.projects:  # fold README "projects" into the repo instead of duplicating it
             project.bullets += p.bullets
+            if p.method in ("parser", "jev") and p.description:
+                project.description, project.method = p.description, p.method   # kept README text, verbatim
             project.description = project.description or p.description
             report.project_remap[p.id] = project.id
         for d in report.dropped_items:  # dropped README bullets now belong to the repo project

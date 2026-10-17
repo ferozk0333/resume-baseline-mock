@@ -39,6 +39,8 @@ class Deps:
     job_llm: object | None = None             # StructuredLLM for reading job descriptions; None = manual form
     plan_in_background: bool = True           # return the score first, write the plan after (specs/09 §2.6)
     extraction_cache: bool = False            # reuse saved extraction outputs for identical documents (app: on)
+    labeller: object | None = None            # Jev for code-first extraction (specs/18 §4); None = default
+    on_source_ready: object | None = None     # (candidate_id, doc_type) after each source is saved (early start)
     _sem: threading.BoundedSemaphore = field(init=False, repr=False)
 
     def __post_init__(self):

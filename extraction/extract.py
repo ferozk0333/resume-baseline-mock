@@ -95,16 +95,33 @@ class ExtractionCache:
                               "VALUES (?, ?, ?, ?)", (self.key(doc, model), used or model, out.model_dump_json(), now_iso()))
 
 
-def extract_all(docs: list[SourceDoc], llm: StructuredLLM, cache: ExtractionCache | None = None) -> dict[str, object]:
-    """evidence_id → extraction, or the LLMError that stopped it. Calls run in parallel."""
+def extract_all(docs: list[SourceDoc], llm: StructuredLLM, cache: ExtractionCache | None = None, parsers=None,
+                on_done=None) -> dict[str, object]:
+    """evidence_id → extraction, a ParseResult (code-first extraction, specs/18 §4), or the LLMError that stopped
+    it. Calls run in parallel. `parsers` (extraction.parse.run.Parsers) reads flagged sources in code first;
+    `on_done(evidence_id, result)` is called as each document finishes (Review opens early, specs/18)."""
 
     def run(doc: SourceDoc):
+        result = _run(doc)
+        if on_done is not None:
+            on_done(*result)
+        return result
+
+    def _run(doc: SourceDoc):
         from core.routing import last_model
+        if parsers is not None and parsers.wants(doc):
+            with timing.span(timing.EXTRACT, doc.type, model="parser", chars=len(doc.text)) as t:
+                parsed = parsers.parse(doc)
+                t.update(outcome=parsed.report.outcome, jev_requests=parsed.report.jev_requests)
+            if parsed.extract is not None:
+                return doc.evidence_id, parsed
         model = model_for(doc)
         with timing.span(timing.EXTRACT, doc.type, model=model, chars=len(doc.text)) as t:
             hit = cache.get(doc, cache_model(model)) if cache is not None else None
             if hit is not None:
                 t["cached"] = True
+                if parsers is not None:
+                    parsers.shadow(doc, hit)
                 return doc.evidence_id, hit
             from core.routing import clear_last
             clear_last()
@@ -115,7 +132,9 @@ def extract_all(docs: list[SourceDoc], llm: StructuredLLM, cache: ExtractionCach
             t["model"] = last_model(model)                # the model that answered
             if cache is not None:
                 cache.put(doc, cache_model(model), out, used=t["model"])
-            return doc.evidence_id, out
+        if parsers is not None:
+            parsers.shadow(doc, out)                      # résumé shadow parse, in the background
+        return doc.evidence_id, out
 
     with ThreadPoolExecutor(max_workers=config.EXTRACT_CONCURRENCY) as pool:
         return dict(pool.map(timing.bind(run), docs))

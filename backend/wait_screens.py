@@ -78,9 +78,11 @@ def reading_view(conn, candidate_id: str, task: dict | None) -> dict:
         warn = next((w[len(WARNING_PREFIX[t]):].strip() for w in warnings if w.startswith(WARNING_PREFIX[t])), None)
         source = {"type": t, "label": SOURCES[t], "status": "waiting", "error": None, "counts": None}
         doc_failed = t != "github" and any(x["status"] == "failed" for x in r)
+        read = bool(r) and all(x["status"] != "parsed" for x in r) and step not in ("queued", "ingest")
         if doc_failed:
             source.update(status="failed", error=cx.public_error(next(x["error"] for x in r if x["status"] == "failed")))
-        elif finished and r:
+        elif (finished and r) or (read and not errored):
+            # Each source is saved as soon as it is read (specs/18 Phase 3): done before the others finish.
             source.update(status="done", counts=_counts(conn, candidate_id, EVIDENCE_TYPES[t]))
         elif finished or errored:
             source.update(status="failed", error=cx.public_error(warn or (task.get("error") if errored
@@ -107,9 +109,20 @@ def reading_view(conn, candidate_id: str, task: dict | None) -> dict:
     durations = [d for r in conn.execute("SELECT created_at, updated_at FROM tasks WHERE kind = 'onboard' AND "
                                          "status = 'done' ORDER BY created_at DESC LIMIT 20")
                  if (d := _seconds(r[0], r[1])) is not None]
+    resume = next((x for x in out if x["type"] == "resume"), None)
     return {"sources": out, "stage": stage, "stage_label": label, "percent": round(pct), "done": finished,
             "error": cx.public_error(task.get("error")) if errored else None,
-            "typical_minutes": None if finished else _typical_minutes(durations)}
+            "typical_minutes": None if finished else _typical_minutes(durations),
+            # Review opens once the resume is read; the other sources join it as each finishes.
+            "review_ready": bool(resume and resume["status"] == "done")}
+
+
+def pending_sources(conn, candidate_id: str, task: dict | None) -> list[dict]:
+    """Sources still being read (shown on Review as "Still reading LinkedIn…"); empty once reading has ended."""
+    if task is None or task["status"] in ("done", "error"):
+        return []
+    view = reading_view(conn, candidate_id, task)
+    return [{"type": x["type"], "label": x["label"]} for x in view["sources"] if x["status"] in ("waiting", "reading")]
 
 
 # --- Scoring -----------------------------------------------------------------------------------------------------

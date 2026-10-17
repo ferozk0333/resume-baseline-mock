@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -75,7 +75,8 @@ CREATE TABLE IF NOT EXISTS roles (
   quote TEXT,
   source TEXT DEFAULT 'extracted',
   needs_review INTEGER DEFAULT 0,
-  review_reasons TEXT
+  review_reasons TEXT,
+  method TEXT                     -- parser | jev | llm (specs/18 §4); null = typed or edited by the user
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -89,7 +90,8 @@ CREATE TABLE IF NOT EXISTS projects (
   quote TEXT,
   source TEXT DEFAULT 'extracted',
   needs_review INTEGER DEFAULT 0,
-  review_reasons TEXT
+  review_reasons TEXT,
+  method TEXT
 );
 
 CREATE TABLE IF NOT EXISTS bullets (
@@ -98,7 +100,8 @@ CREATE TABLE IF NOT EXISTS bullets (
   role_id TEXT, project_id TEXT,
   text TEXT,
   location TEXT,
-  source TEXT DEFAULT 'extracted'
+  source TEXT DEFAULT 'extracted',
+  method TEXT
 );
 
 CREATE TABLE IF NOT EXISTS claims (
@@ -109,7 +112,8 @@ CREATE TABLE IF NOT EXISTS claims (
   name_raw TEXT,
   name_norm TEXT,
   quote TEXT,
-  source TEXT DEFAULT 'extracted'
+  source TEXT DEFAULT 'extracted',
+  method TEXT
 );
 
 CREATE TABLE IF NOT EXISTS certifications (
@@ -118,7 +122,8 @@ CREATE TABLE IF NOT EXISTS certifications (
   name TEXT, issuer TEXT, issued_date TEXT,
   credential_id TEXT, verify_url TEXT,
   verified INTEGER DEFAULT 0,
-  source TEXT DEFAULT 'extracted'
+  source TEXT DEFAULT 'extracted',
+  method TEXT
 );
 
 CREATE TABLE IF NOT EXISTS dropped_items (
@@ -158,7 +163,20 @@ CREATE TABLE IF NOT EXISTS document_texts (
   normalizer TEXT,
   text TEXT,
   created_at TEXT,
+  hidden_json TEXT,               -- hidden text removed before extraction (REMOVE_HIDDEN_TEXT; for Admin only)
   PRIMARY KEY (file_sha256, normalizer)
+);
+
+CREATE TABLE IF NOT EXISTS parser_runs (     -- code-first extraction per document (specs/18 §4): used or shadow
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT, evidence_id TEXT,
+  doc_type TEXT,
+  mode TEXT,                      -- on | shadow
+  outcome TEXT,                   -- parsed | fallback
+  reasons_json TEXT, notes_json TEXT, items_json TEXT,
+  comparison_json TEXT,           -- shadow: against the LLM extraction of the same document
+  seconds REAL, jev_requests INTEGER, jev_questions INTEGER, llm_calls INTEGER,
+  created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS jobs (           -- recruiter view (phase 11): one job per baseline
@@ -464,6 +482,9 @@ def init_db(conn: sqlite3.Connection) -> None:
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
+PARSER_RUNS = """CREATE TABLE IF NOT EXISTS parser_runs (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT,
+  doc_type TEXT, mode TEXT, outcome TEXT, reasons_json TEXT, notes_json TEXT, items_json TEXT, comparison_json TEXT,
+  seconds REAL, jev_requests INTEGER, jev_questions INTEGER, llm_calls INTEGER, created_at TEXT)"""
 DOCUMENT_TEXTS = """CREATE TABLE IF NOT EXISTS document_texts (
   file_sha256 TEXT, normalizer TEXT, text TEXT, created_at TEXT, PRIMARY KEY (file_sha256, normalizer))"""
 EXTRACTION_CACHE = """CREATE TABLE IF NOT EXISTS extraction_cache (
@@ -591,6 +612,9 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
           "UPDATE jobs SET published_at = created_at WHERE status IS NOT 'draft'",
           "CREATE TABLE IF NOT EXISTS candidate_plan_done (candidate_id TEXT, baseline_id TEXT, action_key TEXT, "
           "title TEXT, done_at TEXT, PRIMARY KEY (candidate_id, baseline_id, action_key))"]),
+    (24, [*(f"ALTER TABLE {t} ADD COLUMN method TEXT" for t in ("roles", "projects", "bullets", "claims",
+                                                                 "certifications")),
+          "ALTER TABLE document_texts ADD COLUMN hidden_json TEXT", PARSER_RUNS]),
 ]
 
 

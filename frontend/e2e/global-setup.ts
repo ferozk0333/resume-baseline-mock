@@ -7,5 +7,8 @@ export default function globalSetup() {
   execFileSync(path.join(root, ".venv/bin/python"), ["-c",
     "from tests.helpers import make_pdf, SAMPLE_RESUME_LINES; import pathlib; " +
     "pathlib.Path('frontend/e2e/.tmp').mkdir(exist_ok=True); " +
-    "pathlib.Path('frontend/e2e/.tmp/cv.pdf').write_bytes(make_pdf(SAMPLE_RESUME_LINES))"], { cwd: root });
+    "pathlib.Path('frontend/e2e/.tmp/cv.pdf').write_bytes(make_pdf(SAMPLE_RESUME_LINES)); " +
+    // A LinkedIn PDF the fake reader takes a few seconds over (early Review, specs/18 phase 3)
+    "from tests.ui_fakes import SLOW_LINKEDIN_LINES; " +
+    "pathlib.Path('frontend/e2e/.tmp/linkedin-slow.pdf').write_bytes(make_pdf(SLOW_LINKEDIN_LINES))"], { cwd: root });
 }

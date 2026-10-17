@@ -112,6 +112,8 @@ class State:
     @property
     def pipeline(self) -> Pipeline:
         if self._pipeline is None:
+            if self.deps.on_source_ready is None:
+                self.deps.on_source_ready = getattr(self, "on_source_ready", None)
             self._pipeline = Pipeline(self.deps)
         return self._pipeline
 
@@ -552,9 +554,17 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             data = json.loads(json.dumps(asdict(profile), default=str))
             for item in [*data["roles"], *data["projects"]]:          # readable review flags
                 item["review_reasons"] = [REVIEW_MESSAGES.get(r, r) for r in item["review_reasons"]]
+            from backend import candidate as cx
+            from backend import wait_screens as ws
+            ob = cx.onboarding(c, candidate_id)
+            read_task = tasks.get(ob["read_task_id"]) if ob.get("read_task_id") else None
+            pending = ws.pending_sources(c, candidate_id, read_task)
             return {
                 "candidate": cand,
                 "profile": data,
+                # Review opens once the resume is read; these sources are still being read (Confirm waits for them).
+                "pending": pending,
+                "reading": bool(read_task and read_task["status"] in ("queued", "running")),
                 "dropped": store.list_dropped(c, candidate_id),
                 "warnings": [public_warning(e) for e in evidence if e["status"] == "failed" and e["error"]],
                 "sources": [{"id": e["id"], "type": e["type"], "status": e["status"], "text": e["raw_text"]}
@@ -570,7 +580,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         def day(v):
             return _date.fromisoformat(v + "-01" if v and len(v) == 7 else v) if v else None
         d = edit.data
-        with conn() as c:
+        with conn() as c, store.candidate_lock(candidate_id):   # a source may be saved into the profile meanwhile
             store.get_candidate(c, candidate_id) or not_found("Candidate")
             try:
                 if edit.op == "delete":
@@ -602,6 +612,22 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
         return get_profile(candidate_id)
+
+    @app.get("/admin/candidates/{candidate_id}/extraction", tags=["admin"])
+    def admin_extraction(candidate_id: str):
+        """Admin only (specs/18 §4–5): how each document was read (parser log, shadow comparisons) and any hidden text
+        removed before reading. Never in candidate or recruiter responses."""
+        from ingest.documents import hidden_text
+        with conn() as c:
+            cand_or_404(c, candidate_id)
+            docs = [{"evidence_id": e["id"], "type": e["type"], "status": e["status"],
+                     "hidden_text": hidden_text(c, e["file_sha256"]) if e["file_sha256"] else []}
+                    for e in store.list_evidence(c, candidate_id)]
+            runs = [{**dict(r), **{k: json.loads(r[k]) if r[k] else None for k in
+                                   ("reasons_json", "notes_json", "items_json", "comparison_json")}}
+                    for r in c.execute("SELECT * FROM parser_runs WHERE candidate_id = ? ORDER BY created_at",
+                                       (candidate_id,))]
+            return {"documents": docs, "parser_runs": runs}
 
     @app.get("/candidates/{candidate_id}/runs", tags=["candidates"])
     def candidate_runs(candidate_id: str):
@@ -666,6 +692,12 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 raise HTTPException(409, "Pick at least one target role first.")
             return bad_request(cx.set_step, c, candidate_id, body.step)
 
+    def resume_read(candidate_id: str) -> bool:
+        """The resume is read and saved (the other sources may still be reading): early start can begin."""
+        with conn() as c:
+            return c.execute("SELECT 1 FROM evidence_items WHERE candidate_id = ? AND type = 'resume' AND "
+                             "status = 'validated'", (candidate_id,)).fetchone() is not None
+
     def prejudge_targets(candidate_id: str) -> list[str]:
         """Early start (specs/18 §2 item 7): role-specific judging for the picked roles, once the documents are read
         and until Confirm. Never blocks the request."""
@@ -679,6 +711,15 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             bids = [resolve_baseline(c, t["baseline_id"]) for t in cx.targets(c, candidate_id)]
         return state.pipeline.prejudge(candidate_id, bids) if bids else []
 
+    def source_ready(candidate_id: str, doc_type: str) -> None:
+        """A source was saved into the profile while the others are still read: judge what is there now
+        (specs/18 Phase 3). Background only; never fails the reading."""
+        try:
+            prejudge_targets(candidate_id)
+        except Exception:                                  # noqa: BLE001
+            log.exception("early start after %s failed", doc_type)
+    state.on_source_ready = source_ready
+
     @app.put("/candidates/{candidate_id}/targets", tags=["candidate"])
     def put_targets(candidate_id: str, body: TargetsIn):
         """1–3 target roles, one primary (default: the first picked). Once the documents are read, newly picked
@@ -686,7 +727,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         with conn() as c:
             cand_or_404(c, candidate_id)
             out = bad_request(cx.set_targets, c, candidate_id, body.baseline_ids, body.primary)
-        if candidate_id in state.review_threads:
+        if candidate_id in state.review_threads or resume_read(candidate_id):
             prejudge_targets(candidate_id)
         return out
 
@@ -745,6 +786,10 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             blocker = scoring_blocker(store.load_profile(c, candidate_id))
             if blocker:
                 raise HTTPException(409, blocker)
+            ob = cx.onboarding(c, candidate_id)
+            read = tasks.get(ob["read_task_id"]) if ob.get("read_task_id") else None
+            if not retry and read is not None and read["status"] in ("queued", "running"):
+                raise HTTPException(409, "We're still reading your documents. You can confirm when everything is read.")
         task_id = score_roles(candidate_id, roles)
         with conn() as c:
             if retry:

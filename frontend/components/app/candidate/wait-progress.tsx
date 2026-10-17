@@ -89,10 +89,12 @@ const SOURCE_ICON: Record<ReadingSource["type"], LucideIcon> = { resume: FileTex
 const READ_LABELS = { waiting: "Waiting", reading: "Reading", done: "Done", failed: "Couldn't read" };
 
 /** The document-reading wait: one row per source added, what was found in it, and one stage line. */
-export function ReadingWait({ cid, readTaskId, onDone }: { cid: string; readTaskId: string | null; onDone: () => void }) {
+export function ReadingWait({ cid, readTaskId, onDone, onReviewReady }: { cid: string; readTaskId: string | null;
+  onDone: () => void; onReviewReady?: () => void }) {
   const [said, setSaid] = useState("");
   const seen = useRef<Record<string, string>>({});
   const doneOnce = useRef(false);
+  const readyOnce = useRef(false);
   const data = usePoll<ReadingProgress>(`/candidates/${cid}/reading-progress?task=${readTaskId ?? ""}`,
     (d) => d.done || !!d.error, (d) => {
       const news: string[] = [];
@@ -103,6 +105,7 @@ export function ReadingWait({ cid, readTaskId, onDone }: { cid: string; readTask
       }
       if (d.done) news.push("Your documents are read");
       if (news.length) setSaid(news.join(". "));
+      if (d.review_ready && !readyOnce.current) { readyOnce.current = true; onReviewReady?.(); }
       if ((d.done || d.error) && !doneOnce.current) { doneOnce.current = true; onDone(); }
     });
   if (!data) return <div className="h-40 rounded-xl border bg-white" aria-busy="true" />;

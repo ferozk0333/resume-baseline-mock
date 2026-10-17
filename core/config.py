@@ -246,6 +246,19 @@ GITHUB_CONCURRENCY = 8           # repos whose details are fetched at once
 EXTRACT_MAX_TOKENS = 12_000     # a dense one-page resume needs ~7.3k (phase 9); runaway output is cut earlier
 PLAN_MAX_TOKENS = 16_000
 EXTRACT_CONCURRENCY = 16        # resume, LinkedIn, portfolio and READMEs at once (specs/09 §2.5); Claude cap applies
+
+# Code-first extraction (specs/18 §4). Every flag is off by default: off = today's LLM extraction exactly.
+# A parsed document is used only when its confidence gate passes; otherwise the whole document goes to the LLM.
+PARSE_README = _env("PARSE_README", "0") == "1"          # README blocks kept by rule or Jev; no LLM call
+PARSE_LINKEDIN = _env("PARSE_LINKEDIN", "0") == "1"      # LinkedIn "Save to PDF" layout parser
+PARSE_RESUME = _env("PARSE_RESUME", "off")               # off | shadow (runs after the LLM, logged, never used)
+PARSE_SHADOW_CALLS = _env("PARSE_SHADOW_CALLS", "0") == "1"   # shadow parser may ask Jev / the small claims call
+REMOVE_HIDDEN_TEXT = _env("REMOVE_HIDDEN_TEXT", "0") == "1"   # white-on-white, tiny or off-page text (spec item 20)
+PARSER_MAX_UNCLEAR = int(_env("PARSER_MAX_UNCLEAR", "3"))     # more unclear lines after Jev → LLM fallback
+README_MAX_CHARS = int(_env("README_MAX_CHARS", "1500"))       # kept README blocks, verbatim, as the description
+JEV_PARSE_BATCH = int(_env("JEV_PARSE_BATCH", "20"))           # questions per Jev request when parsing
+HIDDEN_MIN_FONT_PT = 4.0         # smaller text is hidden
+HIDDEN_MIN_CONTRAST = 1.6        # text/background contrast ratio below this is hidden (white on white = 1.0)
 # Concurrency. All 19 subcategories run at once; these caps set how many model calls are in flight.
 # JUDGE_CONCURRENCY (specs/09 §2.1): judgments in flight across all four dimension subgraphs, Jev and
 # Claude together. Beneath it, per-provider pools keep fast Jev calls from queueing slow Claude calls.

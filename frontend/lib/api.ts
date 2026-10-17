@@ -61,6 +61,8 @@ export type ProfileResponse = {
   profile: { roles: Role[]; projects: Project[]; claims: Claim[]; certifications: Certification[] };
   dropped: Dropped[]; warnings: string[]; blocker: string | null; media_links: MediaLink[];
   sources: { id: string; type: string; status: string; text: string | null }[];
+  /** Sources still being read while Review is open (specs/18 Phase 3); Confirm waits for them. */
+  pending?: { type: string; label: string }[]; reading?: boolean;
 };
 
 export type Judgment = { question: string; subject_type: string; subject: string; label: string | null;
@@ -319,7 +321,7 @@ export type ReadingSource = { type: "resume" | "linkedin_pdf" | "github" | "port
   status: "waiting" | "reading" | "done" | "failed"; error: string | null;
   counts: { roles: number; projects: number; skills: number } | null };
 export type ReadingProgress = { sources: ReadingSource[]; stage: string; stage_label: string; percent: number; done: boolean;
-  error: string | null; typical_minutes: number | null };
+  error: string | null; typical_minutes: number | null; review_ready?: boolean };
 export type ScoringRole = { baseline_id: string; title: string; is_primary: boolean;
   status: "waiting" | "scoring" | "ready" | "failed"; dimensions: Record<string, number> };
 export type ScoringProgress = { roles: ScoringRole[]; overall: number; line: string; all_ready: boolean; running: boolean;

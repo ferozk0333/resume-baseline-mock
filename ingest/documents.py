@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import html
 import io
+import json
 import re
 from pathlib import Path
 
@@ -28,7 +29,15 @@ import pymupdf4llm
 from core import config
 
 # Stored with the normalized text; bump when parsing or clean-up changes so old cache rows are not reused.
-NORMALIZER = f"pymupdf4llm-{pymupdf4llm.__version__}-classic+docx-md+clean-1"
+_BASE_NORMALIZER = f"pymupdf4llm-{pymupdf4llm.__version__}-classic+docx-md+clean-1"
+
+
+def normalizer() -> str:
+    """Hidden-text removal (REMOVE_HIDDEN_TEXT, specs/18 item 20) changes the text, so it is part of the key."""
+    return _BASE_NORMALIZER + ("+hidden-1" if config.REMOVE_HIDDEN_TEXT else "")
+
+
+NORMALIZER = _BASE_NORMALIZER
 pymupdf4llm.use_layout(False)
 
 
@@ -46,11 +55,14 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _pdf_markdown(data: bytes) -> str:
+def _pdf_markdown(data: bytes, hidden: list | None = None) -> str:
     try:
         doc = pymupdf.open(stream=data, filetype="pdf")
         if doc.needs_pass and not doc.authenticate(""):
             raise DocumentError("This PDF is password-protected.")
+        if hidden is not None:                            # REMOVE_HIDDEN_TEXT: redact it before reading
+            from ingest.layout import remove_pdf_hidden
+            hidden += remove_pdf_hidden(doc)
         return pymupdf4llm.to_markdown(doc, show_progress=False)
     except DocumentError:
         raise
@@ -58,8 +70,12 @@ def _pdf_markdown(data: bytes) -> str:
         raise DocumentError(f"This PDF could not be opened ({exc.__class__.__name__}).") from exc
 
 
-def _docx_paragraph(p) -> str:
-    text = p.text.strip()
+def _docx_paragraph(p, hidden: list | None = None) -> str:
+    if hidden is not None:
+        from ingest.layout import docx_visible_text
+        text = docx_visible_text(p, hidden).strip()
+    else:
+        text = p.text.strip()
     if not text:
         return ""
     style = (p.style.name if p.style is not None else "") or ""
@@ -74,7 +90,7 @@ def _docx_paragraph(p) -> str:
     return text
 
 
-def _docx_markdown(data: bytes) -> str:
+def _docx_markdown(data: bytes, hidden: list | None = None) -> str:
     try:
         document = docx.Document(io.BytesIO(data))
     except Exception as exc:  # python-docx raises several unrelated types for bad files
@@ -83,10 +99,11 @@ def _docx_markdown(data: bytes) -> str:
     for block in document.iter_inner_content():          # paragraphs and tables in document order
         if isinstance(block, docx.table.Table):
             for row in block.rows:
-                cells = [c.text.strip() for c in row.cells]
+                cells = [c.text.strip() if hidden is None else
+                         "\n".join(_docx_paragraph(p, hidden) for p in c.paragraphs).strip() for c in row.cells]
                 parts.append(" | ".join(dict.fromkeys(c for c in cells if c)))   # merged cells repeat
         else:
-            parts.append(_docx_paragraph(block))
+            parts.append(_docx_paragraph(block, hidden))
     return "\n\n".join(p for p in parts if p)
 
 
@@ -130,13 +147,16 @@ def clean_markdown(md: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
 
 
-def normalize_document(filename: str, data: bytes) -> str:
-    """Parse and clean one upload. Raises DocumentError with a user-facing message."""
+def normalize_document(filename: str, data: bytes, hidden: list | None = None) -> str:
+    """Parse and clean one upload. Raises DocumentError with a user-facing message. With REMOVE_HIDDEN_TEXT, hidden
+    text is removed first and appended to `hidden` (ingest.layout.Hidden)."""
     suffix = Path(filename).suffix.lower()
+    if hidden is None and config.REMOVE_HIDDEN_TEXT:
+        hidden = []
     if suffix == ".pdf":
-        md = _pdf_markdown(data)
+        md = _pdf_markdown(data, hidden)
     elif suffix == ".docx":
-        md = _docx_markdown(data)
+        md = _docx_markdown(data, hidden)
     else:
         raise DocumentError("Upload a PDF or DOCX file.")
     text = clean_markdown(md)
@@ -149,17 +169,26 @@ def extract_text(filename: str, data: bytes, conn=None) -> str:
     """Normalized text of a document, reused by file hash when `conn` is given (stored in document_texts)."""
     if conn is None:
         return normalize_document(filename, data)
-    digest = sha256(data)
+    digest, key = sha256(data), normalizer()
     row = conn.execute("SELECT text FROM document_texts WHERE file_sha256 = ? AND normalizer = ?",
-                       (digest, NORMALIZER)).fetchone()
+                       (digest, key)).fetchone()
     if row is not None:
         return row[0]
-    text = normalize_document(filename, data)
+    hidden: list | None = [] if config.REMOVE_HIDDEN_TEXT else None
+    text = normalize_document(filename, data, hidden)
     from core.db import now_iso
+    removed = json.dumps([{"page": h.page, "text": h.text, "reason": h.reason} for h in hidden]) if hidden else None
     with conn:
-        conn.execute("INSERT OR REPLACE INTO document_texts (file_sha256, normalizer, text, created_at) "
-                     "VALUES (?, ?, ?, ?)", (digest, NORMALIZER, text, now_iso()))
+        conn.execute("INSERT OR REPLACE INTO document_texts (file_sha256, normalizer, text, created_at, hidden_json) "
+                     "VALUES (?, ?, ?, ?, ?)", (digest, key, text, now_iso(), removed))
     return text
+
+
+def hidden_text(conn, file_sha256: str) -> list[dict]:
+    """What was removed as hidden from this upload (Admin only; never shown to candidates or recruiters)."""
+    row = conn.execute("SELECT hidden_json FROM document_texts WHERE file_sha256 = ? AND hidden_json IS NOT NULL "
+                       "ORDER BY created_at DESC LIMIT 1", (file_sha256,)).fetchone()
+    return json.loads(row[0]) if row else []
 
 
 def save_upload(candidate_id: str, filename: str, data: bytes) -> Path:

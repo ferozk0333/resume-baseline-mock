@@ -149,8 +149,10 @@ function RolesStep({ state, reload, onContinue, onRetry }: { state: OnboardingSt
   onContinue: () => void; onRetry: () => void }) {
   const cid = state.candidate.id;
   const [picked, setPicked] = useState<Target[]>(state.targets);
+  const [resumeRead, setResumeRead] = useState(false);       // Review opens once the resume is read
   const done = state.read_task?.status === "done";
   const failed = state.read_task?.status === "error";
+  const canReview = (done || resumeRead) && !failed;
 
   async function save(next: Target[]) {
     const before = picked;
@@ -200,14 +202,15 @@ function RolesStep({ state, reload, onContinue, onRetry }: { state: OnboardingSt
             })}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
-            {!done && !failed && picked.length > 0 && (
-              <span className="text-sm text-muted-foreground">You can continue when your documents are read.</span>)}
-            <Button disabled={!done || picked.length === 0} onClick={onContinue}>Continue to review</Button>
+            {!canReview && !failed && picked.length > 0 && (
+              <span className="text-sm text-muted-foreground">You can continue when your resume is read.</span>)}
+            <Button disabled={!canReview || picked.length === 0} onClick={onContinue}>Continue to review</Button>
           </div>
         </CardContent>
       </Card>
       <div className="space-y-4">
-        <ReadingWait cid={cid} readTaskId={state.onboarding.read_task_id} onDone={reload} />
+        <ReadingWait cid={cid} readTaskId={state.onboarding.read_task_id} onDone={reload}
+          onReviewReady={() => setResumeRead(true)} />
         {failed && <Button variant="outline" size="sm" onClick={onRetry}>Upload again</Button>}
         <GoodToKnow kind="reading" />
       </div>
@@ -220,9 +223,15 @@ function RolesStep({ state, reload, onContinue, onRetry }: { state: OnboardingSt
 function ReviewStep({ cid, onScored }: { cid: string; onScored: () => void }) {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const reading = !!profile?.reading;
   useEffect(() => {
     get<ProfileResponse>(`/candidates/${cid}/profile`).then(setProfile).catch((e) => toast.error(e.message));
   }, [cid]);
+  useEffect(() => {                         // sources still being read join Review as each finishes
+    if (!reading) return;
+    const t = setInterval(() => get<ProfileResponse>(`/candidates/${cid}/profile`).then(setProfile).catch(() => {}), 2000);
+    return () => clearInterval(t);
+  }, [cid, reading]);
   if (!profile) return <Skeleton className="h-96" />;
   return (
     <Review data={profile} onChange={setProfile} confirming={busy} confirmLabel="Confirm profile" onConfirm={async () => {

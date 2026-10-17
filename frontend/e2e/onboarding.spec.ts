@@ -38,7 +38,7 @@ async function firstRun(page: Page, name: string, prefix: string, mobile = false
   await page.getByRole("group", { name: "Roles" }).getByRole("button", { name: /Data Scientist/ }).click();
   await page.getByRole("group", { name: "Roles" }).getByRole("button", { name: /AI Engineer/ }).click();
   await expect(page.getByTestId("role-card-baseline-data-scientist-entry")).toContainText("Primary");
-  await expect(page.getByText("Your documents are read", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("wait-line").filter({ hasText: "Your documents are read" })).toBeVisible({ timeout: 30_000 });
   await shot(page, `${prefix}2-roles`);
   if (mobile) await noSideScroll(page);
   await page.reload();                                                 // resumable: same step, same picks

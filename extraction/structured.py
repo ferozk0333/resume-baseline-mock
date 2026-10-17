@@ -282,8 +282,10 @@ def rendered_resume(rendered_dir: Path | None, profile_id: str) -> str | None:
     return None
 
 
-def load_profile_file(conn, path: Path, rendered_dir: Path | None = None) -> str:
-    """Create a demo candidate from one structured profile file. Returns the candidate id."""
+def load_profile_file(conn, path: Path, rendered_dir: Path | None = None, linkedin=None, readme=None) -> str:
+    """Create a demo candidate from one structured profile file. Returns the candidate id.
+    `linkedin(evidence_id) -> (Profile, source text)` reads the LinkedIn section another way, and
+    `readme(repo) -> ParseResult | None` reads each README (the parser gates, specs/18 §4.4)."""
     pf = read_profile_file(path)
     cid = store.create_candidate(conn, pf.name, pf.role, pf.github_username, None)
     with conn:
@@ -296,14 +298,26 @@ def load_profile_file(conn, path: Path, rendered_dir: Path | None = None) -> str
         profiles.append(resume_profile(s["Resume"], eid))
         _set_extracted(conn, eid, profiles[-1])
     if s.get("LinkedIn"):
-        eid = _evidence(conn, cid, "linkedin_pdf", s["LinkedIn"])
-        profiles.append(linkedin_profile(s["LinkedIn"], eid))
+        if linkedin is None:
+            eid = _evidence(conn, cid, "linkedin_pdf", s["LinkedIn"])
+            profiles.append(linkedin_profile(s["LinkedIn"], eid))
+        else:
+            eid = _evidence(conn, cid, "linkedin_pdf", "")
+            prof, text = linkedin(eid)
+            with conn:
+                conn.execute("UPDATE evidence_items SET raw_text = ? WHERE id = ?", (text, eid))
+            profiles.append(prof)
         _set_extracted(conn, eid, profiles[-1])
     if s.get("GitHub"):
         data = json.loads(re.sub(r"^```json\s*|\s*```$", "", s["GitHub"].strip()))
         for repo in github_repos(data):
             eid = store.add_evidence(conn, cid, "github_repo", "demo", raw_text=repo.as_text(), status="validated")
-            profiles.append(repo_profile(SourceDoc(eid, "github_repo", repo.as_text(), repo.name, repo=repo), None)[0])
+            doc = SourceDoc(eid, "github_repo", repo.as_text(), repo.name, repo=repo)
+            parsed = readme(repo) if readme is not None and repo.readme and repo.counted else None
+            if parsed is not None and parsed.extract is not None:
+                profiles.append(repo_profile(doc, parsed.extract, method_of=parsed.method_of)[0])
+            else:
+                profiles.append(repo_profile(doc, None)[0])
     if s.get("Portfolio"):
         eid = _evidence(conn, cid, "portfolio", s["Portfolio"])
         profiles.append(portfolio_profile(s["Portfolio"], eid))

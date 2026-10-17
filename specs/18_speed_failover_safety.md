@@ -117,46 +117,91 @@ No change to *how* questions are asked.
       - any failed DESIGN check.
     - Feroz decides per flag.
 
-## 4. Phase 3: Jev-assisted extraction (flags, default OFF)
-**Design:** code segments the document, Jev labels the pieces, code assembles them. Every extracted field is a verbatim span of the source, so the quote check always passes and the extraction cannot invent content.
+## 4. Phase 3: Code-first extraction (flags, default OFF). **Build this before Phase 2.**
 
-14. **`JEV_EXTRACT_README`** (first; removes about 22 Flash calls per profile with many repos):
-    - Repo metadata comes from the GitHub API as today.
-    - The README is split into blocks. Jev decides per block (multi-question requests):
-      - describes what was built;
-      - describes a result or outcome;
-      - setup, install, license, badges or other.
-    - The project description is the kept blocks, verbatim and in order, with the length capped in config.
-    - No LLM call for READMEs when the flag is on.
-15. **`JEV_EXTRACT_LINKEDIN`:**
-    - Split the LinkedIn PDF Markdown into lines.
-    - Jev labels each line with a Choice: section heading, job title, employer, date range, location, bullet/description, education, certification, skill, other.
-    - Jev also answers a Noul per line: "belongs to the same item as the previous line".
-    - Code parses dates (inclusive months; year-only → Jan–Dec + needs_review) and builds roles, education, certifications and skills.
-16. **`JEV_EXTRACT_RESUME`** (trial):
-    - Same line labelling as LinkedIn.
-    - Skills and tools: code finds candidate names from our vocabulary (baseline criteria names and aliases plus `config/market_synonyms.json`). Jev then answers a Noul per name: "the candidate states they use or know this".
-    - Report the skills the LLM extraction found that this route missed (out-of-vocabulary).
-17. **Fallback:** if any label for a document is below `JEV_CONFIDENCE_THRESHOLD`, that document falls back to LLM extraction through the routing list. Record the method per item (jev / llm).
-18. **All extraction rules still apply:**
+### 4.1 Why
+- Reading text from digital PDFs (`pymupdf`) already takes milliseconds. OCR is not needed: image-only PDFs keep the unreadable warning.
+- The current ~2 min is the LLM *writing* about 75 structured items with quotes on a slow, capped free tier.
+- Our extraction is richer than job-board parsers (claims inside bullets, skill vs tool, parenthetical rules, award trimming, publication vs certification, quotes). So speed must not cost accuracy.
+
+**Design principle:** **code builds the structure, Jev decides what's unclear, the LLM is a fallback.**
+- Every field is a verbatim span of the source, so the quote check always passes and nothing can be invented.
+- A document uses the new route only when the parser is confident. Otherwise the whole document falls back to today's LLM extraction through the routing list.
+- Record the method per item: parser / jev / llm.
+
+### 4.2 Shared building blocks (code)
+14. **Layout reader:**
+    - Use `pymupdf` text blocks/spans with coordinates, font size and bold.
+    - Detect reading order, including two columns: cluster blocks by x-position; a column is read top to bottom before the next.
+    - Bullet markers; line merging for wrapped lines and PDF hyphenation.
+    - The existing whitespace normalization and hidden-text removal (Phase 4 item 20, moved here) run first.
+    - Keep `pymupdf4llm` Markdown as the source text shown in Review.
+15. **Section detector:**
+    - A dictionary of header variants per section: experience/work history/employment, projects, education, skills/technical skills, certifications/licences, publications, awards/honours, volunteering, summary, other.
+    - Use font and position cues (bigger or bold, alone on a line).
+16. **Date parser:**
+    - Handles "Jan 2020", "01/2020", "2020-01", "2019–2022", "Present/Current".
+    - Inclusive months; year-only → Jan–Dec + `needs_review`.
+    - Use a maintained library (e.g. `dateparser`) plus our rules.
+17. **Item builder:**
+    - Within experience/projects, group lines into items: title, employer, location, dates, then bullets.
+    - Unclear line roles go to Jev (item 20).
+18. **Claims:**
+    - (a) The skills section is split with the existing claim rules (flat lists, the parenthetical platform/category/method rules, "CI/CD" and "A/B testing" kept whole).
+    - (b) Inside bullets and descriptions, code finds names from our vocabulary (baseline criteria names and aliases + `config/market_synonyms.json`), and Jev confirms each with a Noul: "the candidate states they use or know this".
+    - (c) For bullets that matched no vocabulary, **one small LLM call per document** returns only a list of skill/tool names with their quote (judge_single route). Names must appear verbatim in the bullet; otherwise they are dropped.
+19. **Semantic rules in code:**
+    - award trimming (keep the event, trim to the clause, ≤ ~120 chars);
+    - publication vs certification by section and keywords;
+    - skill vs tool display classification (vocabulary first, Jev Choice for unknowns);
     - dedupe;
-    - date conflicts (resume wins; LinkedIn fills empty fields, and its more precise date wins when the year agrees);
-    - claim splitting rules;
-    - award trimming;
-    - publication vs certification;
-    - hidden text removed first (Phase 4 item 20);
-    - text inside tags is data.
-19. **Comparison:**
-    - Run `scripts/compare_extraction.py` on Feroz's resume and LinkedIn PDF (reference in `tests/extraction_reference/`) and on the 16 test profiles, flag on vs off.
-    - Report per source:
-      - items found / missed / extra vs the reference;
-      - dates matched;
-      - skills missed;
-      - proof-density change;
-      - final score change per profile;
-      - whether the ranking is still 1 > {3,4} > 2 > 5;
-      - time, Jev calls and LLM calls.
-    - Feroz decides per flag.
+    - date conflict rules (resume wins; LinkedIn fills empty fields; its more precise date wins when the year agrees).
+20. **Jev labelling for unclear lines:**
+    - Choice: section heading, job title, employer, date range, location, bullet/description, education, certification, publication, award, skill, other.
+    - Noul: "belongs to the same item as the previous line".
+    - Multi-question requests.
+21. **Confidence gate per document:**
+    - Fall back to the LLM if any of these hold:
+      - a required section can't be found;
+      - more than `PARSER_MAX_UNCLEAR` lines (config) are unclear after Jev;
+      - an item has a title but no dates, or dates that don't parse;
+      - reading order looks scrambled (dates interleaved across columns);
+      - any Jev label is below `JEV_CONFIDENCE_THRESHOLD`.
+    - Log the reason.
+
+### 4.3 Per source (separate flags)
+22. **`PARSE_README`** (first):
+    - Repo metadata from the GitHub API as today.
+    - The README is split into blocks. Jev keeps the blocks that "describe what was built" or "describe a result or outcome", and drops setup, install, license, badges and other.
+    - The kept blocks, verbatim and in order (length capped in config), become the project description.
+    - No LLM call.
+23. **`PARSE_LINKEDIN`:**
+    - LinkedIn "Save to PDF" has a fixed layout (left column: contact, top skills, languages, certifications; main column: name, headline, summary, experience, education).
+    - Build a dedicated parser for it on the shared blocks.
+    - No LLM call normally.
+24. **`PARSE_RESUME`:**
+    - Shared blocks + Jev + the one small claims call (item 18c).
+    - Full LLM fallback via the confidence gate.
+25. **Portfolio:** unchanged (LLM).
+
+### 4.4 Acceptance gates ("works just as well as now")
+A flag can be turned on only if all of these pass. Compare against today's LLM extraction:
+26. **Reference** (`scripts/compare_extraction.py`, Feroz's resume and LinkedIn PDF in `tests/extraction_reference/`):
+    - no fewer items found;
+    - no extra items that aren't in the source;
+    - dates identical (or more precise);
+    - proof density within ±0.01.
+27. **16 test profiles:**
+    - final scores within ±1 point;
+    - ranking still 1 > {3,4} > 2 > 5;
+    - all DESIGN checks pass.
+28. **Layout stress set** (synthetic only):
+    - Re-render the 16 test profiles as single-column, two-column and table-based resumes (DOCX and PDF).
+    - Each document must either parse correctly or fall back to the LLM. **Never silently wrong.**
+    - Report the pass/fallback/wrong counts per layout.
+29. **Timing and calls per source:** parser time, Jev calls, LLM calls, and how often the fallback is used.
+
+Report all gates per flag. Feroz decides per flag.
 
 ## 5. Phase 4: prompt-injection screen (never affects scores)
 20. **Hidden text, in code:**

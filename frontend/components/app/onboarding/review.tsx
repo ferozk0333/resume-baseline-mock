@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { AlertTriangle, ChevronDown, Plus, Trash2, Undo2, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Loader2, Plus, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -34,8 +34,21 @@ export function Review({ data, onChange, onConfirm, confirming, confirmLabel = "
   }
 
   const skills = claims.filter((c) => c.kind !== "award");
+  const pending = data.pending ?? [];
   return (
     <div className="space-y-6">
+      {pending.length > 0 && (
+        <div role="status" aria-live="polite" data-testid="still-reading"
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+          {pending.map((p) => (
+            <span key={p.type} className="inline-flex items-center gap-1.5">
+              <Loader2 className="size-3.5 text-primary motion-safe:animate-spin" aria-hidden />
+              Still reading {p.label}…
+            </span>
+          ))}
+          <span className="text-xs text-muted-foreground">You can check what&apos;s here now. New items appear as each finishes.</span>
+        </div>
+      )}
       {data.warnings.length > 0 && (
         <Alert>
           <AlertTriangle />
@@ -122,7 +135,9 @@ export function Review({ data, onChange, onConfirm, confirming, confirmLabel = "
 
       <div className="sticky bottom-0 -mx-6 flex items-center justify-end gap-3 border-t bg-background/95 px-6 py-4 backdrop-blur">
         {data.blocker && <p className="mr-auto text-sm text-destructive">{data.blocker}</p>}
-        <Button size="lg" onClick={onConfirm} disabled={!!data.blocker || confirming}>{confirmLabel}</Button>
+        {!data.blocker && data.reading && (
+          <p className="mr-auto text-sm text-muted-foreground" data-testid="confirm-wait">You can confirm when everything is read.</p>)}
+        <Button size="lg" onClick={onConfirm} disabled={!!data.blocker || confirming || !!data.reading}>{confirmLabel}</Button>
       </div>
     </div>
   );
