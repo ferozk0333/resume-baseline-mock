@@ -65,6 +65,8 @@ export type ProfileResponse = {
   pending?: { type: string; label: string }[]; reading?: boolean;
   /** Deleted in Review, then named again by a source read later: never re-added, offered with "Add back". */
   mentions?: { id: string; item_type: string; label: string; source: string }[];
+  /** "We ignored hidden text in your resume." (hidden text the injection screen also flagged). */
+  notices?: string[];
 };
 
 export type Judgment = { question: string; subject_type: string; subject: string; label: string | null;

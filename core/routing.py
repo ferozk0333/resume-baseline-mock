@@ -16,6 +16,7 @@ The model that answered is recorded (`last_model()`), so judgments and extractio
 from __future__ import annotations
 
 import contextvars
+import itertools
 import logging
 import random
 from contextlib import contextmanager
@@ -302,6 +303,25 @@ def daily_message(task: str, models: list[str], now: float) -> str:
             f"{hours:.0f} h) and it continues where it stopped.")
 
 
+_TURN = itertools.count()
+
+
+def routine_order(task: str | None, models: list[str]) -> list[str]:
+    """GROQ_JUDGE / GEMMA_JUDGE (specs/18 item 12): judging calls take turns across Flash-Lite and the allowed family
+    instead of using it only as overflow. Groq: single-item judging only (never grouped calls, extraction or plans);
+    Gemma: single and grouped judging. The rest of the route stays behind as overflow, in order."""
+    if task not in ("judge_single", "judge_grouped"):
+        return models
+    allowed = [m for m in models if "flash-lite" in m
+               or (config.GROQ_JUDGE and task == "judge_single" and m.startswith("groq/"))
+               or (config.GEMMA_JUDGE and "/gemma-" in m)]
+    if len(allowed) == sum(1 for m in models if "flash-lite" in m):
+        return models                                   # flags off: today's order
+    turn = next(_TURN) % len(allowed)
+    first = allowed[turn:] + allowed[:turn]
+    return first + [m for m in models if m not in first]
+
+
 _HEDGE_POOL = ThreadPoolExecutor(max_workers=16, thread_name_prefix="rightstaff-hedge")
 
 
@@ -318,7 +338,7 @@ class Router:
 
     def parse(self, *, model: str, system: str, user: str, output_type):
         _set_last(None)
-        task, models = task_of(model), models_of(model)
+        task, models = task_of(model), routine_order(task_of(model), models_of(model))
         if config.HEDGE_AFTER_S > 0 and task in config.HEDGE_TASKS and len(models) > 1:
             return self._hedged(task, models, system, user, output_type)
         return self._run(task, models, system, user, output_type)

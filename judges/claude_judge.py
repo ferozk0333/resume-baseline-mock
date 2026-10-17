@@ -42,21 +42,31 @@ def system_prompt(q: Question) -> str:
 def batch_output_model(key: str) -> type[BaseModel]:
     """A list of per-criterion answers, each with `label` constrained to the question's options."""
     q = question(key)
-    item = create_model(
-        f"BatchItem_{key}",
-        criterion=(str, Field(description="The criterion id exactly as given, e.g. C1.")),
-        label=(Literal[tuple(q.options)], Field(description="Exactly one of the options.")),
-        quote=(str, Field(description="Exact text copied from the input that supports the label; "
-                                      "empty string for a none/missing option.")),
-        reasoning=(str, Field(description="One sentence.")),
-    )
+    criterion = (str, Field(description="The criterion id exactly as given, e.g. C1."))
+    label = (Literal[tuple(q.options)], Field(description="Exactly one of the options."))
+    quote = (str, Field(description="Exact text copied from the input that supports the label; "
+                                    "empty string for a none/missing option."))
+    if q.reason_first:            # complexity reasons first, in a batch as alone
+        fields = {"criterion": criterion, "reasoning": (str, Field(description="Two or three sentences.")),
+                  "label": label, "quote": quote}
+    else:
+        fields = {"criterion": criterion, "label": label, "quote": quote,
+                  "reasoning": (str, Field(description="One sentence."))}
+    item = create_model(f"BatchItem_{key}", **fields)
     return create_model(f"Batched_{key}", answers=(list[item], Field(description="One entry per criterion.")))
 
 
 def batch_system_prompt(q: Question) -> str:
+    if q.key in ITEM_FAMILIES:
+        return (f"{system_prompt(q)}\n\nThe input lists several items in <criteria>, each with an id (C1, C2, ...). "
+                "Answer the question separately for each item, against the same shared context. "
+                "Return one entry per item, in the order given.")
     return (f"{system_prompt(q)}\n\nThe input lists several criteria in <criteria>, each with an id (C1, C2, ...). "
             "Answer the question separately for each criterion, using the same candidate text for all of them. "
             "Return one entry per criterion, in the order given.")
+
+
+ITEM_FAMILIES = {"complexity", "work_sample_relevant"}      # batched per item (GROUPED_ITEM_JUDGING)
 
 
 def split_shared(contexts: list[dict]) -> tuple[dict, list[dict]]:
@@ -90,10 +100,11 @@ class ClaudeJudge:
 
     def models_for(self, key: str) -> list[str]:
         """Every model that may answer this family (saved judgments from any of them are reused): the route's
-        members, and for families asked in batches the batch route's too (complexity is never batched)."""
+        members, and the batch route's too (complexity is batched under GROUPED_ITEM_JUDGING)."""
         from core.routing import models_of
         out = []
-        for m in (self.model_for(key),) if key == "complexity" else (self.model_for(key), self.batch_model_for(key)):
+        batched = key != "complexity" or config.GROUPED_ITEM_JUDGING
+        for m in (self.model_for(key), self.batch_model_for(key)) if batched else (self.model_for(key),):
             for x in models_of(m):
                 if x not in out:
                     out.append(x)
@@ -130,12 +141,13 @@ class ClaudeJudge:
         criteria = "\n".join(f"{cid}: {_as_text(next(iter(o.values())) if len(o) == 1 else o)}"
                              for cid, o in zip(ids, own))
         user = f"{render_context(shared)}\n\n{wrap_tag('criteria', criteria)}"
-        model = self.batch_model_for(key)
+        model = self.model_for(key) if key == "complexity" else self.batch_model_for(key)
         clear_last()
+        llm = self.complexity_llm if key == "complexity" else self.llm
         try:
-            with answer_budget(config.grouped_budget(len(contexts))):
-                out = self.llm.parse(model=model, system=batch_system_prompt(q), user=user,
-                                     output_type=batch_output_model(key))
+            with answer_budget(config.grouped_budget(len(contexts)) * (2 if q.reason_first else 1)):
+                out = llm.parse(model=model, system=batch_system_prompt(q), user=user,
+                                output_type=batch_output_model(key))
         except LLMError as exc:
             raise JudgeError(str(exc)) from exc
         model = last_model(model)

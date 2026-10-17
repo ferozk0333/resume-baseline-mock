@@ -77,6 +77,10 @@ def add_posting(conn, *, role: str, company: str, tier: str, source: str, title:
                      "status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                      (pid, role, company, tier, source, source_id, external_id, url, title, location, level,
                       "code" if level else None, h, text, raw_file, posted_at, seen, seen, status, now_iso()))
+    if config.PROMPT_GUARD:                               # screened in the background; never changes the market
+        from extraction import prompt_guard
+        path = conn.execute("PRAGMA database_list").fetchone()[2]
+        prompt_guard.screen_in_background(path, None, [(pid, "market_posting", text, False)])
     return pid, True
 
 

@@ -31,7 +31,7 @@ export function SiteHeader() {
     ? [{ href: "/recruiter", label: "Jobs" }, { href: "/recruiter/tasks", label: "Tasks", count: tasks },
       { href: "/recruiter/outbox", label: "Outbox" }]
     : mode === "admin" ? [{ href: "/admin/market", label: "Market baselines" }, { href: "/baselines", label: "Baselines" },
-      { href: "/admin/demo", label: "Demo tools" }]
+      { href: "/admin/screening", label: "Screening" }, { href: "/admin/demo", label: "Demo tools" }]
     : [{ href: "/", label: "Home" }, { href: "/jobs", label: "Jobs" }, { href: "/applications", label: "My applications" },
       { href: "/scores", label: "My scores" }, { href: "/profile", label: "Profile" }];
   const active = (href: string) => href === "/" ? path === "/" || path === "/onboarding"

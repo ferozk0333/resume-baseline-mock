@@ -199,9 +199,12 @@ def open_ctx(deps: Deps, state: dict, *, with_relevance: bool = True):
             raise ValueError(f"baseline {state['baseline_id']!r} not found")
         candidate_id = state["candidate_id"]
         evidence = {e["id"]: e for e in store.list_evidence(conn, candidate_id)}
+        profile = store.load_profile(conn, candidate_id)
+        if config.REPO_CAP:                               # judge at most MAX_REPOS repositories (specs/18 item 11)
+            profile = _capped(profile, baseline, evidence)
         ctx = Ctx(conn=conn, deps=deps, svc=JudgmentService(conn, deps.judge, candidate_id, state.get("run_id")),
                   candidate_id=candidate_id, run_id=state.get("run_id"), baseline=baseline,
-                  profile=store.load_profile(conn, candidate_id), today=deps.day(), evidence=evidence)
+                  profile=profile, today=deps.day(), evidence=evidence)
         if with_relevance:
             from graph.nodes.prepare import relevance_asks
             labels = resolve(ctx, relevance_asks(ctx), call=False)
@@ -211,8 +214,27 @@ def open_ctx(deps: Deps, state: dict, *, with_relevance: bool = True):
         conn.close()
 
 
+def _capped(profile: Profile, baseline: Baseline, evidence: dict) -> Profile:
+    """The profile as judged under REPO_CAP: repositories beyond MAX_REPOS (by relevance to this role, then latest
+    push) are left out; they stay listed on the saved profile."""
+    from dataclasses import replace
+    from extraction.repo_cap import keep
+    repos = [p for p in profile.projects if p.is_github and not (p.is_fork and not p.own_commits)]
+    if len(repos) <= config.MAX_REPOS:
+        return profile
+    items = [(p.id, " ".join([p.name, p.description or "", *(b.text for b in p.bullets),
+                              (evidence.get(p.evidence_id) or {}).get("raw_text") or ""]),
+              p.end_date.isoformat() if p.end_date else None, 0) for p in repos]
+    kept = keep(items, baseline)
+    return replace(profile, projects=[p for p in profile.projects if not p.is_github or p.id in kept
+                                      or (p.is_fork and not p.own_commits)])
+
+
 # Question families whose unmatched criteria go to Claude in one call per candidate and baseline (specs/09 §2.2).
 BATCH_KEYS = {"skill_evidence", "applied_level", "tool_evidence"}
+# GROUPED_ITEM_JUDGING (specs/18 item 10): these families too, one call per family over all items, same schema, a
+# quote required above the lowest label, each failed item retried alone; complexity keeps "reason first".
+ITEM_BATCH_KEYS = {"complexity", "work_sample_relevant"}
 
 
 def _batched(ctx: Ctx, asks: list[Ask]) -> dict[tuple[str, str], Judgment | None]:
@@ -220,6 +242,8 @@ def _batched(ctx: Ctx, asks: list[Ask]) -> dict[tuple[str, str], Judgment | None
     groups: dict[str, list[Ask]] = {}
     for a in asks:
         if a.key in BATCH_KEYS and a.route == "claude" and a.require_quote and a.rule_label is None:
+            groups.setdefault(a.key, []).append(a)
+        elif config.GROUPED_ITEM_JUDGING and a.key in ITEM_BATCH_KEYS and a.rule_label is None:
             groups.setdefault(a.key, []).append(a)
     found: dict[tuple[str, str], Judgment | None] = {}
     judge = ctx.deps.claude_judge

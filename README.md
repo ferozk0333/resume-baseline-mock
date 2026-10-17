@@ -216,6 +216,24 @@ human reviewers: don't send real personal data on the free tier.
   per document (`prompts/bullet_skills_system.txt`, the judge fallback model) lists skill and tool names from bullets
   that matched no vocabulary; names not written exactly as in their bullet are dropped.
 
+### Fewer calls, more model families (specs/18 phase 2; all flags off)
+- **`GROUPED_ITEM_JUDGING`:** complexity and work-sample questions in one batched call per family (same schema, a
+  quote required above the lowest label, each failed item retried alone; complexity reasons first).
+- **`REPO_CAP`** (`MAX_REPOS` 8): read and judge only the repositories most relevant to the role (then latest push,
+  then stars); the others stay listed. **`GEMMA_JUDGE` / `GROQ_JUDGE`:** judging calls take turns across Flash-Lite and
+  the family (Groq: single items only, never grouped calls, extraction or plans).
+- **`PARTITIONED_BATCHES`:** the all-bullets skill/tool checks per source document; an unchanged document keeps its
+  saved answer and the label is the best across sources.
+- **Capabilities per model** (`config.model_caps`, override `MODEL_CAPS`): a request sends only what the model accepts
+  (Gemma: no thinking setting). `scripts/phase2_compare.py --estimate` states the calls per flag; `--run FLAG` (LIVE)
+  compares on vs off on the test profiles.
+
+### Prompt-injection screen (specs/18 phase 4; `PROMPT_GUARD` off)
+Llama Prompt Guard 2 on Groq (86M, then 22M; 512-token window, so overlapping chunks), in the background: never
+blocks reading, never changes a score, never shown to recruiters. Visible text above `PROMPT_GUARD_THRESHOLD` is logged
+for Admin; hidden text stays removed and, when also flagged, the candidate sees "We ignored hidden text in your …".
+Admin → Screening lists removed hidden text, the parser log and flagged chunks (candidates and market postings).
+
 ## Tests
 ```bash
 .venv/bin/python -m pytest -q                       # offline: FakeJudge and fixtures, no API calls

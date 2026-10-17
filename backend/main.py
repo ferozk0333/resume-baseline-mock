@@ -558,6 +558,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             from backend import candidate as cx
             from backend import wait_screens as ws
             from extraction.deletions import mentions as deletion_mentions
+            from extraction.prompt_guard import notices as guard_notices
             ob = cx.onboarding(c, candidate_id)
             read_task = tasks.get(ob["read_task_id"]) if ob.get("read_task_id") else None
             pending = ws.pending_sources(c, candidate_id, read_task)
@@ -569,6 +570,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 "reading": bool(read_task and read_task["status"] in ("queued", "running")),
                 # Deleted in Review, then named again by a source read later: shown with "Add back", never re-added.
                 "mentions": deletion_mentions(c, candidate_id),
+                # Hidden text that the injection screen also flagged (it stayed removed). Nothing else it finds is shown.
+                "notices": guard_notices(c, candidate_id),
                 "dropped": store.list_dropped(c, candidate_id),
                 "warnings": [public_warning(e) for e in evidence if e["status"] == "failed" and e["error"]],
                 "sources": [{"id": e["id"], "type": e["type"], "status": e["status"], "text": e["raw_text"]}
@@ -636,7 +639,28 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                                    ("reasons_json", "notes_json", "items_json", "comparison_json")}}
                     for r in c.execute("SELECT * FROM parser_runs WHERE candidate_id = ? ORDER BY created_at",
                                        (candidate_id,))]
-            return {"documents": docs, "parser_runs": runs}
+            from extraction import prompt_guard
+            return {"documents": docs, "parser_runs": runs, "flagged_chunks": prompt_guard.admin_flags(c, candidate_id)}
+
+    @app.get("/admin/screening", tags=["admin"])
+    def admin_screening():
+        """Admin only: candidates with removed hidden text, parser logs or flagged chunks (specs/18 Phase 4), and
+        flagged market postings. Never in candidate or recruiter responses."""
+        from extraction import prompt_guard
+        with conn() as c:
+            rows = c.execute(
+                "SELECT c.id, c.name, "
+                "(SELECT COUNT(*) FROM parser_runs p WHERE p.candidate_id = c.id) AS parser_runs, "
+                "(SELECT COUNT(*) FROM prompt_guard_flags f WHERE f.candidate_id = c.id) AS flagged, "
+                "(SELECT COUNT(*) FROM evidence_items e JOIN document_texts d ON d.file_sha256 = e.file_sha256 "
+                " WHERE e.candidate_id = c.id AND d.hidden_json IS NOT NULL) AS hidden_docs "
+                "FROM candidates c ORDER BY c.created_at DESC").fetchall()
+            people = [dict(r) for r in rows if r["parser_runs"] or r["flagged"] or r["hidden_docs"]]
+            market = [f for f in prompt_guard.admin_flags(c) if f["source"] == "market_posting"]
+            return {"candidates": people, "market_flags": market, "enabled": {
+                "prompt_guard": config.PROMPT_GUARD, "remove_hidden_text": config.REMOVE_HIDDEN_TEXT},
+                "threshold": config.PROMPT_GUARD_THRESHOLD,
+                "model_doc": "https://console.groq.com/docs/model/llama-prompt-guard-2-86m"}
 
     @app.get("/candidates/{candidate_id}/runs", tags=["candidates"])
     def candidate_runs(candidate_id: str):

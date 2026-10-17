@@ -299,6 +299,21 @@ JEV_PARSE_BATCH = int(_env("JEV_PARSE_BATCH", "20"))           # questions per J
 # portfolio) instead of one over everything, so an unchanged document keeps its saved answer and a new source can only
 # add credit. Final label = the best across sources.
 PARTITIONED_BATCHES = _env("PARTITIONED_BATCHES", "0") == "1"
+# specs/18 Phase 2 (all default off; the comparison script decides each).
+GROUPED_ITEM_JUDGING = _env("GROUPED_ITEM_JUDGING", "0") == "1"   # complexity / work samples: one call per family
+REPO_CAP = _env("REPO_CAP", "0") == "1"                            # judge and read at most MAX_REPOS repositories
+MAX_REPOS = int(_env("MAX_REPOS", "8"))
+GEMMA_JUDGE = _env("GEMMA_JUDGE", "0") == "1"                      # Gemma in routine judging, not only overflow
+GROQ_JUDGE = _env("GROQ_JUDGE", "0") == "1"                        # Groq in routine single-item judging
+# Prompt-injection screen (specs/18 Phase 4; default off). Llama Prompt Guard 2 on Groq: a 512-token context window
+# (https://console.groq.com/docs/model/llama-prompt-guard-2-86m), so text is screened in chunks. Background only:
+# never blocks reading, never changes a score, never shown to recruiters.
+PROMPT_GUARD = _env("PROMPT_GUARD", "0") == "1"
+PROMPT_GUARD_MODELS = [m.strip() for m in _env("PROMPT_GUARD_MODELS", "groq/meta-llama/llama-prompt-guard-2-86m,"
+                                                "groq/meta-llama/llama-prompt-guard-2-22m").split(",") if m.strip()]
+PROMPT_GUARD_THRESHOLD = float(_env("PROMPT_GUARD_THRESHOLD", "0.5"))
+PROMPT_GUARD_CHUNK_CHARS = 1200     # ≈ 300–400 tokens: inside the 512-token window with room for the template
+PROMPT_GUARD_OVERLAP = 150          # an instruction split across two chunks is still seen whole in one
 HIDDEN_MIN_FONT_PT = 4.0         # smaller text is hidden
 HIDDEN_MIN_CONTRAST = 1.6        # text/background contrast ratio below this is hidden (white on white = 1.0)
 # Concurrency. All 19 subcategories run at once; these caps set how many model calls are in flight.

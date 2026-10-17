@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -174,6 +174,15 @@ CREATE TABLE IF NOT EXISTS deleted_items (   -- deleted in Review while sources 
 CREATE TABLE IF NOT EXISTS suppressed_items ( -- a later source named a deleted item: "LinkedIn also mentions X · Add back"
   id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, item_type TEXT, key TEXT, label TEXT, payload TEXT,
   restored INTEGER DEFAULT 0, created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS prompt_guard_cache (  -- Prompt Guard score per chunk text (specs/18 Phase 4)
+  text_hash TEXT, model TEXT, score REAL, created_at TEXT, PRIMARY KEY (text_hash, model)
+);
+
+CREATE TABLE IF NOT EXISTS prompt_guard_flags (  -- chunks above the threshold: Admin only, never scored or shown
+  id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, source TEXT, chunk_index INTEGER, chunk TEXT,
+  score REAL, hidden INTEGER DEFAULT 0, model TEXT, created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS parser_runs (     -- code-first extraction per document (specs/18 §4): used or shadow
@@ -628,6 +637,11 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
           "label TEXT, payload TEXT, created_at TEXT)",
           "CREATE TABLE IF NOT EXISTS suppressed_items (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, "
           "item_type TEXT, key TEXT, label TEXT, payload TEXT, restored INTEGER DEFAULT 0, created_at TEXT)"]),
+    (26, ["CREATE TABLE IF NOT EXISTS prompt_guard_cache (text_hash TEXT, model TEXT, score REAL, created_at TEXT, "
+          "PRIMARY KEY (text_hash, model))",
+          "CREATE TABLE IF NOT EXISTS prompt_guard_flags (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, "
+          "source TEXT, chunk_index INTEGER, chunk TEXT, score REAL, hidden INTEGER DEFAULT 0, model TEXT, "
+          "created_at TEXT)"]),
 ]
 
 

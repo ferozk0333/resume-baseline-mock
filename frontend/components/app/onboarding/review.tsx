@@ -60,6 +60,10 @@ export function Review({ data, onChange, onConfirm, confirming, confirmLabel = "
         </Alert>
       )}
 
+      {(data.notices ?? []).map((n) => (
+        <p key={n} className="rounded-lg border bg-white px-3 py-2 text-sm text-muted-foreground" data-testid="notice">{n}</p>
+      ))}
+
       {mentions.length > 0 && (
         <ul className="space-y-1.5" data-testid="mentions" aria-label="Deleted items another document mentions">
           {mentions.map((m) => (

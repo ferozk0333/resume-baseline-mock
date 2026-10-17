@@ -35,6 +35,7 @@ class Repo:
     languages: dict[str, int] = field(default_factory=dict)
     own_commits: int = 0
     readme: str | None = None
+    stars: int = 0                       # REPO_CAP's last tie-break; not part of the source text
 
     @property
     def counted(self) -> bool:
@@ -171,6 +172,7 @@ class GitHubClient:
             is_fork=bool(r.get("fork")),
             created_at=r.get("created_at"),
             pushed_at=r.get("pushed_at"),
+            stars=int(r.get("stargazers_count") or 0),
         )
         repo.own_commits = self._own_commits(repo.full_name, username)
         repo.languages = self._languages(repo.full_name)
