@@ -38,7 +38,8 @@ from extraction.parse.readme import parse_readme, repo_from_text  # noqa: E402
 from extraction.records import Profile, new_id  # noqa: E402
 from extraction.validate import SourceDoc, merge_profiles, repo_profile  # noqa: E402
 
-WORK = ROOT / "data" / "readme-gate.db"
+WORK = ROOT / "data" / "readme-gate.db"               # --estimate (rebuilt each time)
+LIVE_DB = ROOT / "data" / "readme-gate-live.db"         # --run: kept; --estimate never touches it
 JEV_RECORD = ROOT / "data" / "readme_gate_jev.json"
 ROLES = {"AI Engineer (role baseline)": "baseline-ai-engineer-entry",
          "Associate Product Manager, Payments (demo job)": "baseline-demo-larkspur-apm-payments"}
@@ -266,31 +267,69 @@ class _HybridRoute:
     def choice(self, key, options, context):
         return self.h._ask(key, context, lambda: self.h.live.fallback.choice(key, options, context))
 
+    def batch(self, key, contexts):
+        """The all-bullets batch: saved answers first, the rest in one live batched call (route judge_single)."""
+        from judges.base import JudgeError
+        out, misses = [None] * len(contexts), []
+        for i, ctx in enumerate(contexts):
+            try:
+                out[i] = self.h.replay._get(key, ctx, route=True)
+            except JudgeError:
+                misses.append(i)
+        if misses:
+            self.h.asked[key] += len(misses)
+            got = self.h.live.fallback.batch(key, [contexts[i] for i in misses])
+            for i, j in zip(misses, got):
+                out[i] = j
+        return out
+
+
+def _labels_by_input(conn, run_id: str) -> dict[tuple[str, str], str]:
+    """(question, input hash) → label used in a run (judgments saved for that run's candidate)."""
+    cid = conn.execute("SELECT candidate_id FROM runs WHERE id = ?", (run_id,)).fetchone()[0]
+    return {(r[0], r[1]): r[2] for r in conn.execute(
+        "SELECT question, input_hash, label FROM judgments WHERE candidate_id = ? AND used = 1 AND input_hash IS NOT "
+        "NULL ORDER BY created_at", (cid,))}
+
+
+def _criterion_finals(details: dict) -> dict[tuple[str, str], tuple[str | None, list]]:
+    """(question, criterion id) → (best label, [(subject id, label)]) from a skills/tools subcategory's judgments."""
+    from graph.nodes.expertise import ALL_BULLETS, best_label
+    out: dict = {}
+    for j in details.get("judgments", []):
+        if j["question"] not in ("skill_evidence", "applied_level", "tool_evidence"):
+            continue
+        cid = j["subject_id"].split(ALL_BULLETS, 1)[0]
+        best, parts = out.get((j["question"], cid), (None, []))
+        out[(j["question"], cid)] = (best_label(j["question"], best, j["label"]), [*parts, (j["subject_id"], j["label"])])
+    return out
+
 
 def run() -> None:
     if not config.LIVE:
         sys.exit("Live run: set LIVE=1 (and only after the go).")
     import time
     from graph.context import Deps
-    from graph.pipeline import Pipeline
+    from graph.pipeline import Pipeline, run_scores
     from judges.replay_judge import ReplayJudge
     from judges.service import get_judge
     from parser_gates import final_of
-    from extraction.validate import validate_extraction  # noqa: F401
     started = time.time()
-    db_copy(ROOT / "data" / "demo.db", WORK)
-    conn = db.connect(str(WORK))
+    db_copy(ROOT / "data" / "demo.db", LIVE_DB)
+    path = str(LIVE_DB)
+    conn = db.connect(path)
     orig = latest_live(conn)
     runs = current_runs(conn, orig)
     vocab = vocabulary(conn)
-    lab = RecordedLabeller(JEV_RECORD, JevLabeller())
+    lab = RecordedLabeller(JEV_RECORD, JevLabeller())     # README reading replays; a miss would ask Jev live
+    control_cid, _, _ = build(conn, "readme gate control (partitioned)", orig)
     t0 = time.time()
     cid, merged, parsed = build(conn, "readme gate live", orig, lambda repo: parse_readme(repo, vocab, lab))
-    parse_seconds = time.time() - t0
-    jev_parse = {"requests": lab.live_labeller.counts.requests, "questions": lab.live_labeller.counts.questions,
-                 "unanswered": lab.counts.unanswered}
-    rep = {"candidate": orig, "parse_seconds": round(parse_seconds, 1), "jev_parse": jev_parse, "readmes": {},
-           "roles": {}}
+    rep = {"candidate": orig, "partitioned_batches": config.PARTITIONED_BATCHES, "parse_seconds": round(time.time() - t0, 1),
+           "jev_parse": {"live_requests": lab.live_labeller.counts.requests,
+                         "live_questions": lab.live_labeller.counts.questions,
+                         "replayed": lab.counts.questions - lab.live_labeller.counts.questions},
+           "readmes": {}, "roles": {}}
     llm = {}
     for e in store.list_evidence(conn, orig):
         if e["type"] == "github_repo" and e["extracted_json"]:
@@ -298,46 +337,87 @@ def run() -> None:
     for name, r in parsed.items():
         old = llm.get(name, {"projects": [], "claims": []})
         rep["readmes"][name] = {
-            "outcome": r.report.outcome, "reasons": r.report.reasons, "notes": r.report.notes,
+            "outcome": r.report.outcome, "reasons": r.report.reasons,
             "parser_claims": [c.name for c in r.extract.claims] if r.extract else None,
             "llm_claims": [c["name_raw"] for c in old.get("claims", [])],
             "parser_bullets": [b.text for b in r.extract.projects[0].bullets] if r.extract else None,
             "llm_bullets": [b["text"] for p in old.get("projects", []) for b in p.get("bullets", [])]}
-    judge = None
+    live = get_judge()
     for label, run_id in runs.items():
-        judge = Hybrid(ReplayJudge(conn, (orig,)), judge.live if judge else get_judge())
-        pipe = Pipeline(Deps(str(WORK), judge, planner=None, today=run_date(conn, run_id)), print_timings=False)
-        t1 = time.time()
-        res = pipe.score(cid, ROLES[label], plan=False)
-        seconds = time.time() - t1
-        summary = next(iter(pipe.recorders.values())).summary() if pipe.recorders else {}
-        entry = {"seconds": round(seconds, 1), "asked": dict(judge.asked), "paused": res.get("paused"),
-                 "errors": len(res.get("errors") or []), "calls_by_task": summary.get("calls_by_task"),
-                 "model_calls": summary.get("model_calls"), "failovers": summary.get("failovers"),
-                 "rate_limits": summary.get("rate_limits")}
-        if res.get("run_id"):
-            before, s0 = final_of(conn, run_id)
-            after, s1 = final_of(conn, res["run_id"])
-            entry.update(current=before.final, parser=after.final, run_id=res["run_id"],
-                         proof_density=[s0["proof_density"]["score"], s1["proof_density"]["score"]],
-                         subcategories={k: [s0[k]["status"], s0[k]["score"], s1[k]["status"], s1[k]["score"]]
-                                        for k in s0 if (s0[k]["score"], s0[k]["status"]) != (s1[k]["score"], s1[k]["status"])})
+        entry = {"recorded_current": final_of(conn, run_id)[0].final}
+        for side, who in (("control", control_cid), ("parser", cid)):
+            judge = Hybrid(ReplayJudge(conn, (orig, control_cid)), live)
+            pipe = Pipeline(Deps(path, judge, planner=None, today=run_date(conn, run_id)), print_timings=False)
+            t1 = time.time()
+            res = pipe.score(who, ROLES[label], plan=False)
+            summary = next(iter(pipe.recorders.values())).summary() if pipe.recorders else {}
+            entry[side] = {"seconds": round(time.time() - t1, 1), "asked": sum(judge.asked.values()),
+                           "asked_by_question": dict(judge.asked), "paused": res.get("paused"),
+                           "errors": len(res.get("errors") or []), "run_id": res.get("run_id"),
+                           "calls_by_task": summary.get("calls_by_task"), "model_calls": summary.get("model_calls"),
+                           "failovers": summary.get("failovers"), "rate_limits": summary.get("rate_limits")}
+            if res.get("run_id"):
+                agg, scores = final_of(conn, res["run_id"])
+                entry[side].update(final=agg.final, scores={k: [v["status"], v["score"]] for k, v in scores.items()})
+            if res.get("paused"):
+                rep["stopped"] = f"{label} / {side}: {res['paused']}"
+                break
         rep["roles"][label] = entry
-        judge.asked = Counter()
-        if res.get("paused"):
-            rep["stopped"] = res["paused"]
+        if rep.get("stopped"):
             break
-    rows = conn.execute("SELECT method, model_version, used, COUNT(*) FROM judgments WHERE candidate_id = ? "
-                        "AND model_version != 'rule-v0.1' GROUP BY 1, 2, 3", (cid,)).fetchall()
+        a, b = entry["control"].get("run_id"), entry["parser"].get("run_id")
+        if a and b:
+            s0, s1 = run_scores(conn, a), run_scores(conn, b)
+            entry["changed_subcategories"] = {k: [s0[k]["score"], s1[k]["score"]] for k in s0
+                                              if (s0[k]["score"], s0[k]["status"]) != (s1[k]["score"], s1[k]["status"])}
+            # Proof density per claim: status changes, removed and added claims, and what each group did to the mean.
+            c0, c1 = s0["proof_density"]["details"].get("claims", {}), s1["proof_density"]["details"].get("claims", {})
+            entry["proof_density"] = _pd_split(c0, c1)
+            # A label that changed although the text it was judged on did not: compare by (question, input hash).
+            l0, l1 = _labels_by_input(conn, a), _labels_by_input(conn, b)
+            same_input_changed = [k for k in l0.keys() & l1.keys() if l0[k] != l1[k]]
+            entry["same_input_label_changes"] = len(same_input_changed)
+            lowered = []
+            for sub in ("role_skills", "applied_knowledge", "tools"):
+                f0, f1 = _criterion_finals(s0[sub]["details"]), _criterion_finals(s1[sub]["details"])
+                for k in f0.keys() & f1.keys():
+                    from graph.nodes.expertise import best_label
+                    if f0[k][0] != f1[k][0] and best_label(k[0], f0[k][0], f1[k][0]) == f0[k][0]:
+                        kept = {sid for sid, _ in f0[k][1]} & {sid for sid, _ in f1[k][1]}
+                        lowered.append({"subcategory": sub, "question": k[0], "criterion": k[1], "before": f0[k][0],
+                                        "after": f1[k][0], "shared_subjects": sorted(kept)})
+            entry["lowered_criteria"] = lowered
+    rows = conn.execute("SELECT c.name, j.method, j.model_version, j.used, COUNT(*) FROM judgments j JOIN candidates c "
+                        "ON c.id = j.candidate_id WHERE c.name LIKE 'readme gate%' AND j.model_version != 'rule-v0.1' "
+                        "GROUP BY 1, 2, 3, 4", ()).fetchall()
     rep["judgments_saved"] = [list(r) for r in rows]
     rep["jev_to_route_fallbacks"] = conn.execute(
-        "SELECT COUNT(*) FROM judgments WHERE candidate_id = ? AND method = 'jev' AND used = 0", (cid,)).fetchone()[0]
+        "SELECT COUNT(*) FROM judgments j JOIN candidates c ON c.id = j.candidate_id WHERE c.name LIKE 'readme gate%' "
+        "AND j.method = 'jev' AND j.used = 0").fetchone()[0]
     rep["total_seconds"] = round(time.time() - started, 1)
-    out = ROOT / "timings" / "readme_live_gate.json"
+    out = ROOT / "timings" / "readme_live_gate_2.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(rep, indent=1, default=str))
-    print(json.dumps({k: v for k, v in rep.items() if k != "readmes"}, indent=1, default=str))
+    print(json.dumps({k: v for k, v in rep.items() if k != "readmes"}, indent=1, default=str)[:20000])
     print(f"\nwritten to {out}")
+
+
+def _pd_split(c0: dict, c1: dict) -> dict:
+    """How proof density moved: removed claims, added claims, and retained claims whose support changed."""
+    def mean(d):
+        v = [x for x in d.values() if x is not None]
+        return sum(v) / len(v) if v else None
+    removed = {k: v for k, v in c0.items() if k not in c1}
+    added = {k: v for k, v in c1.items() if k not in c0}
+    kept = [k for k in c0 if k in c1]
+    changed = {k: [c0[k], c1[k]] for k in kept if c0[k] != c1[k]}
+    step1 = {k: c0[k] for k in kept}                                        # after removal only
+    step2 = {**step1, **{k: c1[k] for k in changed}}                        # + status changes
+    return {"before": mean(c0), "after_removals": mean(step1), "after_status_changes": mean(step2),
+            "after": mean(c1), "removed": len(removed), "added": len(added), "status_changed": len(changed),
+            "removed_values": {str(v): list(removed.values()).count(v) for v in set(removed.values())},
+            "added_values": {str(v): list(added.values()).count(v) for v in set(added.values())},
+            "status_changes": changed}
 
 
 def main() -> None:

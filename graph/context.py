@@ -225,7 +225,15 @@ def _batched(ctx: Ctx, asks: list[Ask]) -> dict[tuple[str, str], Judgment | None
     judge = ctx.deps.claude_judge
     if not hasattr(judge, "batch"):
         return found
-    for key, group in groups.items():
+    if config.PARTITIONED_BATCHES:                   # one batch per question and source document (Phase 3 review 2b)
+        split: dict[str, list[Ask]] = {}
+        for key, group in groups.items():
+            for a in group:
+                source = a.subject_id.split("#all@", 1)[1] if "#all@" in a.subject_id else ""
+                split.setdefault(f"{key}\x00{source}", []).append(a)
+        groups = split
+    for gkey, group in groups.items():
+        key = gkey.split("\x00", 1)[0]
         baseline = ctx.baseline if QUESTIONS[key].job_dependent else None
         misses = [a for a in group if ctx.svc.cached(a.key, a.subject_id, a.context, baseline, judge) is None]
         if len(misses) < 2:

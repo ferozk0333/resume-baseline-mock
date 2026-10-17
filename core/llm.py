@@ -58,12 +58,13 @@ def effort_kwargs(model: str, effort: str | None) -> dict:
 
 
 def sampling_kwargs(model: str) -> dict:
-    """temperature 0 wherever the API allows it (CLAUDE.md rule 7).
+    """temperature 0 wherever the API allows it (CLAUDE.md rule 7; capability table in config).
 
     anthropic 1.x removed `temperature` from the method signatures (not from the
     API), so it is sent through `extra_body` for models that still accept it.
     """
-    return {"extra_body": {"temperature": 0.0}} if model.startswith(_TEMPERATURE_MODELS) else {}
+    ok = model.startswith(_TEMPERATURE_MODELS) and config.model_caps(model).temperature
+    return {"extra_body": {"temperature": 0.0}} if ok else {}
 
 
 def note_usage(response) -> None:
@@ -244,11 +245,16 @@ class GroqLLM:
         budget = self._budget(model, system, user)
         if budget < 500:
             raise Unusable(f"input too long for one {model} request within its tokens per minute")
-        body = {"model": model.removeprefix(GROQ_PREFIX), "max_completion_tokens": budget, "temperature": 0,
+        caps = config.model_caps(model)
+        if not caps.system_instruction or not caps.json_schema:
+            raise Unusable(f"{model} lacks a system instruction or schema output")
+        body = {"model": model.removeprefix(GROQ_PREFIX), "max_completion_tokens": budget,
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                 "response_format": {"type": "json_schema", "json_schema": {
                     "name": output_type.__name__, "strict": True,
                     "schema": strict_schema(output_type.model_json_schema())}}}
+        if caps.temperature:
+            body["temperature"] = 0
         if "gpt-oss" in model and self.effort:
             body["reasoning_effort"] = self.effort
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
@@ -383,10 +389,16 @@ class GeminiLLM:
         if not self.api_key:
             raise Unusable("GEMINI_API_KEY is not set in .env.")
         name = model.removeprefix(GEMINI_PREFIX)
+        caps = config.model_caps(model)
+        if not caps.system_instruction or not caps.json_schema:
+            # Instructions stay in a system part and output follows the schema, or the model is not used.
+            raise Unusable(f"{model} lacks a system instruction or schema output")
         gen = {"responseMimeType": "application/json",
                "responseJsonSchema": gemini_schema(output_type.model_json_schema()),
-               "temperature": 0, "maxOutputTokens": current_budget(self.max_tokens)}
-        if config.GEMINI_THINKING_LEVEL:
+               "maxOutputTokens": current_budget(self.max_tokens)}
+        if caps.temperature:
+            gen["temperature"] = 0
+        if config.GEMINI_THINKING_LEVEL and caps.thinking:
             gen["thinkingConfig"] = {"thinkingLevel": config.GEMINI_THINKING_LEVEL}
         body = {"systemInstruction": {"parts": [{"text": system}]},
                 "contents": [{"role": "user", "parts": [{"text": user}]}], "generationConfig": gen}

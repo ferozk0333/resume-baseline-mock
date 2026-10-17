@@ -162,3 +162,17 @@ def test_timing_summary_of_a_run_that_stopped_early():
     rec = timing.Recorder()
     rec.add(timing.STEP, "prepare_match", 0.0, 1.0)
     assert rec.summary()["scoring_and_plan_seconds"] is None
+
+
+def test_requests_send_only_what_the_model_supports(monkeypatch):
+    """Phase 3 review 2c: Gemma rejects a thinking level; nothing else changes (same prompt, schema, temperature)."""
+    monkeypatch.setattr(config, "GEMINI_THINKING_LEVEL", "low")
+    s = Session(ok(EMPTY), ok(EMPTY))
+    call(s, "gemini/gemini-3.8-flash")
+    call(s, "gemini/gemma-4-31b-it")
+    flash, gemma = (b["generationConfig"] for b in s.bodies)
+    assert flash["thinkingConfig"] == {"thinkingLevel": "low"} and "thinkingConfig" not in gemma
+    assert gemma["temperature"] == 0 and gemma["responseJsonSchema"] == flash["responseJsonSchema"]
+    assert s.bodies[1]["systemInstruction"] == s.bodies[0]["systemInstruction"]
+    assert config.model_caps("claude-sonnet-5-5").temperature is False
+    assert config.model_caps("gemini/gemini-3.5-flash-lite") == config.ModelCaps()

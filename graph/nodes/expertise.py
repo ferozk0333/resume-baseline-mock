@@ -21,11 +21,16 @@ def mentions(text: str | None, c: BaselineCriterion) -> bool:
 
 def evidence_lines(ctx: Ctx) -> list[str]:
     """Role/project bullets and project descriptions: where a skill can be *shown*."""
-    lines = [b.text for r in ctx.profile.roles for b in r.bullets]
+    return [text for text, _ in sourced_lines(ctx)]
+
+
+def sourced_lines(ctx: Ctx) -> list[tuple[str, str | None]]:
+    """evidence_lines with the evidence item each line comes from (a merged role keeps each bullet's source)."""
+    lines = [(b.text, b.evidence_id) for r in ctx.profile.roles for b in r.bullets]
     for p in ctx.counted_projects():
         if p.description:
-            lines.append(f"{p.name}: {p.description}")
-        lines += [b.text for b in p.bullets]
+            lines.append((f"{p.name}: {p.description}", p.evidence_id))
+        lines += [(b.text, b.evidence_id) for b in p.bullets]
     return lines
 
 
@@ -35,13 +40,13 @@ def listed(ctx: Ctx) -> list[str]:
 
 
 def repo_lines(ctx: Ctx) -> list[str]:
-    out = []
-    for p in ctx.counted_projects():
-        if p.is_github:
-            raw = (ctx.evidence.get(p.evidence_id) or {}).get("raw_text") or ""
-            langs = next((ln.split(":", 1)[1].strip() for ln in raw.splitlines() if ln.startswith("Languages:")), "")
-            out.append(f"{p.name}: {p.description or ''} (languages: {langs})".strip())
-    return out
+    return [line for p in ctx.counted_projects() if p.is_github for line in repo_lines_of(ctx, p)]
+
+
+def repo_lines_of(ctx: Ctx, p) -> list[str]:
+    raw = (ctx.evidence.get(p.evidence_id) or {}).get("raw_text") or ""
+    langs = next((ln.split(":", 1)[1].strip() for ln in raw.splitlines() if ln.startswith("Languages:")), "")
+    return [f"{p.name}: {p.description or ''} (languages: {langs})".strip()]
 
 
 def criterion_text(c: BaselineCriterion) -> str:
@@ -58,10 +63,50 @@ def criterion_text(c: BaselineCriterion) -> str:
 # retry once, then missing). Nothing at all → missing by rule.
 
 ALL_BULLETS = "#all"
+PART = "@"                       # "<criterion id>#all@<evidence id>": one all-bullets ask per source document
 
 
 def _all_bullets(key: str, c: BaselineCriterion, context: dict, subject_id: str | None = None) -> Ask:
     return Ask(key, "criterion", subject_id or c.id, context, route="claude", require_quote=True)
+
+
+def _partitions(ctx: Ctx, key: str, c: BaselineCriterion, base_id: str, tools: bool = False) -> list[Ask]:
+    """PARTITIONED_BATCHES: the all-bullets ask once per source document, each with only that document's lines
+    (same question, prompt and schema). A document whose text did not change keeps its saved answer."""
+    from collections import defaultdict
+    parts: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    for text, eid in sourced_lines(ctx):
+        parts[eid or "manual"]["bullets"].append(text)
+    for cl in ctx.profile.claims:
+        if cl.kind in ("skill", "tool") and cl.bullet_id is None:
+            parts[cl.evidence_id or "manual"]["skills_list"].append(cl.name_raw)
+    if tools:
+        for p in ctx.counted_projects():
+            if p.is_github:
+                parts[p.evidence_id or "manual"]["repositories"] += [r for r in repo_lines_of(ctx, p)]
+        for cert in ctx.profile.certifications:
+            parts[cert.evidence_id or "manual"]["certifications"].append(cert.name)
+    asks = []
+    for eid in sorted(parts):
+        part = parts[eid]
+        if not (part["bullets"] or part["repositories"] or (tools and part["certifications"])
+                or (not tools and part["skills_list"])):
+            continue
+        context = {"criterion": criterion_text(c), "bullets": part["bullets"]}
+        if tools:
+            context.update(repositories=part["repositories"], certifications=part["certifications"])
+        context["skills_list"] = part["skills_list"]
+        asks.append(_all_bullets(key, c, context, f"{base_id}{ALL_BULLETS}{PART}{eid}"))
+    return asks
+
+
+def _everything(ctx: Ctx, key: str, c: BaselineCriterion, context: dict, subject_id: str | None = None,
+                tools: bool = False) -> list[Ask]:
+    """The all-bullets route: one ask over everything, or one per source document (PARTITIONED_BATCHES)."""
+    from core import config
+    if config.PARTITIONED_BATCHES:
+        return _partitions(ctx, key, c, c.id, tools)
+    return [_all_bullets(key, c, context, subject_id)]
 
 
 def _skill_asks(ctx: Ctx, key: str, none_label: str, list_counts: bool) -> list[Ask]:
@@ -75,9 +120,9 @@ def _skill_asks(ctx: Ctx, key: str, none_label: str, list_counts: bool) -> list[
             asks.append(Ask(key, "criterion", c.id,
                             {"criterion": criterion_text(c), "bullets": hits, "skills_list": skills}))
             if not hits and lines:
-                asks.append(_all_bullets(key, c, everything, c.id + ALL_BULLETS))
+                asks += _everything(ctx, key, c, everything, c.id + ALL_BULLETS)
         elif lines or skills:
-            asks.append(_all_bullets(key, c, everything))
+            asks += _everything(ctx, key, c, everything)
         else:
             asks.append(Ask(key, "criterion", c.id, {"criterion": criterion_text(c)}, rule_label=none_label,
                             rule_reason="The profile has no bullets and no skills list."))
@@ -92,7 +137,10 @@ def best_label(key: str, *labels: str | None) -> str | None:
 
 
 def criterion_label(labels: Labels, key: str, c: BaselineCriterion) -> str | None:
-    return best_label(key, labels.get(key, c.id), labels.get(key, c.id + ALL_BULLETS))
+    """Alias route, all-bullets route and (PARTITIONED_BATCHES) every source's all-bullets answer: the best."""
+    parts = [labels.get(key, a.subject_id) for a in labels.asks
+             if a.key == key and a.subject_id.startswith(f"{c.id}{ALL_BULLETS}{PART}")]
+    return best_label(key, labels.get(key, c.id), labels.get(key, c.id + ALL_BULLETS), *parts)
 
 
 def _by_priority(ctx: Ctx, labels: Labels, kind: str, key: str) -> tuple[dict, dict]:
@@ -138,9 +186,9 @@ def tools_plan(ctx: Ctx) -> list[Ask]:
             asks.append(Ask("tool_evidence", "criterion", c.id, context))
             # Matched only in the skills list: also the all-bullets judge; the better label counts (§0.4).
             if not any(context[k] for k in ("bullets", "repositories", "certifications")) and (lines or repos):
-                asks.append(_all_bullets("tool_evidence", c, everything, c.id + ALL_BULLETS))
+                asks += _everything(ctx, "tool_evidence", c, everything, c.id + ALL_BULLETS, tools=True)
         elif lines or repos or certs or skills:
-            asks.append(_all_bullets("tool_evidence", c, everything))
+            asks += _everything(ctx, "tool_evidence", c, everything, tools=True)
         else:
             asks.append(Ask("tool_evidence", "criterion", c.id, {"criterion": criterion_text(c)},
                             rule_label="missing", rule_reason="The profile has no bullets, repositories, "

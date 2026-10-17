@@ -147,6 +147,43 @@ def model_limits(model: str) -> ModelLimits:
     return ModelLimits()
 
 
+@dataclass(frozen=True)
+class ModelCaps:
+    """What a model's API accepts (Phase 3 review 2c). A request sends only these; prompts never change."""
+    thinking: bool = True             # Gemini thinkingConfig
+    temperature: bool = True          # temperature 0 (CLAUDE.md rule 7) where accepted
+    system_instruction: bool = True   # instructions in a separate system part (CLAUDE.md rule 9)
+    json_schema: bool = True          # structured output by schema
+
+
+# Prefix → capabilities; the longest matching prefix wins. Gemma on the Gemini API rejects a thinking level ("Thinking
+# level is not supported for this model", live run 1). Newer Claude models reject a non-default temperature.
+_CAPS: dict[str, ModelCaps] = {
+    "gemini/gemma-": ModelCaps(thinking=False),
+    "claude-sonnet-5": ModelCaps(temperature=False), "claude-opus-5": ModelCaps(temperature=False),
+    "claude-haiku-5": ModelCaps(temperature=False), "claude-fable": ModelCaps(temperature=False),
+    "claude-opus-4-7": ModelCaps(temperature=False),
+}
+
+
+def _caps_env(text: str) -> dict[str, ModelCaps]:
+    """MODEL_CAPS="provider/model=thinking:0,temperature:1,…;…" (overrides for one model)."""
+    out = {}
+    for part in filter(None, (x.strip() for x in text.split(";"))):
+        model, _, flags = part.partition("=")
+        kv = dict(f.split(":") for f in flags.split(",") if ":" in f)
+        out[model.strip()] = ModelCaps(**{k.strip(): v.strip() == "1" for k, v in kv.items()})
+    return out
+
+
+_CAPS.update(_caps_env(_env("MODEL_CAPS", "")))
+
+
+def model_caps(model: str) -> ModelCaps:
+    hits = [k for k in _CAPS if model.startswith(k)]
+    return _CAPS[max(hits, key=len)] if hits else ModelCaps()
+
+
 _CONCURRENCY = {k.strip(): int(v) for k, _, v in (x.partition("=") for x in _env("MODEL_CONCURRENCY", "").split(",") if "=" in x)}
 
 
@@ -258,6 +295,10 @@ PARSER_MAX_UNCLEAR = int(_env("PARSER_MAX_UNCLEAR", "3"))     # more unclear lin
 README_MAX_CHARS = int(_env("README_MAX_CHARS", "1500"))       # kept README blocks, verbatim, as the description
 README_TABLE_MAX_ROWS = int(_env("README_TABLE_MAX_ROWS", "10"))   # data rows in a kept results table (one bullet)
 JEV_PARSE_BATCH = int(_env("JEV_PARSE_BATCH", "20"))           # questions per Jev request when parsing
+# All-bullets judging per source document (Phase 3 review 2b): one ask per document (resume, LinkedIn, each repo,
+# portfolio) instead of one over everything, so an unchanged document keeps its saved answer and a new source can only
+# add credit. Final label = the best across sources.
+PARTITIONED_BATCHES = _env("PARTITIONED_BATCHES", "0") == "1"
 HIDDEN_MIN_FONT_PT = 4.0         # smaller text is hidden
 HIDDEN_MIN_CONTRAST = 1.6        # text/background contrast ratio below this is hidden (white on white = 1.0)
 # Concurrency. All 19 subcategories run at once; these caps set how many model calls are in flight.

@@ -202,7 +202,7 @@ def _judged(scores: dict) -> dict[str, dict]:
         for j in (scores.get(sub, {}).get("details") or {}).get("judgments", []):
             if j["question"] not in ("skill_evidence", "tool_evidence"):
                 continue
-            cid = j["subject_id"].removesuffix(ALL_BULLETS)
+            cid = j["subject_id"].split(ALL_BULLETS, 1)[0]          # "<id>#all" and "<id>#all@<source>"
             have = out.get(cid)
             if have is None or (j["label"] is not None and best_label(j["question"], have["label"], j["label"]) == j["label"]
                                 and j["label"] != have["label"]):
