@@ -313,3 +313,24 @@ def test_recruiters_see_display_only_proof_and_honest_credential_wording(tmp_pat
     assert out["more"] == [{"type": "language", "label": "Languages",
                             "fields": {"language": "Spanish", "proficiency": "Fluent"}}]
     assert "verified" not in str(out).lower()
+
+
+def test_remerge_keeps_saved_order_and_merges_only_duplicates(tmp_path):
+    """Judge inputs list items (skills list, artifacts) in saved order: a re-merge that merges nothing changes
+    nothing, and a merged item takes its group's first place."""
+    conn = db.connect(tmp_path / "t.db")
+    cid = store.create_candidate(conn, "Jane")
+    r = store.add_evidence(conn, cid, "resume", "upload", raw_text="x")
+    li = store.add_evidence(conn, cid, "linkedin_pdf", "upload", raw_text="x")
+    claims = [_claim("SQL", li), _claim("Python", r), _claim("HuggingFace", li), _claim("Docker", r),
+              _claim("Hugging Face", r)]
+    store.save_profile(conn, cid, Profile(claims=claims))
+    before = [c.name_raw for c in store.load_profile(conn, cid).claims]
+    out = store.remerge(conn, cid)
+    after = [c.name_raw for c in store.load_profile(conn, cid).claims]
+    assert out["merged_away"] == {"claims": ["HuggingFace"]} or out["merged_away"] == {"claims": ["Hugging Face"]}
+    assert len(after) == 4 and after[:2] == ["SQL", "Python"] and after[3] == "Docker"
+    assert after[2] in ("HuggingFace", "Hugging Face")
+    store.remerge(conn, cid)
+    assert [c.name_raw for c in store.load_profile(conn, cid).claims] == after          # nothing more to merge
+    assert before[:2] == after[:2]

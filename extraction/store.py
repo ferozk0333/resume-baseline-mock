@@ -633,6 +633,7 @@ def remerge(conn: sqlite3.Connection, candidate_id: str) -> dict:
     parts[0].references = profile.references
     before = {t: [_name(x) for x in getattr(profile, t)] for t in ("roles", "projects", "claims", "certifications")}
     merged, report = merge_profiles(parts, types)
+    _keep_order(profile, merged, report)
     after_ids = {x.id for t in ("roles", "projects", "claims", "certifications") for x in getattr(merged, t)}
     gone = {t: [_name(x) for x in getattr(profile, t) if x.id not in after_ids]
             for t in ("roles", "projects", "claims", "certifications")}
@@ -642,6 +643,25 @@ def remerge(conn: sqlite3.Connection, candidate_id: str) -> dict:
             conn.execute("UPDATE dropped_items SET parent_id = ? WHERE candidate_id = ? AND parent_id = ?",
                          (new, candidate_id, old))
     return {"merged_away": {t: v for t, v in gone.items() if v}, "before": before}
+
+
+def _keep_order(before: Profile, merged: Profile, report) -> None:
+    """Items stay in their saved order (a merged item takes its group's first place): judge inputs that list items
+    (the skills list, artifacts) change only where something merged."""
+    from extraction.validate import _same_certification, _same_project, claim_key
+    remap = {**report.role_remap, **report.project_remap}
+    same = {"projects": _same_project, "certifications": _same_certification,
+            "claims": lambda a, b: claim_key(a) == claim_key(b)}
+    for table in ("roles", "projects", "claims", "certifications"):
+        old = getattr(before, table)
+        pos = {x.id: i for i, x in enumerate(old)}
+
+        def first(x, table=table, old=old, pos=pos):
+            group = [i for o, i in pos.items() if remap.get(o) == x.id]
+            if table in same:
+                group += [i for i, o in enumerate(old) if same[table](o, x)]
+            return min([pos.get(x.id, len(old)), *group])
+        getattr(merged, table).sort(key=first)
 
 
 def _name(x) -> str:
