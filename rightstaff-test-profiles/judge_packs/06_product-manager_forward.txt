@@ -1,0 +1,244 @@
+You are an experienced hiring manager filling the entry-level role described below. You will see the application materials of five candidates (resume and, where provided, LinkedIn profile, GitHub, portfolio, certifications and references). Names have been removed; candidates are labelled A to E. The order of the candidates means nothing.
+
+Task: rank the candidates by whom you would most want to interview for this role.
+- Judge what each candidate has actually done and can show that is relevant to this role.
+- Do not give credit for length, formatting or wording style on their own.
+- If two candidates are genuinely equal, you may tie them with "=".
+- Use only the information given. Do not search the web.
+
+Answer in exactly this format:
+
+RANKING: X > X > X > X > X
+GAPS: X-X clear|slight, X-X clear|slight, X-X clear|slight, X-X clear|slight
+DECIDING FACTOR: X-X experience|skills|results|proof|other, (one per adjacent pair, same order as GAPS)
+REASONS:
+A: one sentence
+B: one sentence
+C: one sentence
+D: one sentence
+E: one sentence
+
+=== THE ROLE: Product Manager (entry level, about 1 year of experience expected) ===
+About the role: Early-career Product Manager (APM/PM) who discovers user problems, defines requirements, works with engineering and design to ship, and measures impact with data.
+What you will do: Owns a feature or small product area: defines the problem, writes requirements, prioritizes with engineering and design, ships, and measures the result.
+Required: Product discovery and user research, Requirements writing, Prioritization, Product analytics, Cross-functional collaboration, Jira or Linear, Product analytics tool
+Nice to have: Experimentation / A/B testing, Go-to-market, Technical fluency, Figma, SQL, Product management certification
+
+=== CANDIDATE A ===
+
+--- Resume ---
+**Candidate A**
+Software Engineer moving into Product Management · candidate@example.com · Raleigh, NC · github.com/candidate
+
+**Experience**
+
+**Software Engineer** — Lumen Analytics, Raleigh, NC · Jun 2022 – Present
+- Built the report-scheduling feature in the analytics dashboard (React, Python); worked with the PM to cut the scope of the first version to the 3 most-requested schedules, which shipped in 5 weeks instead of the planned 10.
+- Led discovery for an internal data-export tool: interviewed 9 customer-success staff, wrote the spec, and built it; export requests to engineering dropped from about 40 a month to 6.
+- Wrote technical design docs for 4 features and walked the support team through each launch.
+- Mentor 2 junior engineers; run the team's sprint planning when the engineering manager is away.
+
+**Education**
+B.S. Computer Science, Tar River University · 2022
+
+**Skills**
+JavaScript, React, Python, SQL, REST APIs, Jira, technical specs, user interviews, Figma (basic)
+
+--- LinkedIn profile ---
+Candidate A
+Software Engineer at Lumen Analytics
+Raleigh, North Carolina
+
+Experience
+- Software Engineer, Lumen Analytics · Jun 2022 – Present · Dashboard features, internal tools.
+
+Education
+- Tar River University, B.S. Computer Science, 2018 – 2022
+
+Skills: React, Python, SQL, Product Discovery
+
+--- GitHub (public repositories) ---
+- export-tool-spec: Discovery notes and spec template for an internal data-export tool (sanitized) (Markdown; own repository; commits by candidate: 9; last updated 2025-06)
+  README: Interview guide, synthesized findings from 9 interviews, problem statement, scope options and the final spec. Company details removed.
+- budget-tracker: Personal budget tracker web app (JavaScript, Python; own repository; commits by candidate: 48; last updated 2024-10)
+  README: React front end with a small Flask API.
+
+--- References submitted ---
+- Relationship: peer. Statement: "I am the product manager the candidate works with. He thinks about users before code; the export tool was his idea from start to finish."
+
+=== CANDIDATE B ===
+
+--- Resume ---
+**Candidate B**
+Product Manager | Product Strategy | Agile Leader · candidate@example.com · Miami, FL
+
+**Summary**
+Strategic, customer-obsessed product manager with a passion for building world-class products. Skilled at driving vision, aligning stakeholders and delivering value in agile environments.
+
+**Experience**
+
+**Product Manager** — Bluewave Digital Agency, Miami, FL · Mar 2023 – Present
+- Drove product strategy and vision for multiple client projects.
+- Collaborated cross-functionally with stakeholders to align on priorities and roadmaps.
+- Utilized agile, scrum, OKRs and data-driven decision making to deliver value.
+- Managed product backlog and facilitated sprint ceremonies.
+- Championed the voice of the customer across the organization.
+
+**Education**
+B.A. Marketing, Coastal Florida University · 2022
+
+**Skills**
+Product Strategy, Product Vision, Roadmapping, Agile, Scrum, Kanban, OKRs, KPIs, User Research, Customer Discovery, Design Thinking, Jobs to Be Done, A/B Testing, Product Analytics, SQL, Amplitude, Mixpanel, Google Analytics, Jira, Confluence, Figma, Miro, Stakeholder Management, Go-to-Market, Pricing, Growth, PLG, AI Products
+
+--- LinkedIn profile ---
+Candidate B
+Project Coordinator at Bluewave Digital Agency
+Miami, Florida
+
+Experience
+- Project Coordinator, Bluewave Digital Agency · Sep 2023 – Present · Scheduling, client status reports and timesheets.
+- Marketing Assistant, Bluewave Digital Agency · Jan 2023 – Aug 2023
+
+Education
+- Coastal Florida University, B.A. Marketing, 2018 – 2022
+
+Skills: Project Coordination, Jira, Client Communication
+
+=== CANDIDATE C ===
+
+--- Resume ---
+**Candidate C**
+Aspiring Associate Product Manager · candidate@example.com · Ann Arbor, MI · candidate.example.com
+
+**Education**
+B.S. Cognitive Science, minor in Computer Science, Great Lakes University · May 2026 · GPA 3.7
+President, Product Management Club (2025 – 2026): ran a 10-week APM prep program for 60 students.
+
+**Projects**
+
+**StudySpot — finding open study rooms on campus** · Sep 2025 – Apr 2026
+- Interviewed 18 students and surveyed 340 to confirm the problem (average 14 minutes lost per search); wrote a one-page PRD and prioritized an MVP of 3 features.
+- Worked with 2 engineering students and 1 design student to ship a web app; 1,150 students signed up in the first semester, with 38% weekly retention after 8 weeks (Mixpanel).
+- Ran a test of push reminders vs none: reminders lifted weekly active use from 29% to 35%.
+
+**Campus dining app redesign (case study)** · Feb 2025 – Apr 2025
+- Usability tests with 8 students found ordering took 9 taps; Figma prototype reduced it to 4; presented to the dining services team, who added two changes to their next release.
+
+**Product teardown: how a language app keeps streaks going** · 2025
+- 2,000-word analysis of retention mechanics, published on the club's blog.
+
+**Great Lakes Product Sprint 2025** — winner, "Best product thinking" · Oct 2025
+- 36-hour team sprint; built a prototype that helps international students compare phone plans.
+
+**Skills**
+User research, surveys, PRDs, prioritization, A/B testing, Mixpanel, Figma, SQL (basic), Jira, Python (basic)
+
+--- LinkedIn profile ---
+Candidate C
+Cognitive Science graduate | Product Management Club President
+Ann Arbor, Michigan
+
+Education
+- Great Lakes University, B.S. Cognitive Science, 2022 – 2026
+
+Projects
+- StudySpot (2025 – 2026)
+- Campus dining app redesign (2025)
+
+Honors & awards
+- Winner, "Best product thinking", Product Sprint 2025
+
+Skills: Product Management, User Research, Figma, Mixpanel
+
+--- Portfolio ---
+candidate.example.com — three pages.
+1. StudySpot: problem, interview findings, PRD, MVP scope decisions, launch metrics (sign-ups, retention curve), the push-reminder experiment and what she learned.
+2. Campus dining redesign: usability test notes, before/after flows, the two changes the dining team adopted.
+3. Language-app teardown (the published analysis).
+
+--- References submitted ---
+- Relationship: supervisor. Statement: "I advised the Product Management Club. the candidate ran StudySpot like a real product: she did the research, made the scope calls and tracked retention every week."
+
+=== CANDIDATE D ===
+
+--- Resume ---
+**Candidate D**
+Associate Product Manager · candidate@example.com · Chicago, IL · candidate-pm.example.com
+
+**Experience**
+
+**Associate Product Manager** — Tidewater Learning, Chicago, IL · Aug 2024 – Present
+- Own the student onboarding flow for a learning app with 200k monthly users; work with 5 engineers, 1 designer and 1 data analyst.
+- Ran 22 user interviews and a 1,400-response survey to find why new students dropped off; the top issue was choosing a course level before seeing any content.
+- Wrote the PRD for a "try a lesson first" onboarding; prioritized it over two competing requests using expected activation impact and engineering effort (RICE).
+- Shipped it behind an A/B test (Amplitude): 7-day activation rose from 31% to 37%, and the new flow became the default for all users.
+- Defined the team's onboarding metrics dashboard and run a fortnightly review with engineering and design; manage the backlog in Jira.
+
+**Product Management Intern** — Lakefront Bank, Chicago, IL · Jun 2023 – Aug 2023
+- Analyzed 3,000 support tickets about the mobile app's card-freeze feature; wrote user stories for a clearer freeze/unfreeze screen, which shipped in Q4 2023.
+
+**Education**
+B.S. Information Systems, Prairie State University · 2024
+
+**Case studies** (candidate-pm.example.com)
+- Onboarding: from 31% to 37% activation — problem, research, options, decision, results.
+- Card freeze: turning support tickets into a feature.
+
+**Skills**
+User research, PRDs, prioritization (RICE), A/B testing, product analytics, SQL (basic), Amplitude, Jira, Figma
+
+**Certifications**
+Certified Scrum Product Owner (CSPO) · 2025 · Credential ID CSPO-TEST-20931
+
+--- LinkedIn profile ---
+Candidate D
+Associate Product Manager at Tidewater Learning
+Chicago, Illinois
+
+Experience
+- Associate Product Manager, Tidewater Learning · Aug 2024 – Present · Student onboarding and activation.
+- Product Management Intern, Lakefront Bank · Jun 2023 – Aug 2023
+
+Education
+- Prairie State University, B.S. Information Systems, 2020 – 2024
+
+Skills: Product Management, User Research, A/B Testing, Amplitude, Jira
+
+Licenses & certifications
+- Certified Scrum Product Owner (CSPO) · Issued 2025 · Credential ID CSPO-TEST-20931
+
+--- Portfolio ---
+candidate-pm.example.com — two case studies.
+1. "Onboarding: from 31% to 37% activation": problem statement, interview and survey findings (with quotes), three options considered with trade-offs, why "try a lesson first" was chosen, experiment design, results, and what she would do next.
+2. "Card freeze: turning support tickets into a feature": ticket analysis method, user stories, before/after screens, and the drop in related tickets after launch (about 40%).
+
+--- Certifications submitted ---
+- Certified Scrum Product Owner (CSPO) (Scrum Alliance, 2025-04; credential ID provided)
+
+--- References submitted ---
+- Relationship: manager. Statement: "I manage the candidate. She led the onboarding work end to end, from the research to the experiment, and the new flow is now our default."
+
+=== CANDIDATE E ===
+
+--- Resume ---
+**Candidate E**
+candidate@example.com · Nashville, TN
+
+**Objective**
+Communications graduate interested in becoming a product manager.
+
+**Experience**
+
+**Marketing Intern** — Music Row Events, Nashville, TN · Jun 2025 – Aug 2025
+- Posted on the company's social media accounts.
+- Helped set up events.
+
+**Education**
+B.A. Communications, Cumberland Valley University · May 2025
+
+**Skills**
+Communication, teamwork, leadership, Microsoft Office, Canva
+
+(No LinkedIn, GitHub, portfolio, certifications or references provided.)
+
+Now give your answer in the required format.

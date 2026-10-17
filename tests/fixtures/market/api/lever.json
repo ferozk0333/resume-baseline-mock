@@ -1,0 +1,20 @@
+[
+ {
+  "id": "a1b2",
+  "text": "AI Engineer",
+  "categories": {
+   "location": "Austin, TX",
+   "commitment": "Full-time"
+  },
+  "createdAt": 1759300000000,
+  "hostedUrl": "https://jobs.lever.co/example/a1b2",
+  "descriptionPlain": "Ship retrieval features.",
+  "lists": [
+   {
+    "text": "Requirements",
+    "content": "<li>Python</li><li>2+ years building APIs</li>"
+   }
+  ],
+  "additionalPlain": "Equal opportunity employer."
+ }
+]

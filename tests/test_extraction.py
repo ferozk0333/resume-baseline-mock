@@ -541,3 +541,230 @@ def test_cross_source_roles_need_overlapping_dates_and_a_shared_title_word():
     other_job = Profile(roles=[_role("Product Manager", "Oracle", date(2022, 7, 1), date(2023, 6, 1), "l")])
     assert len(merge_profiles([resume, later])[0].roles) == 2       # a later stint is a separate role
     assert len(merge_profiles([resume, other_job])[0].roles) == 2   # different job at the same employer
+
+
+def test_effort_is_sent_only_to_models_that_support_it():
+    from core.llm import effort_kwargs
+    assert effort_kwargs("claude-sonnet-5-5", "medium") == {"output_config": {"effort": "medium"}}
+    assert effort_kwargs("claude-haiku-5-5", "low") == {"output_config": {"effort": "low"}}
+    assert effort_kwargs("claude-haiku-4-5-20251001", "low") == {}
+    assert effort_kwargs("claude-sonnet-5-5", "") == {}
+
+
+def test_effort_reaches_the_sdk_call_and_passes_signature_check():
+    msgs = FakeMessages([_ok(schemas.PortfolioExtract(projects=[], claims=[]))])
+    ClaudeLLM(client=SimpleNamespace(messages=msgs), effort="medium").parse(
+        model="claude-sonnet-5-5", system="S", user="U", output_type=schemas.PortfolioExtract)
+    assert msgs.kwargs[0]["output_config"] == {"effort": "medium"}
+
+
+# --- Claim lists and publications (phase 9 review) ----------------------------------------------
+
+@pytest.mark.parametrize("name,expected", [
+    ("Chroma, Qdrant, OpenSearch", ["Chroma", "Qdrant", "OpenSearch"]),
+    ("Vector databases (Chroma, Qdrant, OpenSearch)", ["Vector databases (Chroma, Qdrant, OpenSearch)"]),
+    ("Hyperparameter tuning (Bayesian, Hyperband, Random)", ["Hyperparameter tuning (Bayesian, Hyperband, Random)"]),
+    ("pandas, NumPy, and scikit-learn", ["pandas", "NumPy", "scikit-learn"]),
+    ("Python and SQL", ["Python", "SQL"]),
+    ("Docker & Kubernetes", ["Docker", "Kubernetes"]),
+    ("CI/CD", ["CI/CD"]),
+    ("A/B testing", ["A/B testing"]),
+    ("Research and Development", ["Research and Development"]),
+    ("Natural Language Processing", ["Natural Language Processing"]),
+    ("Statistical modelling and causal inference methods", ["Statistical modelling and causal inference methods"]),
+    ("Hugging Face (Transformers)", ["Hugging Face (Transformers)"]),
+])
+def test_split_claim_names(name, expected):
+    from extraction.validate import split_claim_names
+    assert split_claim_names(name) == expected
+
+
+def _doc(text):
+    return SourceDoc("ev-1", "resume", text, "Resume")
+
+
+def test_flat_lists_split_but_parenthetical_names_and_slashes_stay_whole():
+    from extraction.validate import validate_extraction
+    text = ("Skills: Chroma, Qdrant, OpenSearch; Python and SQL; Docker & Kubernetes; CI/CD; A/B testing; "
+            "Hyperparameter tuning (Bayesian, Hyperband, Random)")
+    claim = lambda kind, name: schemas.Claim(kind=kind, name=name, bullet_ref=None, source=src(name))  # noqa: E731
+    out = schemas.ProfileExtract(roles=[], projects=[], certifications=[], claims=[
+        claim("tool", "Chroma, Qdrant, OpenSearch"), claim("tool", "Python and SQL"),
+        claim("tool", "Docker & Kubernetes"), claim("tool", "CI/CD"), claim("skill", "A/B testing"),
+        claim("skill", "Hyperparameter tuning (Bayesian, Hyperband, Random)")])
+    profile, report = validate_extraction(_doc(text), out)
+    assert [c.name_raw for c in profile.claims] == [
+        "Chroma", "Qdrant", "OpenSearch", "Python", "SQL", "Docker", "Kubernetes", "CI/CD", "A/B testing",
+        "Hyperparameter tuning (Bayesian, Hyperband, Random)"]
+    assert report.dropped == 0
+
+
+def test_award_claims_keep_their_context_from_the_quote():
+    from extraction.validate import award_name, validate_extraction
+    line = "Top 10 finalist out of 600+ teams, CSI National Hackathon"
+    out = schemas.ProfileExtract(roles=[], projects=[], certifications=[], claims=[
+        schemas.Claim(kind="award", name="Top 10 finalist", bullet_ref=None, source=src(line)),
+        schemas.Claim(kind="award", name="Dean's List", bullet_ref=None, source=src("Dean's List"))])
+    profile, _ = validate_extraction(_doc(f"Awards\n- {line}\n- Dean's List"), out)
+    assert [c.name_raw for c in profile.claims] == [line, "Dean's List"]
+    assert award_name("Fellowship", "Graduate fellowship, 2025") == "Graduate fellowship, 2025"
+    long = ("Top 10 Finalist from 600+ teams in CSI National Hackathon: Led and managed a team of 4 members "
+            "through 3 jury rounds")
+    assert award_name("Top 10 Finalist", long) == "Top 10 Finalist from 600+ teams in CSI National Hackathon"
+    assert award_name("Dean's List", "Dean's List. Awarded every semester for a GPA above 3.8.") == "Dean's List"
+    huge = "Winner " + "of the very long regional innovation challenge " * 5
+    assert len(award_name("Winner", huge)) <= 120 and award_name("Winner", huge).startswith("Winner of")
+    assert award_name("Best Paper Award", "Best Paper Award") == "Best Paper Award"
+
+
+def test_co_authored_journal_paper_is_a_publication_not_a_certification():
+    from extraction.validate import validate_extraction
+    paper = 'Co-Author, "The Lancet Commission on 21st Century Global Threats to Health," The Lancet Exp. Fall 2026'
+    cert = "AWS Certified Solutions Architect – Associate (SAA-C03), Amazon Web Services 2026"
+    text = f"CERTIFICATIONS & PUBLICATIONS\n{cert}\n{paper}"
+    out = schemas.ProfileExtract(roles=[], projects=[], claims=[], certifications=[
+        schemas.Certification(name="AWS Certified Solutions Architect – Associate", issuer="Amazon Web Services",
+                              date="2026", credential_id=None, verify_url=None, source=src(cert)),
+        schemas.Certification(name='Co-Author, "The Lancet Commission on 21st Century Global Threats to Health"',
+                              issuer="The Lancet", date=None, credential_id=None, verify_url=None,
+                              source=src(paper))])
+    profile, _ = validate_extraction(_doc(text), out)
+    assert [c.name for c in profile.certifications] == ["AWS Certified Solutions Architect – Associate"]
+    assert [(p.kind, p.name) for p in profile.projects] == [
+        ("publication", 'Co-Author, "The Lancet Commission on 21st Century Global Threats to Health"')]
+
+
+def test_extraction_prompt_defines_publications_and_one_claim_per_name():
+    from extraction.extract import load_prompt
+    load_prompt.cache_clear()
+    prompt = load_prompt("extract_system")
+    assert "Publication = a paper, article, poster or talk" in prompt
+    assert "Certification = a credential issued by an organisation" in prompt
+    assert '"Hyperparameter tuning (Bayesian, Hyperband, Random)" → one skill claim' in prompt
+    assert "An award claim keeps its event or context" in prompt
+    assert '"AWS (SageMaker, Bedrock)" → AWS, SageMaker, Bedrock' in prompt
+    assert '"Vector databases (Chroma, Qdrant, OpenSearch)" → Chroma, Qdrant, OpenSearch' in prompt
+    assert "Drop a generic category label" in prompt
+    assert "not every method" in prompt or "Do not make a claim of every method" in prompt
+
+
+# --- Groq provider (phase 9 review) ------------------------------------------------------------------
+
+class GroqSession:
+    def __init__(self, *responses):
+        self.responses, self.bodies = list(responses), []
+
+    def post(self, url, json=None, headers=None, timeout=None):
+        from tests.helpers import FakeResponse
+        self.bodies.append(json)
+        status, payload, hdrs = self.responses.pop(0)
+        return FakeResponse(status, payload, headers=hdrs)
+
+
+def _groq_ok(content, finish="stop"):
+    import json as _json
+    return (200, {"choices": [{"message": {"content": _json.dumps(content) if not isinstance(content, str)
+                                            else content}, "finish_reason": finish}],
+                  "usage": {"prompt_tokens": 100, "completion_tokens": 50}}, {})
+
+
+def test_groq_request_uses_strict_schema_and_fits_the_token_limit(monkeypatch):
+    from core.llm import GroqLLM
+    monkeypatch.setattr(config, "GROQ_TPM", 8000)
+    session = GroqSession(_groq_ok({"projects": [], "claims": []}))
+    out = GroqLLM(session=session, api_key="k", max_tokens=12000).parse(
+        model="groq/openai/gpt-oss-120b", system="S" * 300, user="U" * 3000, output_type=schemas.PortfolioExtract)
+    assert out.projects == []
+    body = session.bodies[0]
+    assert body["model"] == "openai/gpt-oss-120b" and body["reasoning_effort"] == "low"
+    assert body["temperature"] == 0                                               # determinism (CLAUDE.md rule 7)
+    assert body["max_completion_tokens"] == 8000 - (3300 // 3 + 200)              # prompt + completion ≤ TPM
+    schema = body["response_format"]["json_schema"]
+    assert schema["strict"] is True
+
+    def closed(node):
+        if isinstance(node, dict):
+            if "properties" in node:
+                assert node["additionalProperties"] is False and set(node["required"]) == set(node["properties"])
+            assert "default" not in node
+            for v in node.values():
+                closed(v)
+        elif isinstance(node, list):
+            for v in node:
+                closed(v)
+    closed(schema["schema"])
+
+
+def test_groq_429_goes_to_the_router_with_the_stated_reset():
+    """specs/18: no sleeping in the client; the router moves on and rests the model until the reset."""
+    from core.llm import GroqLLM
+    from core.routing import Throttled
+    session = GroqSession((429, {"error": "Rate limit reached for requests per day (RPD)"},
+                           {"retry-after": "2", "x-ratelimit-reset-requests": "7m54.72s"}))
+    with pytest.raises(Throttled) as e:
+        GroqLLM(session=session, api_key="k").parse(model="groq/openai/gpt-oss-20b", system="S", user="U",
+                                                    output_type=schemas.PortfolioExtract)
+    assert e.value.retry_after == 2.0 and e.value.daily and e.value.reset_after == pytest.approx(474.72)
+    assert len(session.bodies) == 1
+
+
+def test_groq_cut_off_and_invalid_output_are_errors():
+    from core.llm import GroqLLM
+    cut = GroqSession(_groq_ok("{\"projects\": [", finish="length"))
+    with pytest.raises(LLMError, match="cut off"):
+        GroqLLM(session=cut, api_key="k").parse(model="groq/openai/gpt-oss-20b", system="S", user="U",
+                                                output_type=schemas.PortfolioExtract)
+    bad = GroqSession(_groq_ok({"nope": 1}), _groq_ok({"nope": 1}))
+    with pytest.raises(LLMError, match="validation twice"):
+        GroqLLM(session=bad, api_key="k").parse(model="groq/openai/gpt-oss-20b", system="S", user="U",
+                                                output_type=schemas.PortfolioExtract)
+
+
+def test_router_sends_groq_models_to_groq_and_judgments_record_the_provider(monkeypatch):
+    from core.llm import ClaudeLLM, GroqLLM, RoutedLLM
+    from judges.claude_judge import method_of
+    r = RoutedLLM()
+    assert isinstance(r._for("groq/openai/gpt-oss-120b"), GroqLLM)
+    assert isinstance(r._for("claude-haiku-4-5-20251001"), ClaudeLLM)
+    assert method_of("groq/qwen/qwen3.8-27b") == "groq" and method_of("claude-sonnet-5-5") == "claude"
+
+
+def test_extraction_prompt_has_short_quotes_and_the_skill_tool_rule():
+    from extraction.extract import load_prompt
+    load_prompt.cache_clear()
+    prompt = load_prompt("extract_system")
+    assert "For a skill or tool claim, `quote` is the name exactly as written" in prompt
+    assert "tool = a programming language, library, framework, platform" in prompt
+    assert "skill = a method, technique or ability" in prompt
+
+
+def test_prompts_have_no_provider_specific_wording():
+    from core import config
+    for path in config.PROMPTS_DIR.glob("*.txt"):
+        text = path.read_text().lower()
+        assert not any(name in text for name in ("claude", "gemini", "groq", "haiku", "sonnet")), path.name
+
+
+def test_compare_helpers_report_kinds_and_structural_proof_density():
+    import importlib.util
+    from core import config
+    spec = importlib.util.spec_from_file_location("compare_extraction", config.ROOT / "scripts" / "compare_extraction.py")
+    cmp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cmp)
+    profile = {"roles": [{"title": "Analyst", "employer": "Acme", "bullets": [{"text": "Built churn model in Python"}]}],
+               "projects": [{"kind": "publication", "name": "Paper on SQL tuning", "description": None, "bullets": []}],
+               "claims": [{"kind": "tool", "name_raw": "Python", "name_norm": "python"},
+                          {"kind": "tool", "name_raw": "SQL", "name_norm": "sql"},
+                          {"kind": "skill", "name_raw": "Tableau", "name_norm": "tableau"}],
+               "certifications": []}
+    score, counts = cmp.structural_proof_density(profile)
+    assert counts == {"artifact": 1, "bullet": 1, "claimed_only": 1} and score == pytest.approx(0.5)
+    other = {**profile, "claims": [{"kind": "skill", "name_raw": "Python", "name_norm": "python"}]}
+    assert cmp.kinds(profile)["python"] == "tool" and cmp.kinds(other)["python"] == "skill"
+    assert set(cmp.items(profile)) == {"role", "bullet", "project", "claim", "certification"}
+
+
+def test_runs_record_provider_and_models():
+    from judges.service import judge_models
+    m = judge_models()
+    assert {"llm_provider", "extract_model", "judge_fallback_model", "complexity_model", "plan_model"} <= set(m)

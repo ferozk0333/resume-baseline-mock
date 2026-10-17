@@ -1,0 +1,28 @@
+# Machine Learning Engineer I
+Lumenfield · Full-time
+
+What you'll do
+
+- Ship LLM-backed features for our search product.
+- Work with product and design to define evaluation criteria.
+- Own a retrieval service end to end.
+
+Requirements
+
+- 1+ years of experience writing production Python.
+- Experience building applications on large language models.
+- Experience with retrieval-augmented generation and vector search.
+- Solid understanding of model evaluation metrics.
+- Comfortable with Git and code review.
+
+Nice to have
+
+- Experience with PyTorch.
+- Familiarity with Docker and Kubernetes.
+
+What we offer
+
+- Salary range $100,000–$130,000 plus equity.
+- Health, dental and vision coverage.
+
+Lumenfield is an equal opportunity employer. Fictional posting for RightStaff tests.

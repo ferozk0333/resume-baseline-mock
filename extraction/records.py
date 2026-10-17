@@ -29,6 +29,7 @@ class BulletRec:
     location: str | None
     evidence_id: str | None
     source: str = "extracted"         # extracted | user_edit
+    method: str | None = None         # how it was read: parser | jev | llm (None: typed or edited by the user)
     id: str = field(default_factory=new_id)
 
 
@@ -46,6 +47,7 @@ class RoleRec:
     bullets: list[BulletRec] = field(default_factory=list)
     review_reasons: list[str] = field(default_factory=list)
     source: str = "extracted"
+    method: str | None = None
     id: str = field(default_factory=new_id)
 
     @property
@@ -69,6 +71,7 @@ class ProjectRec:
     bullets: list[BulletRec] = field(default_factory=list)
     review_reasons: list[str] = field(default_factory=list)
     source: str = "extracted"
+    method: str | None = None
     id: str = field(default_factory=new_id)
 
     @property
@@ -89,6 +92,7 @@ class ClaimRec:
     evidence_id: str | None
     bullet_id: str | None = None      # None = listed only
     source: str = "extracted"
+    method: str | None = None
     id: str = field(default_factory=new_id)
 
 
@@ -101,6 +105,7 @@ class CertificationRec:
     verify_url: str | None
     evidence_id: str | None
     source: str = "extracted"
+    method: str | None = None
     id: str = field(default_factory=new_id)
 
     @property

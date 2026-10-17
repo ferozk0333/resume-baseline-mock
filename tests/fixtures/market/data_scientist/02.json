@@ -1,0 +1,95 @@
+{
+ "company": "Brightline Retail",
+ "tier": "mid",
+ "title": "Data Scientist I",
+ "posted_at": "2026-09-15",
+ "labelled_by": "hand",
+ "extraction": {
+  "status": "ok",
+  "model": "hand-labelled",
+  "details": {
+   "title": "Data Scientist I",
+   "company": "Brightline Retail",
+   "level": "entry",
+   "min_years": 1.0
+  },
+  "detail_quotes": {
+   "min_years": "1-3 years of experience."
+  },
+  "requirements": [
+   {
+    "name": "SQL",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "SQL and Python."
+   },
+   {
+    "name": "Python",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "SQL and Python."
+   },
+   {
+    "name": "Forecasting",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experience with forecasting or time series models."
+   },
+   {
+    "name": "Machine learning",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Machine learning with scikit-learn."
+   },
+   {
+    "name": "scikit-learn",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Machine learning with scikit-learn."
+   },
+   {
+    "name": "Data visualization and communication",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Clear data visualization and communication."
+   },
+   {
+    "name": "dbt",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Experience with dbt."
+   },
+   {
+    "name": "Cloud data warehouse",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Snowflake or BigQuery."
+   }
+  ],
+  "responsibilities": [
+   {
+    "text": "Build demand forecasts for stores.",
+    "quote": "Build demand forecasts for stores."
+   },
+   {
+    "text": "Present findings to merchandising teams.",
+    "quote": "Present findings to merchandising teams."
+   }
+  ],
+  "good": {
+   "expected_reach": 2
+  },
+  "good_quotes": {
+   "expected_reach": "Present findings to merchandising teams."
+  },
+  "dropped": []
+ }
+}

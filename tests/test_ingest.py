@@ -1,6 +1,8 @@
 """Phase 3: document, GitHub and portfolio ingest (no network)."""
 import pytest
 
+from core import config
+
 from ingest import documents, github, portfolio
 from tests.helpers import FakeResponse, FakeSession, SAMPLE_RESUME_LINES, make_docx, make_pdf
 
@@ -33,10 +35,13 @@ def test_corrupt_and_unsupported_files():
         documents.extract_text("cv.txt", b"hello")
 
 
-def test_hidden_pdf_text_is_still_extracted():
-    # White text is invisible but extractable; the prompt must treat it as data (05).
+def test_hidden_pdf_text_is_removed_by_default(monkeypatch):
+    # White-on-white text is removed before reading (specs/18 wrap-up: REMOVE_HIDDEN_TEXT on).
     text = documents.extract_text("cv.pdf", make_pdf(SAMPLE_RESUME_LINES, hidden=["secret line"]))
-    assert "secret line" in text
+    assert "secret line" not in text and "Built a churn model" in text
+    # With the flag off it is extracted, and the prompt treats it as data (05).
+    monkeypatch.setattr(config, "REMOVE_HIDDEN_TEXT", False)
+    assert "secret line" in documents.extract_text("cv.pdf", make_pdf(SAMPLE_RESUME_LINES, hidden=["secret line"]))
 
 
 # --- GitHub ----------------------------------------------------------------------------
@@ -144,9 +149,11 @@ def test_rate_limit_mid_way_keeps_fetched_repos():
     session = _github_session()
     limited = FakeResponse(403, {}, headers={"X-RateLimit-Remaining": "0"})
     session.routes["/repos/jane/forked-lib/commits"] = limited
-    with pytest.raises(github.GitHubError, match="Kept 1 of 3") as info:
+    with pytest.raises(github.GitHubError, match="Kept 2 of 3") as info:
         github.GitHubClient(session, token="").fetch_repos("jane")
-    assert [r.name for r in info.value.partial] == ["churn"]
+    # Details are fetched in parallel: every repo except the rate-limited one is kept, in pushed order.
+    names = [r.name for r in info.value.partial]
+    assert "forked-lib" not in names and names[0] == "churn" and len(names) == 2
 
 
 @pytest.mark.parametrize("name,expected", [
@@ -166,3 +173,54 @@ def test_profile_and_site_repos_are_not_projects():
     repos = github.GitHubClient(session, token="").fetch_repos("jane")
     assert [r.name for r in repos] == ["churn"]
     assert not any("/repos/jane/jane" in u for u in session.requested)   # no API calls spent on them
+
+
+# --- GitHub response cache and record/replay (phase 9) -------------------------------------------
+
+class CountingSession:
+    def __init__(self, inner):
+        self.inner, self.calls = inner, []
+
+    def get(self, url, params=None, headers=None, timeout=None):
+        self.calls.append((url, dict(headers or {})))
+        return self.inner.get(url, params=params, headers=headers, timeout=timeout)
+
+
+def test_cached_session_reuses_responses_within_24_hours(tmp_path):
+    from core import db
+    from ingest.http_cache import CachedSession
+    conn = db.init_app_db(str(tmp_path / "c.db"))
+    counting = CountingSession(_github_session())
+    first = github.GitHubClient(CachedSession(conn, counting), token="secret-token").fetch_repos("jane")
+    spent = len(counting.calls)
+    again = github.GitHubClient(CachedSession(conn, counting), token="secret-token").fetch_repos("jane")
+    assert len(counting.calls) == spent                                  # second run: no requests
+    assert [r.name for r in again] == [r.name for r in first]
+    assert [r.own_commits for r in again] == [r.own_commits for r in first]
+    stored = " ".join(r[0] + r[1] for r in conn.execute("SELECT key, headers_json FROM http_cache"))
+    assert "secret-token" not in stored
+
+
+def test_stale_cache_entry_is_revalidated_with_etag(tmp_path):
+    from core import db
+    from ingest.http_cache import CachedSession
+    conn = db.init_app_db(str(tmp_path / "c.db"))
+    session = _github_session()
+    session.routes["/users/jane"] = FakeResponse(200, {"login": "jane"}, headers={"ETag": '"v1"'})
+    counting = CountingSession(session)
+    cached = CachedSession(conn, counting, max_age_hours=0)
+    cached.get("https://api.github.com/users/jane", headers={"Accept": "application/vnd.github+json"})
+    session.routes["/users/jane"] = FakeResponse(304, None, text="")
+    resp = cached.get("https://api.github.com/users/jane", headers={"Accept": "application/vnd.github+json"})
+    assert counting.calls[-1][1]["If-None-Match"] == '"v1"'
+    assert resp.status_code == 200 and resp.json() == {"login": "jane"} and cached.revalidated == 1
+
+
+def test_record_then_replay_gives_identical_repos_without_network(tmp_path):
+    from ingest.http_cache import RecordingSession, ReplaySession
+    rec = RecordingSession(_github_session())
+    recorded = github.GitHubClient(rec, token="").fetch_repos("jane")
+    rec.save(tmp_path / "gh.json")
+    replayed = github.GitHubClient(ReplaySession(tmp_path / "gh.json", delay=False), token="").fetch_repos("jane")
+    assert [(r.name, r.own_commits, r.languages, r.readme) for r in replayed] == \
+        [(r.name, r.own_commits, r.languages, r.readme) for r in recorded]

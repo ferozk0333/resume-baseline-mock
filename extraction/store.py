@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import uuid
 from dataclasses import asdict
 from datetime import date
@@ -73,11 +74,11 @@ def list_evidence(conn: sqlite3.Connection, candidate_id: str) -> list[dict]:
 def _insert_role(conn, candidate_id: str, r: RoleRec) -> None:
     conn.execute(
         "INSERT INTO roles (id, candidate_id, evidence_id, title, employer, industry, start_date, end_date, "
-        "is_current, team_size, quote, source, needs_review, review_reasons) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "is_current, team_size, quote, source, needs_review, review_reasons, method) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (r.id, candidate_id, r.evidence_id, r.title, r.employer, r.industry, _iso(r.start_date),
          _iso(r.end_date), int(r.is_current), r.team_size, r.quote, r.source, int(r.needs_review),
-         json.dumps(r.review_reasons)),
+         json.dumps(r.review_reasons), r.method),
     )
     _insert_bullets(conn, candidate_id, r.bullets, role_id=r.id)
 
@@ -85,37 +86,39 @@ def _insert_role(conn, candidate_id: str, r: RoleRec) -> None:
 def _insert_project(conn, candidate_id: str, p: ProjectRec) -> None:
     conn.execute(
         "INSERT INTO projects (id, candidate_id, evidence_id, role_id, kind, name, description, url, "
-        "start_date, end_date, is_fork, own_commits, quote, source, needs_review, review_reasons) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "start_date, end_date, is_fork, own_commits, quote, source, needs_review, review_reasons, method) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (p.id, candidate_id, p.evidence_id, p.role_id, p.kind, p.name, p.description, p.url,
          _iso(p.start_date), _iso(p.end_date), None if p.is_fork is None else int(p.is_fork),
-         p.own_commits, p.quote, p.source, int(p.needs_review), json.dumps(p.review_reasons)),
+         p.own_commits, p.quote, p.source, int(p.needs_review), json.dumps(p.review_reasons), p.method),
     )
     _insert_bullets(conn, candidate_id, p.bullets, project_id=p.id)
 
 
 def _insert_bullets(conn, candidate_id: str, bullets: list[BulletRec], role_id=None, project_id=None) -> None:
     conn.executemany(
-        "INSERT INTO bullets (id, candidate_id, evidence_id, role_id, project_id, text, location, source) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        [(b.id, candidate_id, b.evidence_id, role_id, project_id, b.text, b.location, b.source) for b in bullets],
+        "INSERT INTO bullets (id, candidate_id, evidence_id, role_id, project_id, text, location, source, method) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [(b.id, candidate_id, b.evidence_id, role_id, project_id, b.text, b.location, b.source, b.method)
+         for b in bullets],
     )
 
 
 def _insert_claim(conn, candidate_id: str, c: ClaimRec) -> None:
     conn.execute(
-        "INSERT INTO claims (id, candidate_id, evidence_id, bullet_id, kind, name_raw, name_norm, quote, source) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (c.id, candidate_id, c.evidence_id, c.bullet_id, c.kind, c.name_raw, c.name_norm, c.quote, c.source),
+        "INSERT INTO claims (id, candidate_id, evidence_id, bullet_id, kind, name_raw, name_norm, quote, source, method) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (c.id, candidate_id, c.evidence_id, c.bullet_id, c.kind, c.name_raw, c.name_norm, c.quote, c.source,
+         c.method),
     )
 
 
 def _insert_certification(conn, candidate_id: str, c: CertificationRec) -> None:
     conn.execute(
         "INSERT INTO certifications (id, candidate_id, evidence_id, name, issuer, issued_date, credential_id, "
-        "verify_url, verified, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "verify_url, verified, source, method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (c.id, candidate_id, c.evidence_id, c.name, c.issuer, _iso(c.issued_date), c.credential_id,
-         c.verify_url, int(c.verified), c.source),
+         c.verify_url, int(c.verified), c.source, c.method),
     )
 
 
@@ -140,6 +143,27 @@ def save_profile(conn: sqlite3.Connection, candidate_id: str, profile: Profile) 
 
 
 # --- Dropped items ("Add back" in the review step) ---------------------------------------
+
+def append_dropped(conn: sqlite3.Connection, candidate_id: str, items: list) -> None:
+    """Add dropped items without touching earlier ones (a source read while Review is open; specs/18 §4)."""
+    with conn:
+        conn.executemany(
+            "INSERT INTO dropped_items (id, candidate_id, evidence_id, item_type, text, payload, parent_type, "
+            "parent_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [(d.id, candidate_id, d.evidence_id, d.item_type, d.text, json.dumps(d.payload), d.parent_type,
+              d.parent_id, d.reason, now_iso()) for d in items],
+        )
+
+
+_LOCKS: dict[str, threading.RLock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def candidate_lock(candidate_id: str) -> threading.RLock:
+    """Serializes writes to one candidate's profile: a source finishing while the candidate edits Review."""
+    with _LOCKS_GUARD:
+        return _LOCKS.setdefault(candidate_id, threading.RLock())
+
 
 def save_dropped(conn: sqlite3.Connection, candidate_id: str, items: list) -> None:
     """Replace the candidate's dropped items (a re-run of extraction starts over)."""
@@ -225,13 +249,13 @@ def load_profile(conn: sqlite3.Connection, candidate_id: str) -> Profile:
         owner = b["role_id"] or b["project_id"]
         bullets.setdefault(owner, []).append(
             BulletRec(id=b["id"], text=b["text"], location=b["location"], evidence_id=b["evidence_id"],
-                      source=b["source"] or "extracted"))
+                      source=b["source"] or "extracted", method=b["method"]))
     roles = [
         RoleRec(id=r["id"], title=r["title"], employer=r["employer"], industry=r["industry"],
                 start_date=_date(r["start_date"]), end_date=_date(r["end_date"]), is_current=bool(r["is_current"]),
                 team_size=r["team_size"], quote=r["quote"], evidence_id=r["evidence_id"],
                 bullets=bullets.get(r["id"], []), review_reasons=json.loads(r["review_reasons"] or "[]"),
-                source=r["source"])
+                source=r["source"], method=r["method"])
         for r in q("SELECT * FROM roles WHERE candidate_id = ? ORDER BY rowid")
     ]
     projects = [
@@ -240,18 +264,19 @@ def load_profile(conn: sqlite3.Connection, candidate_id: str) -> Profile:
                    evidence_id=p["evidence_id"], role_id=p["role_id"],
                    is_fork=None if p["is_fork"] is None else bool(p["is_fork"]), own_commits=p["own_commits"],
                    bullets=bullets.get(p["id"], []), review_reasons=json.loads(p["review_reasons"] or "[]"),
-                   source=p["source"])
+                   source=p["source"], method=p["method"])
         for p in q("SELECT * FROM projects WHERE candidate_id = ? ORDER BY rowid")
     ]
     claims = [
         ClaimRec(id=c["id"], kind=c["kind"], name_raw=c["name_raw"], name_norm=c["name_norm"], quote=c["quote"],
-                 evidence_id=c["evidence_id"], bullet_id=c["bullet_id"], source=c["source"] or "extracted")
+                 evidence_id=c["evidence_id"], bullet_id=c["bullet_id"], source=c["source"] or "extracted",
+                 method=c["method"])
         for c in q("SELECT * FROM claims WHERE candidate_id = ? ORDER BY rowid")
     ]
     certs = [
         CertificationRec(id=c["id"], name=c["name"], issuer=c["issuer"], issued_date=_date(c["issued_date"]),
                          credential_id=c["credential_id"], verify_url=c["verify_url"], evidence_id=c["evidence_id"],
-                         source=c["source"] or "extracted")
+                         source=c["source"] or "extracted", method=c["method"])
         for c in q("SELECT * FROM certifications WHERE candidate_id = ? ORDER BY rowid")
     ]
     refs = [
@@ -279,6 +304,8 @@ def reset_candidate_evidence(conn: sqlite3.Connection, candidate_id: str) -> Non
     with conn:
         conn.execute("DELETE FROM evidence_items WHERE candidate_id = ?", (candidate_id,))
         conn.execute("DELETE FROM dropped_items WHERE candidate_id = ?", (candidate_id,))
+        conn.execute("DELETE FROM deleted_items WHERE candidate_id = ?", (candidate_id,))       # a new read starts over
+        conn.execute("DELETE FROM suppressed_items WHERE candidate_id = ?", (candidate_id,))
 
 
 # --- Review-step edits (every edited or added row is source = user_edit) ---------------------------

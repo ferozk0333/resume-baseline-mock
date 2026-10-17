@@ -1,0 +1,27 @@
+# Data Scientist I
+Brightline Retail · Full-time
+
+What you'll do
+
+- Build demand forecasts for stores.
+- Present findings to merchandising teams.
+
+Requirements
+
+- 1-3 years of experience.
+- SQL and Python.
+- Experience with forecasting or time series models.
+- Machine learning with scikit-learn.
+- Clear data visualization and communication.
+
+Nice to have
+
+- Experience with dbt.
+- Snowflake or BigQuery.
+
+What we offer
+
+- Salary range $100,000–$130,000 plus equity.
+- Health, dental and vision coverage.
+
+Brightline Retail is an equal opportunity employer. Fictional posting for RightStaff tests.

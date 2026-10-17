@@ -51,3 +51,27 @@ def test_adversarial_hidden_text_does_not_change_extraction():
     assert _summary(attacked) == _summary(clean)
     dumped = raw.model_dump_json().casefold()
     assert "ignore previous instructions" not in dumped
+
+
+# --- Real extraction of rendered test profiles, checked against their exact parsed version (phase 11) -----
+# Provider-neutral: uses whatever EXTRACT_MODEL / LLM_PROVIDER is configured (Claude, Gemini or Groq).
+
+@pytest.mark.parametrize("pid,folder,filename", [
+    ("AI1", "ai-engineer", "AI1_resume.pdf"),               # one-column PDF
+    ("DS2", "data-scientist", "DS2_resume_2col.pdf"),       # two-column PDF
+    ("PM4", "product-manager", "PM4_resume.docx"),          # DOCX
+])
+def test_rendered_profile_extraction_matches_the_parsed_profile(pid, folder, filename):
+    from core.llm import RoutedLLM
+    from extraction.structured import read_profile_file, resume_profile
+    rendered = config.ROOT / "tests" / "fixtures" / "profiles" / "rendered" / filename
+    if not rendered.exists():
+        pytest.skip("run scripts/render_test_profiles.py first")
+    text = extract_text(filename, rendered.read_bytes())
+    doc = SourceDoc("ev", "resume", text, "Resume")
+    profile, report = validate_extraction(doc, extract_document(doc, RoutedLLM()))
+    expected = resume_profile(read_profile_file(config.ROOT / "rightstaff-test-profiles" / "profiles" / folder /
+                                                f"{pid}.md").sections["Resume"], "x")
+    assert [r.title for r in profile.roles] == [r.title for r in expected.roles]
+    assert len(profile.all_bullets()) >= len(expected.all_bullets()) - 1     # at most one bullet lost
+    assert report.dropped <= 2

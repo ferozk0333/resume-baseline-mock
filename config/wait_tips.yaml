@@ -1,0 +1,45 @@
+# "Good to know" tips on the two onboarding waits (specs/17, wait screens). Edit freely; no code change needed.
+# icon: a line icon name the page knows (repeat, file-check, layers, user-check, gauge, compass, sparkles, gem,
+# briefcase, target, list-checks, trending-up); unknown names fall back to a light bulb.
+# Never mention weights, formulas, per-dimension percentages, thresholds, model or provider names, judges, the
+# number of checks, or how evidence is combined.
+
+reading:
+  - title: Show it once
+    text: We read your documents once and reuse your profile every time you apply. No retyping the same details.
+    icon: repeat
+  - title: Only what you wrote
+    text: We keep only what we can trace back to your own documents. You'll check everything on the next screen.
+    icon: file-check
+  - title: More sources, more credibility
+    text: When your LinkedIn, GitHub or portfolio backs up your resume, your profile becomes more convincing.
+    icon: layers
+  - title: You stay in control
+    text: Nothing is final until you confirm it. You can edit, remove or add back anything we found.
+    icon: user-check
+
+scoring:
+  - title: What is a baseline score?
+    text: It shows how your proof compares with what a role typically asks for. Think of it as your starting point, not a verdict.
+    icon: gauge
+  - title: Four ways we look at your profile
+    text: "Experience, expertise, authority and trust: what you've done, what you know, the results you've driven, and how well it's backed up."
+    icon: compass
+  - title: Proof beats polish
+    text: "Packing a resume with keywords doesn't raise your score. Real evidence does: projects, outcomes, references."
+    icon: sparkles
+  - title: Quality over quantity
+    text: Your strongest work matters more than a long list. One great project can say more than ten small ones.
+    icon: gem
+  - title: Built around real hiring needs
+    text: Role baselines reflect the skills, tools and experience employers look for in this role.
+    icon: briefcase
+  - title: Why it matters
+    text: Knowing where you stand helps you apply where you're competitive and spend your time on what moves the needle.
+    icon: target
+  - title: What comes next
+    text: You'll get a short plan with the actions that add the most to your score.
+    icon: list-checks
+  - title: Your score can grow
+    text: Add a project, a reference or a certification, and check again anytime.
+    icon: trending-up

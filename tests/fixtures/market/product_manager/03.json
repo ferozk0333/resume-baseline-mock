@@ -1,0 +1,74 @@
+{
+ "company": "Tidewell",
+ "tier": "startup",
+ "title": "Product Manager (early career)",
+ "posted_at": "2026-10-02",
+ "labelled_by": "hand",
+ "extraction": {
+  "status": "ok",
+  "model": "hand-labelled",
+  "details": {
+   "title": "Product Manager (early career)",
+   "company": "Tidewell",
+   "level": "entry",
+   "min_years": 1.0
+  },
+  "detail_quotes": {
+   "min_years": "1+ years of experience shipping software products."
+  },
+  "requirements": [
+   {
+    "name": "Product discovery and user research",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Customer discovery."
+   },
+   {
+    "name": "Prioritization",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Prioritization."
+   },
+   {
+    "name": "Product analytics",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Product analytics with Amplitude."
+   },
+   {
+    "name": "Product analytics tool",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Product analytics with Amplitude."
+   },
+   {
+    "name": "Go-to-market",
+    "kind": "skill",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Go-to-market experience."
+   }
+  ],
+  "responsibilities": [
+   {
+    "text": "Talk to customers every week.",
+    "quote": "Talk to customers every week."
+   },
+   {
+    "text": "Ship with a team of four engineers.",
+    "quote": "Ship with a team of four engineers."
+   }
+  ],
+  "good": {
+   "expected_reach": 3
+  },
+  "good_quotes": {
+   "expected_reach": "Ship with a team of four engineers."
+  },
+  "dropped": []
+ }
+}

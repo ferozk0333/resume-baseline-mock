@@ -143,6 +143,7 @@ class SourceDoc:
     text: str
     label: str                       # human-readable, used in warnings
     repo: object | None = None       # ingest.github.Repo for github_repo
+    file_path: str | None = None     # the saved upload (resume, LinkedIn PDF): parsers read its layout
 
 
 @dataclass
@@ -166,6 +167,8 @@ class ValidationReport:
     merged: int = 0
     role_remap: dict[str, str] = field(default_factory=dict)      # merged-away id → surviving id
     project_remap: dict[str, str] = field(default_factory=dict)
+    failed: list[str] = field(default_factory=list)               # evidence ids whose extraction failed
+    sources: dict[str, tuple] = field(default_factory=dict)       # evidence id → (profile, its own report)
 
     @property
     def dropped(self) -> int:
@@ -216,7 +219,7 @@ def certification_rec(c: schemas.Certification, evidence_id: str | None,
 
 
 def _bullets(raw: list[schemas.Bullet], index: QuoteIndex, doc: SourceDoc, report: ValidationReport,
-             owner: str, parent_type: str, parent_id: str) -> list[BulletRec]:
+             owner: str, parent_type: str, parent_id: str, method_of=None) -> list[BulletRec]:
     out = []
     for b in raw:
         if not index.contains(b.source.quote):
@@ -224,7 +227,77 @@ def _bullets(raw: list[schemas.Bullet], index: QuoteIndex, doc: SourceDoc, repor
                         f"a bullet under {owner}")
             continue
         out.append(bullet_rec(b, doc.evidence_id))
+        out[-1].method = _method(method_of, b)
     return out
+
+
+def _method(method_of, item) -> str:
+    """How an item was read: the parser's record (parser | jev), else the LLM (specs/18 §4)."""
+    return (method_of(item) if method_of is not None else None) or "llm"
+
+
+# --- Claim lists and publications listed as certifications ------------------------------------
+
+# Names that contain "and"/"&" but are one thing. Slashes ("CI/CD", "A/B testing") are never split.
+_ONE_THING = {"research and development", "r&d", "p&l", "profit and loss", "mergers and acquisitions", "m&a",
+              "sales and marketing", "search and rescue", "q&a", "at&t", "h&m", "b&w", "s&p", "johnson & johnson",
+              "procter & gamble", "black and white", "trial and error"}
+_AND = re.compile(r"\s+(?:and|&)\s+", re.I)
+
+
+def split_claim_names(name: str) -> list[str]:
+    """One claim per named skill or tool, for flat lists only: "Chroma, Qdrant, OpenSearch" → 3 names,
+    "Python and SQL" → 2. A name with parentheses is never split here: whether "X (a, b)" is a list of
+    tools or one method with variants is for the extraction prompt to decide, not code."""
+    name = name.strip()
+    if "(" in name or ")" in name:
+        return [name]
+    if name.casefold() in _ONE_THING:
+        return [name]
+    parts = [p.strip() for p in re.split(r"[,;]", name) if p.strip()]
+    if len(parts) > 1:                                         # "A, B and C" / "A, B, and C"
+        parts = [x.strip() for p in parts for x in _AND.split(re.sub(r"^(?:and|&)\s+", "", p, flags=re.I))
+                 if x.strip()]
+    elif _AND.search(name):
+        sides = [p.strip() for p in _AND.split(name) if p.strip()]
+        # "Python and SQL", "Docker & Kubernetes": short names on both sides.
+        if len(sides) > 1 and all(len(s.split()) <= 2 for s in sides):
+            parts = sides
+    return parts if len(parts) > 1 else [name]
+
+
+_AUTHORED = re.compile(r"\b(co-?authors?(?:ed)?|authors?(?:ed)?|et al\.?|journal|proceedings|published|publication|"
+                       r"conference paper|paper|poster|talk|preprint|arxiv|doi|commission)\b", re.I)
+_CREDENTIAL = re.compile(r"\b(certified|certificate|certification|license|licen[cs]ed|credential|associate|"
+                         r"professional|specialty|nanodegree|badge)\b", re.I)
+
+
+AWARD_MAX_CHARS = 120
+_CLAUSE_END = re.compile(r"(?<=\w)[.;:](?:\s|$)|\s[–—]\s")
+
+
+def award_name(name: str, quote: str | None) -> str:
+    """Award claims keep their event or context: when the name is a shorter piece of its quote
+    ("Top 10 finalist" in "Top 10 finalist out of 600+ teams, CSI National Hackathon: led a team of 4"),
+    use the clause of the quote that contains it ("… CSI National Hackathon"), at most one sentence and
+    about AWARD_MAX_CHARS characters (cut at a word boundary)."""
+    q = re.sub(r"\s+", " ", (quote or "")).strip().strip("-•·,;. ")
+    n = name.strip()
+    if not q or len(q) <= len(n) or normalize_name(n) not in normalize_name(q):
+        return n
+    clauses = [c.strip(" ,") for c in _CLAUSE_END.split(q) if c and c.strip(" ,")]
+    clause = next((c for c in clauses if normalize_name(n) in normalize_name(c)), q)
+    if len(clause) > AWARD_MAX_CHARS:
+        cut = clause[:AWARD_MAX_CHARS]
+        clause = cut[:cut.rfind(" ")] if " " in cut else cut
+        clause = clause.rstrip(" ,;-–—") if normalize_name(n) in normalize_name(clause) else n
+    return clause if len(clause) >= len(n) else n
+
+
+def looks_like_publication(c: schemas.Certification) -> bool:
+    """An authored paper, article, poster or talk listed as a certification (e.g. "Co-Author, 'The Lancet …'")."""
+    text = " ".join(x for x in (c.name, c.issuer, c.source.quote) if x)
+    return bool(_AUTHORED.search(text)) and not _CREDENTIAL.search(text) and not c.credential_id
 
 
 def _link_claim(claim: schemas.Claim, bullets: list[BulletRec]) -> str | None:
@@ -243,6 +316,7 @@ def validate_extraction(
     doc: SourceDoc,
     extract: schemas.ProfileExtract | schemas.PortfolioExtract,
     today: date | None = None,
+    method_of=None,
 ) -> tuple[Profile, ValidationReport]:
     """Keep items whose quote is in the source text; record the rest as DroppedItems."""
     today = today or config.today()
@@ -259,7 +333,8 @@ def validate_extraction(
             drop("role", r, f"{r.title}" + (f" at {r.employer}" if r.employer else ""), f"role '{r.title}'")
             continue
         rec = role_rec(r, doc.evidence_id, today)
-        rec.bullets = _bullets(r.bullets, index, doc, report, f"'{rec.title}'", "role", rec.id)
+        rec.method = _method(method_of, r)
+        rec.bullets = _bullets(r.bullets, index, doc, report, f"'{rec.title}'", "role", rec.id, method_of)
         profile.roles.append(rec)
         role_ids[i] = rec.id
 
@@ -269,7 +344,8 @@ def validate_extraction(
             continue
         rec = project_rec(p, doc.evidence_id, today,
                           role_id=role_ids.get(p.role_index) if p.role_index is not None else None)
-        rec.bullets = _bullets(p.bullets, index, doc, report, f"'{rec.name}'", "project", rec.id)
+        rec.method = _method(method_of, p)
+        rec.bullets = _bullets(p.bullets, index, doc, report, f"'{rec.name}'", "project", rec.id, method_of)
         profile.projects.append(rec)
 
     bullets = profile.all_bullets()
@@ -277,13 +353,29 @@ def validate_extraction(
         if not index.contains(c.source.quote):
             drop("claim", c, f"{c.kind}: {c.name}", f"{c.kind} '{c.name}'")
             continue
-        profile.claims.append(claim_rec(c, doc.evidence_id, _link_claim(c, bullets)))
+        names = split_claim_names(c.name)
+        if len(names) > 1 and all(contains_phrase(c.source.quote, n) for n in names):
+            parts = [c.model_copy(update={"name": n}) for n in names]
+        else:
+            parts = [c]
+        for part in parts:
+            if part.kind == "award":
+                part = part.model_copy(update={"name": award_name(part.name, part.source.quote)})
+            profile.claims.append(claim_rec(part, doc.evidence_id, _link_claim(part, bullets)))
+            profile.claims[-1].method = _method(method_of, c)
 
     for c in getattr(extract, "certifications", []):
         if not index.contains(c.source.quote):
             drop("certification", c, c.name, f"certification '{c.name}'")
             continue
+        if looks_like_publication(c):              # authored work, not a credential: count it as a publication
+            pub = schemas.Project(kind="publication", name=c.name, description=None, url=c.verify_url, start=c.date,
+                                  end=c.date, role_index=None, bullets=[], source=c.source)
+            profile.projects.append(project_rec(pub, doc.evidence_id, today))
+            profile.projects[-1].method = _method(method_of, c)
+            continue
         profile.certifications.append(certification_rec(c, doc.evidence_id))
+        profile.certifications[-1].method = _method(method_of, c)
 
     report.kept = (len(profile.roles) + len(profile.projects) + len(profile.all_bullets())
                    + len(profile.claims) + len(profile.certifications))
@@ -291,8 +383,9 @@ def validate_extraction(
 
 
 def repo_profile(doc: SourceDoc, readme_extract: schemas.PortfolioExtract | None,
-                 today: date | None = None) -> tuple[Profile, ValidationReport]:
-    """A GitHub repo becomes one project from API metadata; its README adds bullets and tool claims."""
+                 today: date | None = None, method_of=None) -> tuple[Profile, ValidationReport]:
+    """A GitHub repo becomes one project from API metadata; its README adds bullets and tool claims.
+    A parsed README (PARSE_README) brings the kept README text as the description instead of bullets."""
     repo = doc.repo
     pushed = date.fromisoformat(repo.pushed_at[:10]) if repo.pushed_at else None
     created = date.fromisoformat(repo.created_at[:10]) if repo.created_at else None
@@ -301,13 +394,15 @@ def repo_profile(doc: SourceDoc, readme_extract: schemas.PortfolioExtract | None
         start_date=created.replace(day=1) if created else None,
         end_date=pushed.replace(day=1) if pushed else None,
         quote=f"Repository: {repo.full_name}", evidence_id=doc.evidence_id,
-        is_fork=repo.is_fork, own_commits=repo.own_commits,
+        is_fork=repo.is_fork, own_commits=repo.own_commits, method="parser",
     )
     profile, report = Profile(projects=[project]), ValidationReport()
     if readme_extract is not None:
-        sub, report = validate_extraction(doc, readme_extract, today)
+        sub, report = validate_extraction(doc, readme_extract, today, method_of)
         for p in sub.projects:  # fold README "projects" into the repo instead of duplicating it
             project.bullets += p.bullets
+            if p.method in ("parser", "jev") and p.description:
+                project.description, project.method = p.description, p.method   # kept README text, verbatim
             project.description = project.description or p.description
             report.project_remap[p.id] = project.id
         for d in report.dropped_items:  # dropped README bullets now belong to the repo project

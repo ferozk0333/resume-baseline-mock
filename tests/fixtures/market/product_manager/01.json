@@ -1,0 +1,85 @@
+{
+ "company": "Lumenfield",
+ "tier": "large",
+ "title": "Associate Product Manager",
+ "posted_at": "2026-09-05",
+ "labelled_by": "hand",
+ "extraction": {
+  "status": "ok",
+  "model": "hand-labelled",
+  "details": {
+   "title": "Associate Product Manager",
+   "company": "Lumenfield",
+   "level": "entry",
+   "min_years": 0.0
+  },
+  "detail_quotes": {
+   "min_years": "0-2 years of product experience; new grads welcome."
+  },
+  "requirements": [
+   {
+    "name": "Product discovery and user research",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experience running user research and synthesizing findings."
+   },
+   {
+    "name": "Requirements writing",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Write clear product requirements."
+   },
+   {
+    "name": "Product analytics",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Comfort with data: SQL or product analytics."
+   },
+   {
+    "name": "Prioritization",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Prioritize with clear trade-offs."
+   },
+   {
+    "name": "Figma",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Familiarity with Figma."
+   },
+   {
+    "name": "Technical fluency",
+    "kind": "skill",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Technical background."
+   }
+  ],
+  "responsibilities": [
+   {
+    "text": "Own a feature area from discovery to launch.",
+    "quote": "Own a feature area from discovery to launch."
+   },
+   {
+    "text": "Work with engineering, design and data science.",
+    "quote": "Work with engineering, design and data science."
+   },
+   {
+    "text": "Define success metrics and track them.",
+    "quote": "Define success metrics and track them."
+   }
+  ],
+  "good": {
+   "expected_reach": 3
+  },
+  "good_quotes": {
+   "expected_reach": "Define success metrics and track them."
+  },
+  "dropped": []
+ }
+}

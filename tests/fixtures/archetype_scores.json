@@ -1,0 +1,2373 @@
+{
+ "career_switcher@baseline-ai-engineer-entry": {
+  "dimensions": {
+   "authority": 0.6,
+   "experience": 0.69251,
+   "expertise": 0.108333,
+   "trust": 0.202632
+  },
+  "final": 40.077942,
+  "labels": {
+   "bullet|impact_type|business": 1,
+   "bullet|impact_type|none": 1,
+   "bullet|impact_type|operational": 1,
+   "bullet|outcome_direction|no": 1,
+   "bullet|outcome_direction|yes": 2,
+   "bullet|outcome_metric|yes": 3,
+   "bullet|ownership|contributed": 1,
+   "bullet|ownership|led": 2,
+   "bullet|reach|cross_functional": 1,
+   "bullet|reach|own_work": 1,
+   "bullet|reach|team": 1,
+   "claim|proof_support|bullet": 3,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|missing": 8,
+   "criterion|tool_evidence|missing": 6,
+   "criterion|tool_evidence|used": 1,
+   "project|complexity|partly": 1,
+   "project|quality_check_1|yes": 1,
+   "project|quality_check_2|no": 1,
+   "project|quality_check_3|no": 1,
+   "project|quality_check_4|yes": 1,
+   "project|quality_check_5|yes": 1,
+   "project|relevance|relevant": 1,
+   "role|complexity|partly": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|yes": 1,
+   "role|quality_check_5|yes": 1,
+   "role|relevance|adjacent": 1,
+   "role|scope_vs_baseline|partly": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.8,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.375,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.982593,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.222222,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "career_switcher@baseline-data-scientist-entry": {
+  "dimensions": {
+   "authority": 0.6,
+   "experience": 0.69251,
+   "expertise": 0.35,
+   "trust": 0.202632
+  },
+  "final": 47.327942,
+  "labels": {
+   "bullet|impact_type|business": 1,
+   "bullet|impact_type|none": 1,
+   "bullet|impact_type|operational": 1,
+   "bullet|outcome_direction|no": 1,
+   "bullet|outcome_direction|yes": 2,
+   "bullet|outcome_metric|yes": 3,
+   "bullet|ownership|contributed": 1,
+   "bullet|ownership|led": 2,
+   "bullet|reach|cross_functional": 1,
+   "bullet|reach|own_work": 1,
+   "bullet|reach|team": 1,
+   "claim|proof_support|bullet": 3,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 5,
+   "criterion|applied_level|skill_task": 1,
+   "criterion|applied_level|skill_task_result": 2,
+   "criterion|skill_evidence|bullet": 3,
+   "criterion|skill_evidence|missing": 5,
+   "criterion|tool_evidence|missing": 3,
+   "criterion|tool_evidence|used": 4,
+   "project|complexity|partly": 1,
+   "project|quality_check_1|yes": 1,
+   "project|quality_check_2|no": 1,
+   "project|quality_check_3|no": 1,
+   "project|quality_check_4|yes": 1,
+   "project|quality_check_5|yes": 1,
+   "project|relevance|relevant": 1,
+   "role|complexity|partly": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|yes": 1,
+   "role|quality_check_5|yes": 1,
+   "role|relevance|adjacent": 1,
+   "role|scope_vs_baseline|partly": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.277778,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.8,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.375,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.982593,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.333333,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.611111,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "career_switcher@baseline-product-manager-entry": {
+  "dimensions": {
+   "authority": 0.6,
+   "experience": 0.69251,
+   "expertise": 0.166667,
+   "trust": 0.202632
+  },
+  "final": 41.827942,
+  "labels": {
+   "bullet|impact_type|business": 1,
+   "bullet|impact_type|none": 1,
+   "bullet|impact_type|operational": 1,
+   "bullet|outcome_direction|no": 1,
+   "bullet|outcome_direction|yes": 2,
+   "bullet|outcome_metric|yes": 3,
+   "bullet|ownership|contributed": 1,
+   "bullet|ownership|led": 2,
+   "bullet|reach|cross_functional": 1,
+   "bullet|reach|own_work": 1,
+   "bullet|reach|team": 1,
+   "claim|proof_support|bullet": 3,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 7,
+   "criterion|applied_level|skill_task_result": 1,
+   "criterion|skill_evidence|bullet": 1,
+   "criterion|skill_evidence|missing": 7,
+   "criterion|tool_evidence|missing": 3,
+   "criterion|tool_evidence|used": 1,
+   "project|complexity|partly": 1,
+   "project|quality_check_1|yes": 1,
+   "project|quality_check_2|no": 1,
+   "project|quality_check_3|no": 1,
+   "project|quality_check_4|yes": 1,
+   "project|quality_check_5|yes": 1,
+   "project|relevance|relevant": 1,
+   "role|complexity|partly": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|yes": 1,
+   "role|quality_check_5|yes": 1,
+   "role|relevance|adjacent": 1,
+   "role|scope_vs_baseline|partly": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.111111,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.8,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.375,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.982593,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.111111,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.166667,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "empty@baseline-ai-engineer-entry": {
+  "dimensions": {
+   "authority": 0.0,
+   "experience": 0.0,
+   "expertise": 0.0,
+   "trust": 0.021053
+  },
+  "final": 0.421053,
+  "labels": {
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|missing": 8,
+   "criterion|tool_evidence|missing": 7,
+   "role|quality_check_1|no": 1,
+   "role|quality_check_2|no": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|no": 1,
+   "role|quality_check_5|no": 1,
+   "role|relevance|unrelated": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.2,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "outcomes": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "ownership": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "recency": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "scope_of_impact": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "tools": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "empty@baseline-data-scientist-entry": {
+  "dimensions": {
+   "authority": 0.0,
+   "experience": 0.0,
+   "expertise": 0.0,
+   "trust": 0.021053
+  },
+  "final": 0.421053,
+  "labels": {
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|missing": 8,
+   "criterion|tool_evidence|missing": 7,
+   "role|quality_check_1|no": 1,
+   "role|quality_check_2|no": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|no": 1,
+   "role|quality_check_5|no": 1,
+   "role|relevance|unrelated": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.2,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "outcomes": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "ownership": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "recency": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "scope_of_impact": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "tools": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "empty@baseline-product-manager-entry": {
+  "dimensions": {
+   "authority": 0.0,
+   "experience": 0.0,
+   "expertise": 0.0,
+   "trust": 0.021053
+  },
+  "final": 0.421053,
+  "labels": {
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|missing": 8,
+   "criterion|tool_evidence|missing": 4,
+   "role|quality_check_1|no": 1,
+   "role|quality_check_2|no": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|no": 1,
+   "role|quality_check_5|no": 1,
+   "role|relevance|unrelated": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.2,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "outcomes": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "ownership": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "recency": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "scope_of_impact": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "tools": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "keyword_heavy@baseline-ai-engineer-entry": {
+  "dimensions": {
+   "authority": 0.05,
+   "experience": 0.458333,
+   "expertise": 0.033333,
+   "trust": 0.021053
+  },
+  "final": 16.171053,
+  "labels": {
+   "bullet|impact_type|none": 2,
+   "bullet|outcome_direction|no": 2,
+   "bullet|outcome_metric|no": 2,
+   "bullet|ownership|contributed": 2,
+   "bullet|reach|not_stated": 2,
+   "claim|proof_support|claimed_only": 15,
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|missing": 9,
+   "criterion|tool_evidence|listed": 4,
+   "criterion|tool_evidence|missing": 5,
+   "role|complexity|no": 1,
+   "role|quality_check_1|no": 1,
+   "role|quality_check_2|no": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|no": 1,
+   "role|quality_check_5|no": 1,
+   "role|relevance|adjacent": 1,
+   "role|scope_vs_baseline|below": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 0.75,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.2,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 0.25,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "tools": {
+    "score": 0.222222,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "keyword_heavy@baseline-data-scientist-entry": {
+  "dimensions": {
+   "authority": 0.05,
+   "experience": 0.458333,
+   "expertise": 0.225,
+   "trust": 0.021053
+  },
+  "final": 21.921053,
+  "labels": {
+   "bullet|impact_type|none": 2,
+   "bullet|outcome_direction|no": 2,
+   "bullet|outcome_metric|no": 2,
+   "bullet|ownership|contributed": 2,
+   "bullet|reach|not_stated": 2,
+   "claim|proof_support|claimed_only": 15,
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|keyword": 16,
+   "criterion|tool_evidence|listed": 14,
+   "role|complexity|no": 1,
+   "role|quality_check_1|no": 1,
+   "role|quality_check_2|no": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|no": 1,
+   "role|quality_check_5|no": 1,
+   "role|relevance|adjacent": 1,
+   "role|scope_vs_baseline|below": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 0.75,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.2,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 0.25,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "tools": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "keyword_heavy@baseline-product-manager-entry": {
+  "dimensions": {
+   "authority": 0.05,
+   "experience": 0.458333,
+   "expertise": 0.029167,
+   "trust": 0.021053
+  },
+  "final": 16.046053,
+  "labels": {
+   "bullet|impact_type|none": 2,
+   "bullet|outcome_direction|no": 2,
+   "bullet|outcome_metric|no": 2,
+   "bullet|ownership|contributed": 2,
+   "bullet|reach|not_stated": 2,
+   "claim|proof_support|claimed_only": 15,
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|keyword": 2,
+   "criterion|skill_evidence|missing": 7,
+   "criterion|tool_evidence|listed": 2,
+   "criterion|tool_evidence|missing": 3,
+   "role|complexity|no": 1,
+   "role|quality_check_1|no": 1,
+   "role|quality_check_2|no": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|no": 1,
+   "role|quality_check_5|no": 1,
+   "role|relevance|adjacent": 1,
+   "role|scope_vs_baseline|below": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 0.75,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.2,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 0.25,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.055556,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "tools": {
+    "score": 0.083333,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "project_strong_grad@baseline-ai-engineer-entry": {
+  "dimensions": {
+   "authority": 0.75,
+   "experience": 0.383187,
+   "expertise": 0.316667,
+   "trust": 0.621053
+  },
+  "final": 48.416664,
+  "labels": {
+   "bullet|impact_type|none": 3,
+   "bullet|impact_type|operational": 1,
+   "bullet|outcome_direction|no": 2,
+   "bullet|outcome_direction|yes": 2,
+   "bullet|outcome_metric|yes": 4,
+   "bullet|ownership|led": 4,
+   "bullet|reach|own_work": 2,
+   "bullet|reach|team": 2,
+   "claim|proof_support|artifact": 4,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|missing": 8,
+   "criterion|tool_evidence|missing": 5,
+   "criterion|tool_evidence|used": 3,
+   "evidence_item|source_alignment|aligned": 1,
+   "project|complexity|meets": 1,
+   "project|complexity|partly": 3,
+   "project|quality_check_1|yes": 4,
+   "project|quality_check_2|yes": 4,
+   "project|quality_check_3|yes": 4,
+   "project|quality_check_4|yes": 4,
+   "project|quality_check_5|yes": 4,
+   "project|relevance|relevant": 4,
+   "project|work_sample_relevant|yes": 2
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.8,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.948683,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "role_skills": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.444444,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 1.0,
+    "status": "scored"
+   }
+  }
+ },
+ "project_strong_grad@baseline-data-scientist-entry": {
+  "dimensions": {
+   "authority": 0.75,
+   "experience": 0.383187,
+   "expertise": 0.766667,
+   "trust": 0.621053
+  },
+  "final": 61.916664,
+  "labels": {
+   "bullet|impact_type|none": 3,
+   "bullet|impact_type|operational": 1,
+   "bullet|outcome_direction|no": 2,
+   "bullet|outcome_direction|yes": 2,
+   "bullet|outcome_metric|yes": 4,
+   "bullet|ownership|led": 4,
+   "bullet|reach|own_work": 2,
+   "bullet|reach|team": 2,
+   "claim|proof_support|artifact": 4,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 1,
+   "criterion|applied_level|skill_task": 6,
+   "criterion|applied_level|skill_task_result": 1,
+   "criterion|skill_evidence|bullet": 7,
+   "criterion|skill_evidence|missing": 1,
+   "criterion|tool_evidence|missing": 2,
+   "criterion|tool_evidence|used": 6,
+   "evidence_item|source_alignment|aligned": 1,
+   "project|complexity|meets": 1,
+   "project|complexity|partly": 3,
+   "project|quality_check_1|yes": 4,
+   "project|quality_check_2|yes": 4,
+   "project|quality_check_3|yes": 4,
+   "project|quality_check_4|yes": 4,
+   "project|quality_check_5|yes": 4,
+   "project|relevance|relevant": 4,
+   "project|work_sample_relevant|yes": 2
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.8,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.948683,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "role_skills": {
+    "score": 0.833333,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.777778,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 1.0,
+    "status": "scored"
+   }
+  }
+ },
+ "project_strong_grad@baseline-product-manager-entry": {
+  "dimensions": {
+   "authority": 0.7,
+   "experience": 0.383187,
+   "expertise": 0.325,
+   "trust": 0.621053
+  },
+  "final": 47.666664,
+  "labels": {
+   "bullet|impact_type|none": 3,
+   "bullet|impact_type|operational": 1,
+   "bullet|outcome_direction|no": 2,
+   "bullet|outcome_direction|yes": 2,
+   "bullet|outcome_metric|yes": 4,
+   "bullet|ownership|led": 4,
+   "bullet|reach|own_work": 2,
+   "bullet|reach|team": 2,
+   "claim|proof_support|artifact": 4,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 7,
+   "criterion|applied_level|skill_task": 1,
+   "criterion|skill_evidence|bullet": 1,
+   "criterion|skill_evidence|missing": 7,
+   "criterion|tool_evidence|missing": 3,
+   "criterion|tool_evidence|used": 1,
+   "evidence_item|source_alignment|aligned": 1,
+   "project|complexity|meets": 1,
+   "project|complexity|partly": 3,
+   "project|quality_check_1|yes": 4,
+   "project|quality_check_2|yes": 4,
+   "project|quality_check_3|yes": 4,
+   "project|quality_check_4|yes": 4,
+   "project|quality_check_5|yes": 4,
+   "project|relevance|relevant": 4,
+   "project|work_sample_relevant|yes": 2
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.055556,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.8,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.948683,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "role_skills": {
+    "score": 0.111111,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "scope_of_impact": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.166667,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 1.0,
+    "status": "scored"
+   }
+  }
+ },
+ "resume_only@baseline-ai-engineer-entry": {
+  "dimensions": {
+   "authority": 0.9,
+   "experience": 0.888889,
+   "expertise": 0.108333,
+   "trust": 0.184211
+  },
+  "final": 51.600877,
+  "labels": {
+   "bullet|impact_type|business": 1,
+   "bullet|outcome_direction|yes": 1,
+   "bullet|outcome_metric|yes": 1,
+   "bullet|ownership|led": 1,
+   "bullet|reach|team": 1,
+   "claim|proof_support|bullet": 1,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|missing": 8,
+   "criterion|tool_evidence|missing": 6,
+   "criterion|tool_evidence|used": 1,
+   "role|complexity|partly": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|yes": 1,
+   "role|quality_check_5|yes": 1,
+   "role|relevance|relevant": 1,
+   "role|scope_vs_baseline|partly": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.25,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.222222,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "resume_only@baseline-data-scientist-entry": {
+  "dimensions": {
+   "authority": 0.9,
+   "experience": 0.888889,
+   "expertise": 0.166667,
+   "trust": 0.184211
+  },
+  "final": 53.350877,
+  "labels": {
+   "bullet|impact_type|business": 1,
+   "bullet|outcome_direction|yes": 1,
+   "bullet|outcome_metric|yes": 1,
+   "bullet|ownership|led": 1,
+   "bullet|reach|team": 1,
+   "claim|proof_support|bullet": 1,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 7,
+   "criterion|applied_level|skill_task_result": 1,
+   "criterion|skill_evidence|bullet": 1,
+   "criterion|skill_evidence|missing": 7,
+   "criterion|tool_evidence|missing": 7,
+   "criterion|tool_evidence|used": 1,
+   "role|complexity|partly": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|yes": 1,
+   "role|quality_check_5|yes": 1,
+   "role|relevance|relevant": 1,
+   "role|scope_vs_baseline|partly": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.111111,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.25,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.111111,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.166667,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "resume_only@baseline-product-manager-entry": {
+  "dimensions": {
+   "authority": 0.85,
+   "experience": 0.888889,
+   "expertise": 0.075,
+   "trust": 0.184211
+  },
+  "final": 49.600877,
+  "labels": {
+   "bullet|impact_type|business": 1,
+   "bullet|outcome_direction|yes": 1,
+   "bullet|outcome_metric|yes": 1,
+   "bullet|ownership|led": 1,
+   "bullet|reach|team": 1,
+   "claim|proof_support|bullet": 1,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|missing": 8,
+   "criterion|tool_evidence|missing": 5,
+   "role|complexity|partly": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|yes": 1,
+   "role|quality_check_5|yes": 1,
+   "role|relevance|relevant": 1,
+   "role|scope_vs_baseline|partly": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.25,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "stale_expert@baseline-ai-engineer-entry": {
+  "dimensions": {
+   "authority": 0.9,
+   "experience": 0.692554,
+   "expertise": 0.183333,
+   "trust": 0.147368
+  },
+  "final": 47.223993,
+  "labels": {
+   "bullet|impact_type|business": 3,
+   "bullet|outcome_direction|yes": 3,
+   "bullet|outcome_metric|yes": 3,
+   "bullet|ownership|led": 3,
+   "bullet|reach|cross_functional": 1,
+   "bullet|reach|organization": 1,
+   "bullet|reach|team": 1,
+   "candidate|progression|same": 1,
+   "claim|proof_support|bullet": 1,
+   "claim|proof_support|claimed_only": 2,
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|missing": 8,
+   "criterion|tool_evidence|missing": 6,
+   "criterion|tool_evidence|used": 1,
+   "role|complexity|meets": 1,
+   "role|quality_check_1|no": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 2,
+   "role|quality_check_3|yes": 2,
+   "role|quality_check_4|yes": 2,
+   "role|quality_check_5|yes": 2,
+   "role|relevance|relevant": 1,
+   "role|relevance|unrelated": 1,
+   "role|scope_vs_baseline|meets": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.9,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "proof_density": {
+    "score": 0.166667,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.59049,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.381443,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.222222,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "stale_expert@baseline-data-scientist-entry": {
+  "dimensions": {
+   "authority": 0.9,
+   "experience": 0.692554,
+   "expertise": 0.425,
+   "trust": 0.147368
+  },
+  "final": 54.473993,
+  "labels": {
+   "bullet|impact_type|business": 3,
+   "bullet|outcome_direction|yes": 3,
+   "bullet|outcome_metric|yes": 3,
+   "bullet|ownership|led": 3,
+   "bullet|reach|cross_functional": 1,
+   "bullet|reach|organization": 1,
+   "bullet|reach|team": 1,
+   "candidate|progression|same": 1,
+   "claim|proof_support|bullet": 1,
+   "claim|proof_support|claimed_only": 2,
+   "criterion|applied_level|mention_or_missing": 5,
+   "criterion|applied_level|skill_task_result": 3,
+   "criterion|skill_evidence|bullet": 3,
+   "criterion|skill_evidence|missing": 5,
+   "criterion|tool_evidence|missing": 4,
+   "criterion|tool_evidence|used": 5,
+   "role|complexity|meets": 1,
+   "role|quality_check_1|no": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 2,
+   "role|quality_check_3|yes": 2,
+   "role|quality_check_4|yes": 2,
+   "role|quality_check_5|yes": 2,
+   "role|relevance|relevant": 1,
+   "role|relevance|unrelated": 1,
+   "role|scope_vs_baseline|meets": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.333333,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.9,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "proof_density": {
+    "score": 0.166667,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.59049,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.381443,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.333333,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "stale_expert@baseline-product-manager-entry": {
+  "dimensions": {
+   "authority": 0.9,
+   "experience": 0.692554,
+   "expertise": 0.241667,
+   "trust": 0.147368
+  },
+  "final": 48.973993,
+  "labels": {
+   "bullet|impact_type|business": 3,
+   "bullet|outcome_direction|yes": 3,
+   "bullet|outcome_metric|yes": 3,
+   "bullet|ownership|led": 3,
+   "bullet|reach|cross_functional": 1,
+   "bullet|reach|organization": 1,
+   "bullet|reach|team": 1,
+   "candidate|progression|same": 1,
+   "claim|proof_support|bullet": 1,
+   "claim|proof_support|claimed_only": 2,
+   "criterion|applied_level|mention_or_missing": 7,
+   "criterion|applied_level|skill_task_result": 1,
+   "criterion|skill_evidence|bullet": 1,
+   "criterion|skill_evidence|missing": 7,
+   "criterion|tool_evidence|missing": 3,
+   "criterion|tool_evidence|used": 2,
+   "role|complexity|meets": 1,
+   "role|quality_check_1|no": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 2,
+   "role|quality_check_3|yes": 2,
+   "role|quality_check_4|yes": 2,
+   "role|quality_check_5|yes": 2,
+   "role|relevance|relevant": 1,
+   "role|relevance|unrelated": 1,
+   "role|scope_vs_baseline|meets": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.111111,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.9,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "proof_density": {
+    "score": 0.166667,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 0.59049,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 0.381443,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.111111,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.166667,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 0.0,
+    "status": "missing"
+   }
+  }
+ },
+ "strong_ds@baseline-ai-engineer-entry": {
+  "dimensions": {
+   "authority": 0.9,
+   "experience": 1.0,
+   "expertise": 0.316667,
+   "trust": 0.63208
+  },
+  "final": 70.141604,
+  "labels": {
+   "bullet|impact_type|business": 2,
+   "bullet|impact_type|operational": 2,
+   "bullet|outcome_direction|no": 2,
+   "bullet|outcome_direction|yes": 2,
+   "bullet|outcome_metric|no": 2,
+   "bullet|outcome_metric|yes": 2,
+   "bullet|ownership|contributed": 1,
+   "bullet|ownership|led": 3,
+   "bullet|reach|cross_functional": 3,
+   "bullet|reach|team": 1,
+   "claim|proof_support|artifact": 6,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 8,
+   "criterion|skill_evidence|missing": 8,
+   "criterion|tool_evidence|missing": 5,
+   "criterion|tool_evidence|used": 3,
+   "evidence_item|source_alignment|aligned": 1,
+   "project|complexity|meets": 1,
+   "project|complexity|partly": 1,
+   "project|quality_check_1|yes": 2,
+   "project|quality_check_2|no": 1,
+   "project|quality_check_2|yes": 1,
+   "project|quality_check_3|yes": 2,
+   "project|quality_check_4|yes": 2,
+   "project|quality_check_5|yes": 2,
+   "project|relevance|relevant": 2,
+   "project|work_sample_relevant|yes": 2,
+   "role|complexity|meets": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|yes": 1,
+   "role|quality_check_5|yes": 1,
+   "role|relevance|relevant": 1,
+   "role|scope_vs_baseline|meets": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.933333,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.857143,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.0,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.444444,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 1.0,
+    "status": "scored"
+   }
+  }
+ },
+ "strong_ds@baseline-data-scientist-entry": {
+  "dimensions": {
+   "authority": 0.9,
+   "experience": 1.0,
+   "expertise": 0.75,
+   "trust": 0.789975
+  },
+  "final": 86.299499,
+  "labels": {
+   "bullet|impact_type|business": 2,
+   "bullet|impact_type|operational": 2,
+   "bullet|outcome_direction|no": 2,
+   "bullet|outcome_direction|yes": 2,
+   "bullet|outcome_metric|no": 2,
+   "bullet|outcome_metric|yes": 2,
+   "bullet|ownership|contributed": 1,
+   "bullet|ownership|led": 3,
+   "bullet|reach|cross_functional": 3,
+   "bullet|reach|team": 1,
+   "claim|proof_support|artifact": 6,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 2,
+   "criterion|applied_level|skill_task": 3,
+   "criterion|applied_level|skill_task_result": 3,
+   "criterion|skill_evidence|bullet": 6,
+   "criterion|skill_evidence|missing": 2,
+   "criterion|tool_evidence|used": 8,
+   "evidence_item|source_alignment|aligned": 1,
+   "project|complexity|meets": 1,
+   "project|complexity|partly": 1,
+   "project|quality_check_1|yes": 2,
+   "project|quality_check_2|no": 1,
+   "project|quality_check_2|yes": 1,
+   "project|quality_check_3|yes": 2,
+   "project|quality_check_4|yes": 2,
+   "project|quality_check_5|yes": 2,
+   "project|relevance|relevant": 2,
+   "project|work_sample_relevant|yes": 2,
+   "role|complexity|meets": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|yes": 1,
+   "role|quality_check_5|yes": 1,
+   "role|relevance|relevant": 1,
+   "role|scope_vs_baseline|meets": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.933333,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.857143,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.666667,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.5,
+    "status": "scored"
+   },
+   "work_samples": {
+    "score": 1.0,
+    "status": "scored"
+   }
+  }
+ },
+ "strong_ds@baseline-product-manager-entry": {
+  "dimensions": {
+   "authority": 0.9,
+   "experience": 1.0,
+   "expertise": 0.341667,
+   "trust": 0.63208
+  },
+  "final": 70.891604,
+  "labels": {
+   "bullet|impact_type|business": 2,
+   "bullet|impact_type|operational": 2,
+   "bullet|outcome_direction|no": 2,
+   "bullet|outcome_direction|yes": 2,
+   "bullet|outcome_metric|no": 2,
+   "bullet|outcome_metric|yes": 2,
+   "bullet|ownership|contributed": 1,
+   "bullet|ownership|led": 3,
+   "bullet|reach|cross_functional": 3,
+   "bullet|reach|team": 1,
+   "claim|proof_support|artifact": 6,
+   "claim|proof_support|claimed_only": 1,
+   "criterion|applied_level|mention_or_missing": 7,
+   "criterion|applied_level|skill_task_result": 1,
+   "criterion|skill_evidence|bullet": 1,
+   "criterion|skill_evidence|missing": 7,
+   "criterion|tool_evidence|missing": 3,
+   "criterion|tool_evidence|used": 1,
+   "evidence_item|source_alignment|aligned": 1,
+   "project|complexity|meets": 1,
+   "project|complexity|partly": 1,
+   "project|quality_check_1|yes": 2,
+   "project|quality_check_2|no": 1,
+   "project|quality_check_2|yes": 1,
+   "project|quality_check_3|yes": 2,
+   "project|quality_check_4|yes": 2,
+   "project|quality_check_5|yes": 2,
+   "project|relevance|relevant": 2,
+   "project|work_sample_relevant|yes": 2,
+   "role|complexity|meets": 1,
+   "role|quality_check_1|yes": 1,
+   "role|quality_check_2|yes": 1,
+   "role|quality_check_3|yes": 1,
+   "role|quality_check_4|yes": 1,
+   "role|quality_check_5|yes": 1,
+   "role|relevance|relevant": 1,
+   "role|scope_vs_baseline|meets": 1
+  },
+  "subcategories": {
+   "applied_knowledge": {
+    "score": 0.111111,
+    "status": "scored"
+   },
+   "complexity": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "consistency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "depth": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "evidence_quality": {
+    "score": 0.933333,
+    "status": "scored"
+   },
+   "impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "outcomes": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "ownership": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "progression": {
+    "score": null,
+    "status": "na"
+   },
+   "proof_density": {
+    "score": 0.857143,
+    "status": "scored"
+   },
+   "recency": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "recognition": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "relevance": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "role_skills": {
+    "score": 0.111111,
+    "status": "scored"
+   },
+   "scope": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "scope_of_impact": {
+    "score": 1.0,
+    "status": "scored"
+   },
+   "tools": {
+    "score": 0.166667,
+    "status": "scored"
+   },
+   "validation_strength": {
+    "score": 0.0,
+    "status": "missing"
+   },
+   "work_samples": {
+    "score": 1.0,
+    "status": "scored"
+   }
+  }
+ }
+}

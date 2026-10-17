@@ -17,6 +17,7 @@ from extraction.records import (
     BulletRec, CertificationRec, ClaimRec, Profile, ProjectRec, ReferenceRec, RoleRec,
 )
 from extraction.validate import normalize_claim
+from core.text import contains_phrase
 from judges.fake_judge import FakeJudge
 from judges.questions import QUESTIONS
 
@@ -122,10 +123,22 @@ class Builder:
             if q in CRITERION_QUESTIONS:
                 name = ctx["criterion"].split(":", 1)[0]
                 if (q, name) in criteria:
-                    return criteria[(q, name)]
+                    return _with_list_quote(criteria[(q, name)], ctx)
             return defaults.get(q, QUESTIONS[q].none_option)
 
         return self.cid, FakeJudge(script=script)
+
+
+def _with_list_quote(label: str, ctx: dict):
+    """A scripted label above the none-option quotes the matching skills-list entry, as a real judge must on the
+    unmatched route, where a criterion matched only in the skills list now goes (specs/13 §0.4)."""
+    if label in ("missing", "mention_or_missing"):
+        return label
+    head, _, rest = ctx["criterion"].partition(":")
+    names = [head] + [a.strip() for a in rest.split("Also called:", 1)[1].rstrip(". ").split(",")] \
+        if "Also called:" in rest else [head]
+    entry = next((s for s in ctx.get("skills_list") or [] if any(contains_phrase(s, n) for n in names)), None)
+    return (label, entry) if entry else label
 
 
 # Skills a Data Scientist baseline looks for, and how strong-evidence profiles show them.

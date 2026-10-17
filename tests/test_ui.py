@@ -1,4 +1,5 @@
 """Phase 7: Streamlit pages run headless (AppTest) with fake deps. No network."""
+import sys
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -11,7 +12,9 @@ from extraction import schemas
 from tests.helpers import SAMPLE_RESUME_LINES, FakeLLM, make_pdf, sample_resume_extract, src
 
 DS = "baseline-data-scientist-entry"
-APP_DIR = config.ROOT / "app"
+APP_DIR = config.ROOT / "legacy" / "app"     # the retired Streamlit UI (phase 10)
+if str(APP_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(APP_DIR.parent))
 
 
 @pytest.fixture
@@ -35,6 +38,7 @@ def scored_candidate(path, with_drop=False):
     p = Pipeline(deps)
     r = p.start_onboarding(OnboardingInputs(resume=Upload("cv.pdf", make_pdf(SAMPLE_RESUME_LINES)), name="Jane"), DS)
     done = p.confirm_review(r["thread_id"])
+    Pipeline.wait_for_plan(done["run_id"])           # the plan is written after the score
     return done["candidate_id"], done["run_id"]
 
 
@@ -160,6 +164,17 @@ def test_review_shows_profile_dropped_items_and_add_back(env):
     no_errors(at)
     claims = store.load_profile(db.connect(env), cid).claims
     assert any(c.name_raw == "Spark" and c.source == "user_edit" for c in claims)
+
+
+def test_review_shows_the_normalized_source_text(env):
+    cid, _ = scored_candidate(env)
+    at = page("2_Onboarding.py", candidate_id=cid, baseline_id=DS)
+    no_errors(at)
+    assert any(s.value == "Source text" for s in at.subheader)
+    resume = next(e for e in at.expander if e.label.startswith("Resume"))
+    stored = db.connect(env).execute("SELECT raw_text FROM evidence_items WHERE candidate_id = ? AND type = 'resume'",
+                                     (cid,)).fetchone()[0]
+    assert [x.value.strip() for x in resume.text] == [stored.strip()]
 
 
 def test_review_edit_role_marks_user_edit(env):

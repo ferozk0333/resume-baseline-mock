@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 26
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -23,7 +23,9 @@ CREATE TABLE IF NOT EXISTS baselines (
   complexity_criteria TEXT,
   description TEXT,
   is_mock INTEGER DEFAULT 1,
-  updated_at TEXT
+  updated_at TEXT,
+  owner_job_id TEXT,              -- set for a recruiter-created job's own baseline (specs/14); never listed as a role
+  market_version_id TEXT          -- set for a published Market baseline (specs/15); used through the role's toggle
 );
 
 CREATE TABLE IF NOT EXISTS baseline_criteria (
@@ -42,7 +44,10 @@ CREATE TABLE IF NOT EXISTS candidates (
   target_role TEXT,
   github_username TEXT,
   portfolio_url TEXT,
-  created_at TEXT
+  created_at TEXT,
+  data_source TEXT,               -- null = uploaded; demo_parsed | archetype | test_variant (demo data, labelled in the UI)
+  email TEXT,                     -- contact address for recruiter emails (demo: fictional, example.com)
+  linkedin_url TEXT               -- profile link entered on the upload form (display only, never scored)
 );
 
 CREATE TABLE IF NOT EXISTS evidence_items (
@@ -70,7 +75,8 @@ CREATE TABLE IF NOT EXISTS roles (
   quote TEXT,
   source TEXT DEFAULT 'extracted',
   needs_review INTEGER DEFAULT 0,
-  review_reasons TEXT
+  review_reasons TEXT,
+  method TEXT                     -- parser | jev | llm (specs/18 §4); null = typed or edited by the user
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -84,7 +90,8 @@ CREATE TABLE IF NOT EXISTS projects (
   quote TEXT,
   source TEXT DEFAULT 'extracted',
   needs_review INTEGER DEFAULT 0,
-  review_reasons TEXT
+  review_reasons TEXT,
+  method TEXT
 );
 
 CREATE TABLE IF NOT EXISTS bullets (
@@ -93,7 +100,8 @@ CREATE TABLE IF NOT EXISTS bullets (
   role_id TEXT, project_id TEXT,
   text TEXT,
   location TEXT,
-  source TEXT DEFAULT 'extracted'
+  source TEXT DEFAULT 'extracted',
+  method TEXT
 );
 
 CREATE TABLE IF NOT EXISTS claims (
@@ -104,7 +112,8 @@ CREATE TABLE IF NOT EXISTS claims (
   name_raw TEXT,
   name_norm TEXT,
   quote TEXT,
-  source TEXT DEFAULT 'extracted'
+  source TEXT DEFAULT 'extracted',
+  method TEXT
 );
 
 CREATE TABLE IF NOT EXISTS certifications (
@@ -113,7 +122,8 @@ CREATE TABLE IF NOT EXISTS certifications (
   name TEXT, issuer TEXT, issued_date TEXT,
   credential_id TEXT, verify_url TEXT,
   verified INTEGER DEFAULT 0,
-  source TEXT DEFAULT 'extracted'
+  source TEXT DEFAULT 'extracted',
+  method TEXT
 );
 
 CREATE TABLE IF NOT EXISTS dropped_items (
@@ -143,7 +153,211 @@ CREATE TABLE IF NOT EXISTS runs (
   started_at TEXT, finished_at TEXT,
   logic_version TEXT,
   baseline_hash TEXT,
-  models_json TEXT
+  models_json TEXT,
+  timings_json TEXT,
+  plan_status TEXT                -- generating | ready | failed (improvement plan, written after the score)
+);
+
+CREATE TABLE IF NOT EXISTS document_texts (
+  file_sha256 TEXT,
+  normalizer TEXT,
+  text TEXT,
+  created_at TEXT,
+  hidden_json TEXT,               -- hidden text removed before extraction (REMOVE_HIDDEN_TEXT; for Admin only)
+  PRIMARY KEY (file_sha256, normalizer)
+);
+
+CREATE TABLE IF NOT EXISTS deleted_items (   -- deleted in Review while sources are read: not re-added by a later one
+  id TEXT PRIMARY KEY, candidate_id TEXT, item_type TEXT, key TEXT, label TEXT, payload TEXT, created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS suppressed_items ( -- a later source named a deleted item: "LinkedIn also mentions X · Add back"
+  id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, item_type TEXT, key TEXT, label TEXT, payload TEXT,
+  restored INTEGER DEFAULT 0, created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS prompt_guard_cache (  -- Prompt Guard score per chunk text (specs/18 Phase 4)
+  text_hash TEXT, model TEXT, score REAL, created_at TEXT, PRIMARY KEY (text_hash, model)
+);
+
+CREATE TABLE IF NOT EXISTS prompt_guard_flags (  -- chunks above the threshold: Admin only, never scored or shown
+  id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, source TEXT, chunk_index INTEGER, chunk TEXT,
+  score REAL, hidden INTEGER DEFAULT 0, model TEXT, created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS parser_runs (     -- code-first extraction per document (specs/18 §4): used or shadow
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT, evidence_id TEXT,
+  doc_type TEXT,
+  mode TEXT,                      -- on | shadow
+  outcome TEXT,                   -- parsed | fallback
+  reasons_json TEXT, notes_json TEXT, items_json TEXT,
+  comparison_json TEXT,           -- shadow: against the LLM extraction of the same document
+  seconds REAL, jev_requests INTEGER, jev_questions INTEGER, llm_calls INTEGER,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS jobs (           -- recruiter view (phase 11): one job per baseline
+  id TEXT PRIMARY KEY,
+  baseline_id TEXT,
+  title TEXT, company TEXT,
+  weights_json TEXT,              -- defaults to the team table
+  must_haves_json TEXT,           -- list of baseline criterion ids
+  preset TEXT,                    -- weights preset name, or null for custom
+  created_at TEXT,
+  settings_json TEXT,             -- recruiter name, interview duration, availability windows, scheduling link
+  status TEXT DEFAULT 'open',     -- draft | open | closed (specs/14)
+  details_json TEXT,              -- department, location, workplace, employment type, level, years, short description
+  jd_text TEXT, jd_file TEXT,     -- the original job description (normalized text, saved file)
+  draft_json TEXT,                -- the create/edit form while it is being worked on (autosaved)
+  updated_at TEXT,
+  data_source TEXT,               -- 'demo' for seeded demo jobs (specs/17 §9), null otherwise
+  role_baseline_id TEXT,          -- "Role family": a role baseline id, 'none', or null (unknown)
+  published_at TEXT               -- when the job was posted (drafts: null)
+);
+
+CREATE TABLE IF NOT EXISTS applications (
+  id TEXT PRIMARY KEY,
+  job_id TEXT, candidate_id TEXT,
+  run_id TEXT,                    -- latest scoring run against the job's baseline
+  status TEXT,                    -- new | shortlisted | in_loop | not_moving_forward (follows the stage)
+  applied_at TEXT,
+  stage_id TEXT                   -- interview_stages.id; null = not yet in the interview plan
+);
+
+CREATE TABLE IF NOT EXISTS interview_stages (   -- interview plan per job (specs/13 §3)
+  id TEXT PRIMARY KEY, job_id TEXT,
+  name TEXT, position INTEGER,
+  focus_json TEXT,                -- focus areas (criterion names), pre-filled from the job's must-haves
+  terminal INTEGER DEFAULT 0      -- 1 = "Not moving forward"
+);
+
+CREATE TABLE IF NOT EXISTS activity (       -- stage moves, emails, decisions (Activity tab)
+  id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT,
+  kind TEXT,                      -- stage | email | decision | note
+  summary TEXT, detail_json TEXT, created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS emails (         -- every drafted or sent email (specs/13 §4)
+  id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT,
+  kind TEXT,                      -- not_moving_forward | scheduling | stage
+  stage_id TEXT, batch_id TEXT,
+  status TEXT,                    -- draft | sent | failed | cancelled
+  intended_to TEXT, actual_to TEXT,
+  subject TEXT, body TEXT,
+  model TEXT,                     -- model id, or "template" (labelled "Template draft")
+  provider TEXT,                  -- outbox | smtp
+  reasons_json TEXT, checks_json TEXT, error TEXT,
+  created_at TEXT, updated_at TEXT, sent_at TEXT,
+  token TEXT,                     -- hiring workflow token "[RS-1a2b3c]" added to the subject on send (specs/16)
+  message_id TEXT,                -- Message-ID header, set on send
+  in_reply_to TEXT,               -- Message-ID of the candidate reply this answers
+  attachments_json TEXT,          -- [{filename, content_type, text}] e.g. the .ics invite
+  interview_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS workflows (      -- hiring workflow per application (specs/16 §6)
+  application_id TEXT PRIMARY KEY, job_id TEXT,
+  thread_id TEXT,                 -- LangGraph thread (SQLite checkpointer)
+  token TEXT,                     -- matches replies: "[RS-<token>]" in the subject
+  stage TEXT,                     -- timeline position, e.g. "Phone screen · Scheduling"
+  round INTEGER, phase TEXT,      -- interview round (index into the plan's interview stages) and its phase
+  step TEXT,                      -- the waiting interrupt: approve_email | await_reply | confirm_slot | …
+  title TEXT,                     -- Tasks line, e.g. "Approve scheduling email"
+  payload_json TEXT,              -- what the step shows (email id, reply id, slots, options)
+  status TEXT,                    -- needs_action | waiting_candidate | scheduled | paused | closed
+  paused_status TEXT, next_due TEXT, step_since TEXT, outcome TEXT,
+  created_at TEXT, updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS workflow_events (
+  id TEXT PRIMARY KEY, application_id TEXT,
+  type TEXT, payload_json TEXT,
+  actor TEXT,                     -- recruiter | agent | candidate
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS messages (       -- the email thread: every sent and received message
+  id TEXT PRIMARY KEY, application_id TEXT,
+  direction TEXT,                 -- out | in
+  subject TEXT, body TEXT, token TEXT,
+  message_id TEXT, in_reply_to TEXT,
+  intended_to TEXT, actual_to TEXT, from_addr TEXT,
+  draft_id TEXT,                  -- emails.id for outbound
+  status TEXT,                    -- out: sent | in: new | read
+  source TEXT,                    -- outbox | smtp | pasted | canned | imap
+  reading_json TEXT,              -- reply classification shown to the recruiter
+  sent_at TEXT, created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS interviews (
+  id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT,
+  stage TEXT, start TEXT, end TEXT, timezone TEXT,
+  ics_uid TEXT, status TEXT,      -- tentative | confirmed | done | cancelled
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS scorecards (
+  id TEXT PRIMARY KEY, application_id TEXT, interview_id TEXT, stage TEXT,
+  interviewer TEXT,
+  ratings_json TEXT,              -- [{area, rating 1-4, notes}]
+  notes TEXT,
+  recommendation TEXT,            -- strong_yes | yes | no | strong_no
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS generated_summaries (  -- "why" points and phone-screen questions, cached per run and weights
+  run_id TEXT, kind TEXT,         -- why | questions
+  weights_hash TEXT,
+  content_json TEXT, model TEXT,  -- model = "template-v1" for code templates ("Demo text")
+  created_at TEXT,
+  PRIMARY KEY (run_id, kind, weights_hash)
+);
+
+CREATE TABLE IF NOT EXISTS tasks (          -- background work started by the API (phase 10)
+  id TEXT PRIMARY KEY,
+  kind TEXT,                      -- onboard | score | plan | rejudge
+  candidate_id TEXT, run_id TEXT,
+  status TEXT,                    -- running | awaiting_review | done | error
+  step TEXT, message TEXT, percent REAL, error TEXT,
+  result_json TEXT,
+  created_at TEXT, updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS task_events (    -- progress lines streamed over SSE
+  task_id TEXT, seq INTEGER,
+  step TEXT, message TEXT, percent REAL, status TEXT, created_at TEXT,
+  PRIMARY KEY (task_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS media_links (    -- demo videos (YouTube, Loom); display only, not scored
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT,
+  url TEXT, kind TEXT,            -- youtube | loom
+  title TEXT, project_id TEXT,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS provider_usage (  -- free-tier daily quota, counted across restarts
+  provider TEXT, model TEXT,
+  day TEXT,                       -- Pacific date (quotas reset at midnight Pacific)
+  requests INTEGER, tokens INTEGER,
+  PRIMARY KEY (provider, model, day)
+);
+
+CREATE TABLE IF NOT EXISTS extraction_cache (
+  key TEXT PRIMARY KEY,           -- sha256 of model + system prompt + schema + user message
+  model TEXT,
+  output_json TEXT,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS http_cache (
+  key TEXT PRIMARY KEY,           -- URL + Accept header; never the token
+  status INTEGER,
+  headers_json TEXT,              -- ETag, Link, Content-Type
+  body TEXT,
+  fetched_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS judgments (
@@ -186,6 +400,56 @@ CREATE TABLE IF NOT EXISTS scores (
   computed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_scores_run ON scores(run_id);
+
+CREATE TABLE IF NOT EXISTS market_postings (   -- specs/15 §3
+  id TEXT PRIMARY KEY, role TEXT, company TEXT, tier TEXT, source TEXT, source_id TEXT, external_id TEXT,
+  source_url TEXT, title TEXT, location TEXT, level TEXT, level_method TEXT,
+  text_hash TEXT, text TEXT, raw_file TEXT, posted_at TEXT, first_seen TEXT, last_seen TEXT,
+  status TEXT,                    -- active | closed | excluded (title filter)
+  created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS market_extractions (   -- one extraction per posting text, never repeated
+  text_hash TEXT PRIMARY KEY, model TEXT, extract_json TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS market_versions (
+  id TEXT PRIMARY KEY, role TEXT, level TEXT, version INTEGER, window_start TEXT, window_end TEXT,
+  postings INTEGER, companies INTEGER, content_json TEXT, content_hash TEXT,
+  status TEXT,                    -- draft | published | discarded
+  insufficient INTEGER, test_version INTEGER, baseline_id TEXT, summary_method TEXT,
+  created_at TEXT, published_at TEXT
+);
+CREATE TABLE IF NOT EXISTS market_suggestions (   -- new names waiting for a person: merge into a canonical name?
+  id TEXT PRIMARY KEY, name TEXT, canonical TEXT, method TEXT, status TEXT, created_at TEXT, decided_at TEXT
+);
+CREATE TABLE IF NOT EXISTS market_settings (key TEXT PRIMARY KEY, value TEXT);
+
+-- Candidate experience (specs/17)
+CREATE TABLE IF NOT EXISTS candidate_targets (    -- target roles (1-3 role baselines), one primary
+  candidate_id TEXT, baseline_id TEXT, is_primary INTEGER, position INTEGER, added_at TEXT,
+  PRIMARY KEY (candidate_id, baseline_id)
+);
+CREATE TABLE IF NOT EXISTS candidate_onboarding ( -- first-run progress, so every step is resumable
+  candidate_id TEXT PRIMARY KEY,
+  step TEXT,                      -- proof | roles | review | scores | details | done
+  read_task_id TEXT, score_task_id TEXT, confirmed_at TEXT, finished_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS job_events (           -- recruiter activity on a job (specs/17 §4.1)
+  id TEXT PRIMARY KEY, job_id TEXT, application_id TEXT,
+  kind TEXT,                      -- panel_opened | stage_moved (seeded demo activity uses both)
+  demo INTEGER DEFAULT 0, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS candidate_job_prefs (  -- Save / Not interested on the candidate Home (no score effect)
+  candidate_id TEXT, job_id TEXT, saved INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, reason TEXT, updated_at TEXT,
+  PRIMARY KEY (candidate_id, job_id)
+);
+CREATE TABLE IF NOT EXISTS candidate_plan_done (    -- "Mark done" on a plan action (changes no score)
+  candidate_id TEXT, baseline_id TEXT, action_key TEXT, title TEXT, done_at TEXT,
+  PRIMARY KEY (candidate_id, baseline_id, action_key)
+);
+CREATE TABLE IF NOT EXISTS candidate_application_details (  -- "fill once": never sent to a model, never shown
+  candidate_id TEXT PRIMARY KEY,                            -- to recruiters, never used in scoring or pools
+  work_auth_json TEXT, questions_json TEXT, eeo_json TEXT, saved_at TEXT, dismissed_at TEXT, updated_at TEXT
+);
 
 CREATE TABLE IF NOT EXISTS gap_reports (
   id TEXT PRIMARY KEY,
@@ -236,6 +500,78 @@ def init_db(conn: sqlite3.Connection) -> None:
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
+PARSER_RUNS = """CREATE TABLE IF NOT EXISTS parser_runs (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT,
+  doc_type TEXT, mode TEXT, outcome TEXT, reasons_json TEXT, notes_json TEXT, items_json TEXT, comparison_json TEXT,
+  seconds REAL, jev_requests INTEGER, jev_questions INTEGER, llm_calls INTEGER, created_at TEXT)"""
+DOCUMENT_TEXTS = """CREATE TABLE IF NOT EXISTS document_texts (
+  file_sha256 TEXT, normalizer TEXT, text TEXT, created_at TEXT, PRIMARY KEY (file_sha256, normalizer))"""
+EXTRACTION_CACHE = """CREATE TABLE IF NOT EXISTS extraction_cache (
+  key TEXT PRIMARY KEY, model TEXT, output_json TEXT, created_at TEXT)"""
+JOBS = """CREATE TABLE IF NOT EXISTS jobs (
+  id TEXT PRIMARY KEY, baseline_id TEXT, title TEXT, company TEXT, weights_json TEXT, must_haves_json TEXT,
+  preset TEXT, created_at TEXT)"""
+APPLICATIONS = """CREATE TABLE IF NOT EXISTS applications (
+  id TEXT PRIMARY KEY, job_id TEXT, candidate_id TEXT, run_id TEXT, status TEXT, applied_at TEXT)"""
+GENERATED_SUMMARIES = """CREATE TABLE IF NOT EXISTS generated_summaries (
+  run_id TEXT, kind TEXT, weights_hash TEXT, content_json TEXT, model TEXT, created_at TEXT,
+  PRIMARY KEY (run_id, kind, weights_hash))"""
+TASKS = """CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY, kind TEXT, candidate_id TEXT, run_id TEXT, status TEXT, step TEXT, message TEXT,
+  percent REAL, error TEXT, result_json TEXT, created_at TEXT, updated_at TEXT)"""
+TASK_EVENTS = """CREATE TABLE IF NOT EXISTS task_events (
+  task_id TEXT, seq INTEGER, step TEXT, message TEXT, percent REAL, status TEXT, created_at TEXT,
+  PRIMARY KEY (task_id, seq))"""
+MEDIA_LINKS = """CREATE TABLE IF NOT EXISTS media_links (
+  id TEXT PRIMARY KEY, candidate_id TEXT, url TEXT, kind TEXT, title TEXT, project_id TEXT, created_at TEXT)"""
+INTERVIEW_STAGES = """CREATE TABLE IF NOT EXISTS interview_stages (
+  id TEXT PRIMARY KEY, job_id TEXT, name TEXT, position INTEGER, focus_json TEXT, terminal INTEGER DEFAULT 0)"""
+ACTIVITY = """CREATE TABLE IF NOT EXISTS activity (
+  id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT, kind TEXT, summary TEXT, detail_json TEXT, created_at TEXT)"""
+EMAILS = """CREATE TABLE IF NOT EXISTS emails (
+  id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT, kind TEXT, stage_id TEXT, batch_id TEXT, status TEXT,
+  intended_to TEXT, actual_to TEXT, subject TEXT, body TEXT, model TEXT, provider TEXT, reasons_json TEXT,
+  checks_json TEXT, error TEXT, created_at TEXT, updated_at TEXT, sent_at TEXT)"""
+MARKET_TABLES = [
+    "CREATE TABLE IF NOT EXISTS market_postings (id TEXT PRIMARY KEY, role TEXT, company TEXT, tier TEXT, source TEXT, "
+    "source_id TEXT, external_id TEXT, source_url TEXT, title TEXT, location TEXT, level TEXT, level_method TEXT, "
+    "text_hash TEXT, text TEXT, raw_file TEXT, posted_at TEXT, first_seen TEXT, last_seen TEXT, status TEXT, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS market_extractions (text_hash TEXT PRIMARY KEY, model TEXT, extract_json TEXT, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS market_versions (id TEXT PRIMARY KEY, role TEXT, level TEXT, version INTEGER, "
+    "window_start TEXT, window_end TEXT, postings INTEGER, companies INTEGER, content_json TEXT, content_hash TEXT, "
+    "status TEXT, insufficient INTEGER, test_version INTEGER, baseline_id TEXT, summary_method TEXT, created_at TEXT, "
+    "published_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS market_suggestions (id TEXT PRIMARY KEY, name TEXT, canonical TEXT, method TEXT, "
+    "status TEXT, created_at TEXT, decided_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS market_settings (key TEXT PRIMARY KEY, value TEXT)",
+]
+CANDIDATE_TABLES = [
+    "CREATE TABLE IF NOT EXISTS candidate_targets (candidate_id TEXT, baseline_id TEXT, is_primary INTEGER, "
+    "position INTEGER, added_at TEXT, PRIMARY KEY (candidate_id, baseline_id))",
+    "CREATE TABLE IF NOT EXISTS candidate_onboarding (candidate_id TEXT PRIMARY KEY, step TEXT, read_task_id TEXT, "
+    "score_task_id TEXT, confirmed_at TEXT, finished_at TEXT, updated_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS candidate_application_details (candidate_id TEXT PRIMARY KEY, work_auth_json TEXT, "
+    "questions_json TEXT, eeo_json TEXT, saved_at TEXT, dismissed_at TEXT, updated_at TEXT)",
+]
+WORKFLOW_TABLES = [
+    "CREATE TABLE IF NOT EXISTS workflows (application_id TEXT PRIMARY KEY, job_id TEXT, thread_id TEXT, token TEXT, "
+    "stage TEXT, round INTEGER, phase TEXT, step TEXT, title TEXT, payload_json TEXT, status TEXT, paused_status TEXT, "
+    "next_due TEXT, step_since TEXT, outcome TEXT, created_at TEXT, updated_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS workflow_events (id TEXT PRIMARY KEY, application_id TEXT, type TEXT, "
+    "payload_json TEXT, actor TEXT, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, application_id TEXT, direction TEXT, subject TEXT, "
+    "body TEXT, token TEXT, message_id TEXT, in_reply_to TEXT, intended_to TEXT, actual_to TEXT, from_addr TEXT, "
+    "draft_id TEXT, status TEXT, source TEXT, reading_json TEXT, sent_at TEXT, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS interviews (id TEXT PRIMARY KEY, application_id TEXT, job_id TEXT, stage TEXT, "
+    "start TEXT, end TEXT, timezone TEXT, ics_uid TEXT, status TEXT, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS scorecards (id TEXT PRIMARY KEY, application_id TEXT, interview_id TEXT, stage TEXT, "
+    "interviewer TEXT, ratings_json TEXT, notes TEXT, recommendation TEXT, created_at TEXT)",
+]
+PROVIDER_USAGE = """CREATE TABLE IF NOT EXISTS provider_usage (
+  provider TEXT, model TEXT, day TEXT, requests INTEGER, tokens INTEGER, PRIMARY KEY (provider, model, day))"""
+HTTP_CACHE = """CREATE TABLE IF NOT EXISTS http_cache (
+  key TEXT PRIMARY KEY, status INTEGER, headers_json TEXT, body TEXT, fetched_at TEXT)"""
+
+
 # Steps that bring an older DB up to SCHEMA. New DBs get SCHEMA directly.
 MIGRATIONS: list[tuple[int, list[str]]] = [
     (2, [
@@ -267,6 +603,45 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
          "ALTER TABLE runs ADD COLUMN baseline_hash TEXT",
          "ALTER TABLE runs ADD COLUMN models_json TEXT"]),
     (8, ["ALTER TABLE gap_reports ADD COLUMN plan_json TEXT"]),
+    (9, ["ALTER TABLE runs ADD COLUMN timings_json TEXT"]),
+    (10, [DOCUMENT_TEXTS, HTTP_CACHE]),
+    (11, ["ALTER TABLE runs ADD COLUMN plan_status TEXT"]),
+    (12, [EXTRACTION_CACHE]),
+    (13, [PROVIDER_USAGE]),
+    (14, [TASKS, TASK_EVENTS, MEDIA_LINKS]),
+    (15, ["ALTER TABLE candidates ADD COLUMN data_source TEXT", JOBS, APPLICATIONS, GENERATED_SUMMARIES]),
+    (16, ["ALTER TABLE candidates ADD COLUMN email TEXT", "ALTER TABLE jobs ADD COLUMN settings_json TEXT",
+          "ALTER TABLE applications ADD COLUMN stage_id TEXT", INTERVIEW_STAGES, ACTIVITY, EMAILS]),
+    (17, ["ALTER TABLE candidates ADD COLUMN linkedin_url TEXT"]),
+    (18, [*(f"ALTER TABLE emails ADD COLUMN {c} TEXT" for c in ("token", "message_id", "in_reply_to",
+                                                                "attachments_json", "interview_id")),
+          *WORKFLOW_TABLES]),
+    (19, ["ALTER TABLE baselines ADD COLUMN owner_job_id TEXT", "ALTER TABLE jobs ADD COLUMN status TEXT DEFAULT 'open'",
+          *(f"ALTER TABLE jobs ADD COLUMN {c} TEXT" for c in ("details_json", "jd_text", "jd_file", "draft_json",
+                                                              "updated_at"))]),
+    (20, ["ALTER TABLE baselines ADD COLUMN market_version_id TEXT", *MARKET_TABLES]),
+    (21, CANDIDATE_TABLES),
+    (22, ["ALTER TABLE jobs ADD COLUMN data_source TEXT", "ALTER TABLE jobs ADD COLUMN role_baseline_id TEXT",
+          "CREATE TABLE IF NOT EXISTS job_events (id TEXT PRIMARY KEY, job_id TEXT, application_id TEXT, kind TEXT, "
+          "demo INTEGER DEFAULT 0, created_at TEXT)",
+          "CREATE TABLE IF NOT EXISTS candidate_job_prefs (candidate_id TEXT, job_id TEXT, saved INTEGER DEFAULT 0, "
+          "hidden INTEGER DEFAULT 0, reason TEXT, updated_at TEXT, PRIMARY KEY (candidate_id, job_id))"]),
+    (23, ["ALTER TABLE jobs ADD COLUMN published_at TEXT",
+          "UPDATE jobs SET published_at = created_at WHERE status IS NOT 'draft'",
+          "CREATE TABLE IF NOT EXISTS candidate_plan_done (candidate_id TEXT, baseline_id TEXT, action_key TEXT, "
+          "title TEXT, done_at TEXT, PRIMARY KEY (candidate_id, baseline_id, action_key))"]),
+    (24, [*(f"ALTER TABLE {t} ADD COLUMN method TEXT" for t in ("roles", "projects", "bullets", "claims",
+                                                                 "certifications")),
+          "ALTER TABLE document_texts ADD COLUMN hidden_json TEXT", PARSER_RUNS]),
+    (25, ["CREATE TABLE IF NOT EXISTS deleted_items (id TEXT PRIMARY KEY, candidate_id TEXT, item_type TEXT, key TEXT, "
+          "label TEXT, payload TEXT, created_at TEXT)",
+          "CREATE TABLE IF NOT EXISTS suppressed_items (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, "
+          "item_type TEXT, key TEXT, label TEXT, payload TEXT, restored INTEGER DEFAULT 0, created_at TEXT)"]),
+    (26, ["CREATE TABLE IF NOT EXISTS prompt_guard_cache (text_hash TEXT, model TEXT, score REAL, created_at TEXT, "
+          "PRIMARY KEY (text_hash, model))",
+          "CREATE TABLE IF NOT EXISTS prompt_guard_flags (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, "
+          "source TEXT, chunk_index INTEGER, chunk TEXT, score REAL, hidden INTEGER DEFAULT 0, model TEXT, "
+          "created_at TEXT)"]),
 ]
 
 
@@ -328,8 +703,11 @@ def get_baseline(conn: sqlite3.Connection, baseline_id: str) -> Baseline | None:
     return _row_to_baseline(row, _criteria_rows(conn, baseline_id))
 
 
-def list_baselines(conn: sqlite3.Connection) -> list[Baseline]:
-    rows = conn.execute("SELECT * FROM baselines ORDER BY title, id").fetchall()
+def list_baselines(conn: sqlite3.Connection, include_owned: bool = False) -> list[Baseline]:
+    """Role baselines. A recruiter job's own baseline (specs/14) is listed only with include_owned."""
+    rows = conn.execute("SELECT * FROM baselines" + ("" if include_owned else
+                        " WHERE owner_job_id IS NULL AND market_version_id IS NULL") +
+                        " ORDER BY title, id").fetchall()
     return [_row_to_baseline(r, _criteria_rows(conn, r["id"])) for r in rows]
 
 
@@ -404,6 +782,17 @@ def create_run(conn: sqlite3.Connection, candidate_id: str, baseline_id: str, we
 def finish_run(conn: sqlite3.Connection, run_id: str, status: str = "done") -> None:
     with conn:
         conn.execute("UPDATE runs SET status = ?, finished_at = ? WHERE id = ?", (status, now_iso(), run_id))
+
+
+def set_plan_status(conn: sqlite3.Connection, run_id: str, status: str) -> None:
+    with conn:
+        conn.execute("UPDATE runs SET plan_status = ? WHERE id = ?", (status, run_id))
+
+
+def save_run_timings(conn: sqlite3.Connection, run_id: str, timings: dict) -> None:
+    """Per-run timing summary (specs/09 §1)."""
+    with conn:
+        conn.execute("UPDATE runs SET timings_json = ? WHERE id = ?", (json.dumps(timings), run_id))
 
 
 def list_runs(conn: sqlite3.Connection, candidate_id: str | None = None) -> list[dict]:

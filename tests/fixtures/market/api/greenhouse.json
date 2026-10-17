@@ -1,0 +1,26 @@
+{
+ "jobs": [
+  {
+   "id": 4001,
+   "title": "Machine Learning Engineer I",
+   "location": {
+    "name": "Remote, US"
+   },
+   "updated_at": "2026-10-01T10:00:00-04:00",
+   "first_published": "2026-09-30T10:00:00-04:00",
+   "absolute_url": "https://boards.greenhouse.io/example/jobs/4001",
+   "content": "&lt;p&gt;Build LLM features.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;1+ years of Python&lt;/li&gt;&lt;li&gt;Experience with RAG&lt;/li&gt;&lt;/ul&gt;"
+  },
+  {
+   "id": 4002,
+   "title": "Sales Engineer, AI",
+   "location": {
+    "name": "NYC"
+   },
+   "updated_at": "2026-10-01T10:00:00-04:00",
+   "first_published": "2026-09-30T10:00:00-04:00",
+   "absolute_url": "https://boards.greenhouse.io/example/jobs/4002",
+   "content": "&lt;p&gt;Sell.&lt;/p&gt;"
+  }
+ ]
+}

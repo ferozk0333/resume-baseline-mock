@@ -1,0 +1,74 @@
+{
+ "company": "Tidewell",
+ "tier": "startup",
+ "title": "LLM Engineer",
+ "posted_at": "2026-10-01",
+ "labelled_by": "hand",
+ "extraction": {
+  "status": "ok",
+  "model": "hand-labelled",
+  "details": {
+   "title": "LLM Engineer",
+   "company": "Tidewell",
+   "level": "entry",
+   "min_years": 0.0
+  },
+  "detail_quotes": {
+   "min_years": "New grads welcome: projects count."
+  },
+  "requirements": [
+   {
+    "name": "Python",
+    "kind": "tool",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Strong Python."
+   },
+   {
+    "name": "LLM application development",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "You have built something with LLMs and can show it."
+   },
+   {
+    "name": "Model evaluation",
+    "kind": "skill",
+    "priority": "required",
+    "aliases": [],
+    "quote": "Experience writing evals for model outputs."
+   },
+   {
+    "name": "pgvector",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Experience with vector databases such as pgvector."
+   },
+   {
+    "name": "Docker",
+    "kind": "tool",
+    "priority": "preferred",
+    "aliases": [],
+    "quote": "Docker."
+   }
+  ],
+  "responsibilities": [
+   {
+    "text": "Prototype and ship agent features for small-business accounting.",
+    "quote": "Prototype and ship agent features for small-business accounting."
+   },
+   {
+    "text": "Write evaluation sets and run them on every change.",
+    "quote": "Write evaluation sets and run them on every change."
+   }
+  ],
+  "good": {
+   "expected_reach": 2
+  },
+  "good_quotes": {
+   "expected_reach": "Write evaluation sets and run them on every change."
+  },
+  "dropped": []
+ }
+}

@@ -169,3 +169,57 @@ class FakeSession:
             if url.endswith(key):
                 return self.routes[key]
         return FakeResponse(404, {"message": "Not Found"})
+
+
+def brightwater_extract():
+    """A plausible model answer for the Brightwater JD fixture, with mistakes the code must catch (an invented
+    requirement, a benefit, team size, a wrong priority, an unsplit list)."""
+    from pathlib import Path
+    from extraction import job_reader as jr
+    Q, R = jr.Quoted, jr.JDRequirement
+    JD = (Path(__file__).parent / "fixtures" / "jd" / "brightwater.txt").read_text()
+    line = lambda start: next(ln.strip("- ").strip() for ln in JD.splitlines() if start in ln)   # noqa: E731
+    return jr.JobExtract(
+        title=Q(text="AI Engineer", quote="AI Engineer"), company=Q(text="Brightwater Systems", quote=line("Brightwater Systems ·")),
+        department=Q(text="Engineering – Applied AI", quote=line("Brightwater Systems ·")),
+        location=Q(text="Austin, TX", quote=line("Brightwater Systems ·")), workplace="hybrid",
+        workplace_quote="Hybrid, 3 days in office", employment_type=Q(text="Full-time", quote=line("Brightwater Systems ·")),
+        level=Q(text="Early career", quote=line("Level Early career")),
+        years=Q(text="1+ years", quote=line("1+ years of professional")),
+        short_description="Build and ship LLM features on claims data.",
+        requirements=[
+            R(name="Python", kind="tool", priority="required", quote=line("1+ years of professional")),
+            R(name="Retrieval-augmented generation", kind="skill", priority="required", aliases=["RAG"],
+              quote=line("Experience with retrieval")),
+            R(name="Git", kind="tool", priority="required", quote=line("Working knowledge of Git")),
+            R(name="REST APIs", kind="skill", priority="required", quote=line("REST APIs")),
+            R(name="Machine learning fundamentals", kind="skill", priority="required", quote=line("machine learning fundamentals")),
+            R(name="pgvector", kind="tool", priority="preferred", quote=line("vector databases")),
+            R(name="Pinecone", kind="tool", priority="preferred", quote=line("vector databases")),
+            R(name="Weaviate", kind="tool", priority="preferred", quote=line("vector databases")),
+            R(name="Docker and basic CI/CD", kind="tool", priority="preferred", quote=line("Docker and basic")),
+            R(name="Hyperparameter tuning", kind="skill", priority="required",                 # wrong priority
+              quote=line("Hyperparameter tuning")),
+            R(name="Cloud ML certification", kind="certification", priority="preferred",
+              aliases=["AWS Certified Machine Learning Engineer – Associate",
+                       "Google Cloud Professional Machine Learning Engineer"], quote=line("A cloud ML certification")),
+            R(name="Kubernetes", kind="tool", priority="required", quote="Experience with Kubernetes at scale."),  # invented
+            R(name="401(k) plan", kind="skill", priority="preferred", quote=line("401(k)")),                       # benefit
+            R(name="Team of 6 engineers", kind="skill", priority="required", quote=line("Team Applied AI")),      # team size
+        ],
+        responsibilities=[Q(text="Build RAG pipelines", quote=line("Build and maintain retrieval"))],
+        scope=Q(text="Owns well-defined components end to end.", quote=line("You will own well-defined") if
+                any("You will own well-defined" in ln for ln in JD.splitlines()) else "You will own well-defined components end to end"),
+        complexity=Q(text="Answer quality and cost on messy claim files.", quote=line("Improve quality and cost")),
+        reach=jr.JDReach(label="cross_functional", quote=line("Partner with product")))
+
+
+class FakeJobReader:
+    """JOB_EXTRACT_MODEL stand-in for UI tests: the fixture answer for the Brightwater JD, otherwise "unavailable"
+    (the manual-form fallback)."""
+
+    def parse(self, *, model, system, user, output_type):
+        from core.llm import LLMError
+        if "Brightwater Systems" not in user:
+            raise LLMError("fake reader: only the Brightwater fixture is scripted")
+        return brightwater_extract()

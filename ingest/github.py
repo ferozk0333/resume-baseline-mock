@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from urllib.parse import parse_qs, urlparse
 
 import requests
 
-from core import config
+from core import config, timing
 
 API = "https://api.github.com"
 _USERNAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
@@ -34,6 +35,7 @@ class Repo:
     languages: dict[str, int] = field(default_factory=dict)
     own_commits: int = 0
     readme: str | None = None
+    stars: int = 0                       # REPO_CAP's last tie-break; not part of the source text
 
     @property
     def counted(self) -> bool:
@@ -145,13 +147,19 @@ class GitHubClient:
 
         active = [r for r in raw if not r.get("archived") and not is_profile_repo(r["name"], username)]
         active.sort(key=lambda r: r.get("pushed_at") or "", reverse=True)
+        chosen = active[: config.GITHUB_MAX_REPOS]
+        with ThreadPoolExecutor(max_workers=config.GITHUB_CONCURRENCY) as pool:
+            futures = [pool.submit(timing.bind(self._repo_details), r, username, include_readme) for r in chosen]
         repos: list[Repo] = []
-        try:
-            for r in active[: config.GITHUB_MAX_REPOS]:
-                repos.append(self._repo_details(r, username, include_readme))
-        except GitHubError as exc:
-            # Keep what was fetched before the rate limit hit.
-            raise GitHubError(f"{exc} Kept {len(repos)} of {len(active)} repositories.", partial=repos) from exc
+        failure: GitHubError | None = None
+        for fut in futures:                 # most recently pushed first, as before
+            try:
+                repos.append(fut.result())
+            except GitHubError as exc:
+                failure = failure or exc
+        if failure is not None:
+            # Keep the repositories fetched before the rate limit hit.
+            raise GitHubError(f"{failure} Kept {len(repos)} of {len(active)} repositories.", partial=repos)
         return repos
 
     def _repo_details(self, r: dict, username: str, include_readme: bool) -> Repo:
@@ -164,6 +172,7 @@ class GitHubClient:
             is_fork=bool(r.get("fork")),
             created_at=r.get("created_at"),
             pushed_at=r.get("pushed_at"),
+            stars=int(r.get("stargazers_count") or 0),
         )
         repo.own_commits = self._own_commits(repo.full_name, username)
         repo.languages = self._languages(repo.full_name)
