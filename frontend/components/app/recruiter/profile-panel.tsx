@@ -30,7 +30,8 @@ export function ProfilePanel({ p, tab, onTab, stages, onStatus, onStage, onRejec
   onReject: () => void; onStageEmail: () => void; activityKey: number;
 }) {
   const backed = p.must_haves.filter((m) => m.status === "met_backed").length;
-  const workCount = p.work.videos.length + p.work.repos.length + p.work.portfolio.length;
+  const workCount = p.work.videos.length + p.work.repos.length + p.work.portfolio.length
+    + (p.work.certifications?.length ?? 0) + (p.work.more?.length ?? 0);
   const has: Record<Tab, boolean> = {
     overview: true, requirements: p.requirements.length > 0, eeat: !!p.dimensions, resume: p.work.resume_file,
     work: workCount > 0 || !!p.work.portfolio_url, linkedin: !!p.work.linkedin || !!p.work.linkedin_link, activity: true,
@@ -59,7 +60,7 @@ export function ProfilePanel({ p, tab, onTab, stages, onStatus, onStage, onRejec
             {inLoop && (
               <>
                 <select aria-label="Stage" value={p.stage_id ?? ""} onChange={(e) => onStage(e.target.value)}
-                  className="h-7 rounded-lg border border-input bg-white px-2 text-sm">
+                  className="h-7 rounded-lg border border-field-border bg-field px-2 text-sm">
                   {stages.filter((s) => !s.terminal).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 <Button size="sm" variant="outline" onClick={onStageEmail}><Mail /> Stage email</Button>
@@ -304,6 +305,34 @@ function Work({ p }: { p: Panel }) {
             ))}
           </div>
           {p.work.portfolio_url && <a href={p.work.portfolio_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-primary hover:underline">Open the portfolio</a>}
+        </div>
+      )}
+      {(p.work.certifications?.length ?? 0) > 0 && (
+        <div data-testid="panel-certifications">
+          <h4 className="mb-2 text-sm font-medium">Certifications</h4>
+          <ul className="space-y-1.5 text-sm">
+            {p.work.certifications!.map((c, i) => (
+              <li key={i} className="rounded-lg border bg-white px-3 py-2">
+                <span className="font-medium">{c.name}</span>{c.issuer && <span className="text-muted-foreground"> · {c.issuer}</span>}
+                <span className="block text-xs text-muted-foreground">
+                  {[c.credential_status ?? "No credential ID or link", c.sources.length ? `From ${c.sources.join(", ")}` : null].filter(Boolean).join(" · ")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {(p.work.more?.length ?? 0) > 0 && (
+        <div data-testid="panel-more">
+          <h4 className="mb-2 text-sm font-medium">More about the candidate <span className="text-xs font-normal text-muted-foreground">· Shown to recruiters, not scored</span></h4>
+          <ul className="space-y-1.5 text-sm">
+            {p.work.more!.map((x, i) => (
+              <li key={i} className="rounded-lg border bg-white px-3 py-2">
+                <span className="text-xs text-muted-foreground">{x.label}: </span>
+                {Object.values(x.fields).filter(Boolean).join(" · ")}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

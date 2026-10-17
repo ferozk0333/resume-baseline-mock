@@ -65,7 +65,8 @@ async function firstRun(page: Page, name: string, prefix: string, mobile = false
   await page.getByRole("button", { name: "Continue" }).click();
 
   // 5 · Finish your profile (optional)
-  await expect(page.getByText("Answering is voluntary.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Voluntary self-identification", { exact: true })).toBeVisible();
+  await expect(page.getByText("Answering is voluntary.", { exact: false })).toHaveCount(0);   // title only (specs/19)
   await expect(page.getByLabel("Gender")).toHaveValue("decline");
   await shot(page, `${prefix}5-details`);
   if (mobile) await noSideScroll(page);

@@ -59,7 +59,7 @@ export function PipelineBoard({ jobId }: { jobId: string }) {
                     </span>
                   )}
                   <select aria-label={`Move ${c.name ?? "applicant"} to`} value="" onChange={(e) => e.target.value && move(c.application_id, e.target.value)}
-                    className="mt-1.5 h-6 w-full rounded-md border border-input bg-white px-1 text-xs text-muted-foreground">
+                    className="mt-1.5 h-6 w-full rounded-md border border-field-border bg-field px-1 text-xs text-muted-foreground">
                     <option value="">Move to…</option>
                     {board.stages.filter((x) => x.id !== s.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                   </select>

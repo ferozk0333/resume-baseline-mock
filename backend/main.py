@@ -329,10 +329,11 @@ class EmailEdit(BaseModel):
 
 class ProfileEdit(BaseModel):
     """One review edit. `item` is role | project | bullet? (bullets go with their role/project) | claim |
-    certification; `op` add | edit | delete | add_back (add_back uses `id` of a dropped item, or of a mention: an item
-    the candidate deleted that a later source named again)."""
-    op: Literal["add", "edit", "delete", "add_back"]
-    item: Literal["role", "project", "claim", "certification", "dropped", "mention"]
+    certification | extra (a display-only proof type); `op` add | edit | delete | add_back (add_back uses `id` of a
+    dropped item, or of a mention: an item the candidate deleted that a later source named again) | undo (item
+    "deleted", `id` from a delete's response) | confirm_dates ("the months are right": clears the date flags)."""
+    op: Literal["add", "edit", "delete", "add_back", "undo", "confirm_dates"]
+    item: Literal["role", "project", "claim", "certification", "dropped", "mention", "extra", "deleted"]
     id: str | None = None
     data: dict = Field(default_factory=dict)
 
@@ -406,6 +407,18 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     def not_found(what: str):
         raise HTTPException(404, f"{what} not found.")
+
+    async def read_upload(f: UploadFile, what: str) -> bytes:
+        """An uploaded file's bytes; 413 with a plain message above UPLOAD_MAX_MB (specs/19 item 2)."""
+        data = await f.read()
+        if len(data) > config.UPLOAD_MAX_MB * 1024 * 1024:
+            raise HTTPException(413, f"{what} is too large. The limit is {config.UPLOAD_MAX_MB:g} MB.")
+        return data
+
+    @app.get("/settings/uploads", tags=["candidates"])
+    def upload_settings():
+        """What the upload drop zones accept (the size limit lives in config)."""
+        return {"max_mb": config.UPLOAD_MAX_MB, "max_bytes": int(config.UPLOAD_MAX_MB * 1024 * 1024)}
 
     # --- Baselines ---------------------------------------------------------------------------------
     @app.get("/baselines", response_model=list[Baseline], tags=["baselines"])
@@ -498,8 +511,9 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         except (ValueError, TypeError) as exc:
             raise HTTPException(422, f"Could not read the form: {exc}") from exc
         inputs = OnboardingInputs(
-            resume=Upload(resume.filename or "resume", await resume.read()),
-            linkedin_pdf=Upload(linkedin_pdf.filename or "linkedin.pdf", await linkedin_pdf.read())
+            resume=Upload(resume.filename or "resume", await read_upload(resume, "Your resume")),
+            linkedin_pdf=Upload(linkedin_pdf.filename or "linkedin.pdf",
+                                await read_upload(linkedin_pdf, "The LinkedIn PDF"))
             if linkedin_pdf is not None and linkedin_pdf.filename else None,
             github=github or None, portfolio_url=portfolio_url or None, certifications=certs, references=refs,
             name=cand["name"], target_role=cand["target_role"], candidate_id=candidate_id)
@@ -551,10 +565,9 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             profile = store.load_profile(c, candidate_id)
             evidence = store.list_evidence(c, candidate_id)
             from dataclasses import asdict
-            from extraction.records import REVIEW_MESSAGES
             data = json.loads(json.dumps(asdict(profile), default=str))
-            for item in [*data["roles"], *data["projects"]]:          # readable review flags
-                item["review_reasons"] = [REVIEW_MESSAGES.get(r, r) for r in item["review_reasons"]]
+            from backend.review import review_view
+            review_view(data, profile, evidence, store.list_extra(c, candidate_id))
             from backend import candidate as cx
             from backend import wait_screens as ws
             from extraction.deletions import mentions as deletion_mentions
@@ -562,9 +575,13 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             ob = cx.onboarding(c, candidate_id)
             read_task = tasks.get(ob["read_task_id"]) if ob.get("read_task_id") else None
             pending = ws.pending_sources(c, candidate_id, read_task)
+            from extraction import skill_groups
             return {
                 "candidate": cand,
                 "profile": data,
+                "skill_groups": skill_groups.groups(),
+                # Education, patents, volunteering, courses, languages: shown to recruiters, never scored (specs/19 D).
+                "extra": data.pop("extra"),
                 # Review opens once the resume is read; these sources are still being read (Confirm waits for them).
                 "pending": pending,
                 "reading": bool(read_task and read_task["status"] in ("queued", "running")),
@@ -587,19 +604,28 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         def day(v):
             return _date.fromisoformat(v + "-01" if v and len(v) == 7 else v) if v else None
         d = edit.data
+        undo_id = None
         with conn() as c, store.candidate_lock(candidate_id):   # a source may be saved into the profile meanwhile
             store.get_candidate(c, candidate_id) or not_found("Candidate")
             try:
-                if edit.op == "delete":
+                from extraction import deletions
+                if edit.op == "delete" and edit.item == "extra":
+                    row = store.delete_extra(c, candidate_id, edit.id or "")
+                    if row is None:
+                        raise ValueError("Item not found.")
+                    undo_id = deletions.remember_extra(c, candidate_id, row)
+                elif edit.op == "delete":
                     table = {"role": "roles", "project": "projects", "claim": "claims",
                              "certification": "certifications"}.get(edit.item)
                     if table is None or not edit.id:
                         raise ValueError("delete needs an item type and id")
-                    from extraction import deletions
-                    deletions.remember(c, candidate_id, table, edit.id)   # a later source won't add it back
+                    undo_id = deletions.remember(c, candidate_id, table, edit.id)   # a later source won't add it back
                     store.delete_item(c, table, edit.id)
+                elif edit.op == "undo":
+                    deletions.undo(c, candidate_id, edit.id or "")
+                elif edit.op == "confirm_dates":
+                    store.confirm_dates(c, {"role": "roles", "project": "projects"}.get(edit.item, ""), edit.id or "")
                 elif edit.item == "mention":
-                    from extraction import deletions
                     deletions.add_back(c, candidate_id, edit.id or "")
                 elif edit.op == "add_back" or edit.item == "dropped":
                     store.restore_dropped(c, edit.id)
@@ -608,22 +634,31 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                                     title=d.get("title", ""), employer=d.get("employer"), industry=d.get("industry"),
                                     start_date=day(d.get("start_date")), end_date=day(d.get("end_date")),
                                     is_current=bool(d.get("is_current")), team_size=d.get("team_size"),
-                                    bullets=d.get("bullets", []))
+                                    bullets=d.get("bullets", []), location=d.get("location"))
                 elif edit.item == "project":
                     store.save_project(c, candidate_id, project_id=edit.id if edit.op == "edit" else None,
                                        kind=d.get("kind", "project"), name=d.get("name", ""),
                                        description=d.get("description"), url=d.get("url"),
                                        start_date=day(d.get("start_date")), end_date=day(d.get("end_date")),
-                                       bullets=d.get("bullets", []))
+                                       bullets=d.get("bullets", []), role_id=d.get("role_id"),
+                                       details=d.get("details"))
                 elif edit.item == "claim":
-                    store.add_claim(c, candidate_id, d.get("kind", "skill"), d.get("name", ""))
+                    store.add_claim(c, candidate_id, d.get("kind", "skill"), d.get("name", ""),
+                                    skill_group=d.get("group"), details=d.get("details"),
+                                    claim_id=edit.id if edit.op == "edit" else None)
                 elif edit.item == "certification":
                     store.save_certification(c, candidate_id, cert_id=edit.id if edit.op == "edit" else None,
-                                             name=d.get("name", ""), issuer=d.get("issuer"), issued_date=None,
+                                             name=d.get("name", ""), issuer=d.get("issuer"),
+                                             issued_date=day(d.get("issued_date")),
                                              credential_id=d.get("credential_id"), verify_url=d.get("verify_url"))
+                elif edit.item == "extra":
+                    store.save_extra(c, candidate_id, d.get("type", ""), d.get("fields") or {},
+                                     item_id=edit.id if edit.op == "edit" else None)
+                else:
+                    raise ValueError(f"{edit.op} {edit.item} is not supported")
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
-        return get_profile(candidate_id)
+        return {**get_profile(candidate_id), "undo": undo_id}
 
     @app.get("/admin/candidates/{candidate_id}/extraction", tags=["admin"])
     def admin_extraction(candidate_id: str):
@@ -1203,7 +1238,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         jd_file = None
         try:
             if file is not None and file.filename:
-                data = await file.read()
+                data = await read_upload(file, "The file")
                 if file.filename.lower().endswith((".txt", ".md")):
                     jd_text = data.decode("utf-8", errors="replace")
                 else:
@@ -1393,8 +1428,9 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         from ingest.documents import DocumentError, extract_text
         try:
             if file is not None and file.filename:
+                data = await read_upload(file, "The file")
                 with conn() as c:
-                    text = extract_text(file.filename, await file.read(), c)
+                    text = extract_text(file.filename, data, c)
         except DocumentError as exc:
             raise HTTPException(422, str(exc)) from exc
         with conn() as c:

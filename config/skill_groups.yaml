@@ -1,0 +1,211 @@
+# Skill and tool groups in Review (specs/19 item 10). Display only: the group never changes a score.
+# Seeded from the baseline criteria (names and aliases) and config/market_synonyms.json, plus a few common names
+# marked "# added". A name matches on the same key as dedupe (lowercase, punctuation stripped, last word singular)
+# or through the alias file. Anything not listed shows under "Other". Order here is the order in Review.
+groups:
+  Languages:
+    - Python
+    - python3
+    - SQL
+    - BigQuery SQL
+    - R                    # added
+    - Java                 # added
+    - JavaScript           # added
+    - TypeScript           # added
+    - Go                   # added
+    - Scala                # added
+    - C++                  # added
+    - C#                   # added
+    - Bash                 # added
+    - Rust                 # added
+    - MATLAB               # added
+  AI & ML:
+    - Machine learning
+    - ML
+    - Machine learning fundamentals
+    - ML fundamentals
+    - model training
+    - predictive modeling
+    - classification
+    - clustering
+    - Hyperparameter tuning
+    - Experiment tracking
+    - Large language models
+    - LLMs
+    - LLM
+    - LLM application development
+    - LLM apps
+    - generative AI
+    - GenAI
+    - prompt engineering
+    - Retrieval-augmented generation
+    - RAG
+    - Retrieval
+    - embeddings
+    - semantic search
+    - vector search
+    - Fine-tuning
+    - Model fine-tuning
+    - LoRA
+    - PEFT
+    - Model evaluation
+    - evals
+    - LLM evaluation
+    - benchmarking
+    - Hugging Face
+    - transformers
+    - PyTorch
+    - torch
+    - scikit-learn
+    - sklearn
+    - LangChain
+    - LangGraph
+    - LangChain or LangGraph
+    - LlamaIndex
+    - Vector databases
+    - pgvector
+    - Pinecone
+    - Weaviate
+    - FAISS
+    - Chroma               # added
+    - Qdrant               # added
+    - SageMaker
+    - Bedrock
+    - Vertex AI
+    - TensorFlow           # added
+    - Keras                # added
+    - XGBoost              # added
+    - LightGBM             # added
+    - MLflow               # added
+    - NLP                  # added
+    - Natural language processing   # added
+    - Deep learning        # added
+    - Computer vision      # added
+    - Model Context Protocol        # added
+    - OpenAI API           # added
+  Data:
+    - pandas
+    - NumPy                # added
+    - SciPy                # added
+    - statsmodels          # added
+    - Spark                # added
+    - PySpark              # added
+    - Airflow              # added
+    - dbt
+    - Cloud data warehouse
+    - BigQuery
+    - Snowflake
+    - Redshift
+    - PostgreSQL
+    - MySQL
+    - MongoDB              # added
+    - Kafka                # added
+    - ETL
+    - Data preprocessing
+    - Data wrangling
+    - data cleaning
+    - data preparation
+    - feature engineering
+    - Exploratory data analysis
+    - EDA
+    - data exploration
+    - Statistical analysis
+    - statistics
+    - regression
+    - hypothesis testing
+    - Causal inference
+    - causal analysis
+    - uplift modeling
+    - Forecasting
+    - time series
+    - demand forecasting
+    - Experimentation / A/B testing
+    - A/B testing
+    - experiment design
+    - BI tool
+    - Tableau
+    - Power BI
+    - Looker
+    - Excel                # added
+    - Data visualization and communication
+    - data storytelling
+    - visualization
+    - dashboards
+    - Jupyter Notebook     # added
+    - matplotlib           # added
+    - seaborn              # added
+    - Insurance or risk modeling
+  Cloud & infrastructure:
+    - Cloud platform
+    - AWS
+    - GCP
+    - Google Cloud
+    - Azure
+    - Kubernetes
+    - Docker
+    - containers
+    - Terraform            # added
+    - Linux                # added
+    - AWS Lambda           # added
+    - API Gateway          # added
+    - S3                   # added
+    - EC2                  # added
+  DevOps & tooling:
+    - Git
+    - GitHub
+    - GitLab
+    - CI/CD
+    - GitHub Actions       # added
+    - MLOps basics
+    - MLOps
+    - model deployment
+    - model monitoring
+    - Code review
+    - API development
+    - REST APIs
+    - REST API
+    - FastAPI
+    - Flask
+    - backend
+    - Django               # added
+    - Streamlit            # added
+    - Jira or Linear
+    - Jira
+    - Linear
+    - Asana
+    - Postman              # added
+  Product & methods:
+    - Product analytics
+    - metrics
+    - KPIs
+    - funnel analysis
+    - Product analytics tool
+    - Amplitude
+    - Mixpanel
+    - Google Analytics
+    - GA4
+    - Prioritization
+    - roadmapping
+    - RICE
+    - backlog prioritization
+    - Requirements writing
+    - PRD
+    - user stories
+    - product specs
+    - Product discovery and user research
+    - user research
+    - customer interviews
+    - discovery
+    - Go-to-market
+    - GTM
+    - product launch
+    - Figma
+    - wireframes
+    - Cross-functional collaboration
+    - stakeholder management
+    - cross-functional
+    - Technical fluency
+    - Explaining technical trade-offs to non-engineers
+    - Agile                # added
+    - Scrum                # added
+  Other: []

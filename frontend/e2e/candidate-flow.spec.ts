@@ -19,7 +19,8 @@ test("Demo tools: upload → review → score → plan", async ({ page }) => {
 
   // 2 · Review
   await expect(page.getByText("Data Analyst — Acme Retail")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("Dropped items (0)")).toBeVisible();
+  await expect(page.getByTestId("attention-box")).toContainText("Analytics Intern — Beta Corp: we only found the year");
+  await expect(page.getByText("Left out because", { exact: false })).toHaveCount(0);      // nothing dropped
   await page.screenshot({ path: "e2e/.tmp/review.png", fullPage: true });
   await page.getByRole("button", { name: "Confirm & score" }).click();
 

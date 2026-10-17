@@ -61,13 +61,23 @@ def _awards(ctx: Ctx):
     return [c for c in ctx.profile.claims if c.kind == "award"]
 
 
+def award_text(c) -> str:
+    """What the judge reads for an award: its source quote, or for one typed in Review (specs/19 item 22) its name
+    with the issuer and what it was for. An award with no extra fields reads exactly as before."""
+    if c.quote:
+        return c.quote
+    d = c.details or {}
+    text = c.name_raw + (f" ({d['issuer']})" if d.get("issuer") else "")
+    return text + (f": {d['for']}" if d.get("for") else "")
+
+
 def _publications(ctx: Ctx):
     return [p for p in ctx.profile.projects if p.kind == "publication"]
 
 
 def recognition_plan(ctx: Ctx) -> list[Ask]:
     asks = [Ask("award_relevant", "claim", c.id,
-                {"baseline": ctx.baseline_summary, "award": c.quote or c.name_raw}) for c in _awards(ctx)]
+                {"baseline": ctx.baseline_summary, "award": award_text(c)}) for c in _awards(ctx)]
     asks += [Ask("publication_relevant", "project", p.id,
                  {"baseline": ctx.baseline_summary, "publication": project_text(p)}) for p in _publications(ctx)]
     return asks

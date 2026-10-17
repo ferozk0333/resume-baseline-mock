@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 
 const STEPS = ["Start", "Role & requirements", "Hiring setup", "Review & publish"];
 const PRESETS = ["Startup", "Enterprise", "Proof-first"];
-const field = "h-9 w-full rounded-lg border border-input bg-white px-2 text-sm";
+const field = "h-9 w-full rounded-lg border border-field-border bg-field px-2 text-sm";
 
 export function Stepper({ step, onStep }: { step: number; onStep?: (s: number) => void }) {
   return (
@@ -374,7 +374,7 @@ function Aliases({ r, onChange }: { r: ReqRow; onChange: (a: string[]) => void }
           <button type="button" aria-label={`Remove alias ${a}`} onClick={() => onChange(r.aliases.filter((x) => x !== a))}><X className="size-3" /></button>
         </span>
       ))}
-      <input aria-label={`Add alias to ${r.name || "requirement"}`} value={v} placeholder="+ alias" className="h-7 w-20 rounded-md border border-input bg-white px-1.5 text-xs"
+      <input aria-label={`Add alias to ${r.name || "requirement"}`} value={v} placeholder="+ alias" className="h-7 w-20 rounded-md border border-field-border bg-field px-1.5 text-xs"
         onChange={(e) => setV(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && v.trim()) { e.preventDefault(); onChange([...r.aliases, v.trim()]); setV(""); } }} />
     </div>

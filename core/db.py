@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -76,7 +76,9 @@ CREATE TABLE IF NOT EXISTS roles (
   source TEXT DEFAULT 'extracted',
   needs_review INTEGER DEFAULT 0,
   review_reasons TEXT,
-  method TEXT                     -- parser | jev | llm (specs/18 §4); null = typed or edited by the user
+  method TEXT,                    -- parser | jev | llm (specs/18 §4); null = typed or edited by the user
+  location TEXT,                  -- display only (specs/19)
+  sources TEXT                    -- JSON: evidence ids merged into this item; display only, never scored
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -91,7 +93,9 @@ CREATE TABLE IF NOT EXISTS projects (
   source TEXT DEFAULT 'extracted',
   needs_review INTEGER DEFAULT 0,
   review_reasons TEXT,
-  method TEXT
+  method TEXT,
+  details TEXT,                   -- JSON: type-specific Review fields (venue, event, placement, …)
+  sources TEXT
 );
 
 CREATE TABLE IF NOT EXISTS bullets (
@@ -113,7 +117,8 @@ CREATE TABLE IF NOT EXISTS claims (
   name_norm TEXT,
   quote TEXT,
   source TEXT DEFAULT 'extracted',
-  method TEXT
+  method TEXT,
+  details TEXT, skill_group TEXT, sources TEXT
 );
 
 CREATE TABLE IF NOT EXISTS certifications (
@@ -123,7 +128,14 @@ CREATE TABLE IF NOT EXISTS certifications (
   credential_id TEXT, verify_url TEXT,
   verified INTEGER DEFAULT 0,
   source TEXT DEFAULT 'extracted',
-  method TEXT
+  method TEXT,
+  sources TEXT
+);
+
+CREATE TABLE IF NOT EXISTS extra_items (   -- display-only proof types (specs/19 Phase D): never judged or scored
+  id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT,
+  type TEXT,                      -- education | patent | volunteering | course | language
+  fields_json TEXT, quote TEXT, source TEXT DEFAULT 'extracted', position INTEGER, created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS dropped_items (
@@ -642,6 +654,12 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
           "CREATE TABLE IF NOT EXISTS prompt_guard_flags (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, "
           "source TEXT, chunk_index INTEGER, chunk TEXT, score REAL, hidden INTEGER DEFAULT 0, model TEXT, "
           "created_at TEXT)"]),
+    (27, ["ALTER TABLE roles ADD COLUMN location TEXT",
+          *(f"ALTER TABLE {t} ADD COLUMN sources TEXT" for t in ("roles", "projects", "claims", "certifications")),
+          "ALTER TABLE projects ADD COLUMN details TEXT", "ALTER TABLE claims ADD COLUMN details TEXT",
+          "ALTER TABLE claims ADD COLUMN skill_group TEXT",
+          "CREATE TABLE IF NOT EXISTS extra_items (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, type TEXT, "
+          "fields_json TEXT, quote TEXT, source TEXT DEFAULT 'extracted', position INTEGER, created_at TEXT)"]),
 ]
 
 

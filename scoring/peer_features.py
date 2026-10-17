@@ -41,7 +41,7 @@ def _share(values: list[float], at_least: float) -> bool:
 
 FEATURES: list[Feature] = [
     Feature("verified_certification", "trust", "validation_strength",
-            "hold a verifiable certification relevant to the role",
+            "hold a relevant certification with a credential ID or link",
             lambda d: any(c.get("verified") and c.get("match") == "matched" for c in d.get("certifications", []))),
     Feature("manager_reference", "trust", "validation_strength",
             "have a manager or supervisor reference confirming relevant work",

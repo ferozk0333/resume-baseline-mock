@@ -172,7 +172,7 @@ function Empty({ title, text, children }: { title: string; text: string; childre
 }
 
 function FilterBar({ f, setF, data }: { f: Filters; setF: (f: Filters) => void; data: HomeJobs }) {
-  const sel = "h-8 rounded-lg border border-input bg-white px-2 text-sm";
+  const sel = "h-8 rounded-lg border border-field-border bg-field px-2 text-sm";
   return (
     <div role="group" aria-label="Filters" className="flex flex-wrap items-center gap-2 text-sm">
       <select aria-label="Role" className={sel} value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>

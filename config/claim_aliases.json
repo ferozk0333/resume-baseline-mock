@@ -1,0 +1,11 @@
+{
+ "version": 1,
+ "_about": "Reviewed alias groups (specs/19 item 14). Names in one group are one claim, certification or project when merging duplicates. Only add names that are the same thing spelled differently; never related-but-different tools. Matching is on the normalized key (lowercase, punctuation stripped, exam codes and initials in brackets stripped, last word singular).",
+ "groups": [
+  ["Hugging Face", "HuggingFace"],
+  ["Chroma", "ChromaDB"],
+  ["AWS", "AWS Services"],
+  ["Docker", "Dockerfile"],
+  ["Jupyter Notebook", "Jupyter/Google Colab Notebooks"]
+ ]
+}

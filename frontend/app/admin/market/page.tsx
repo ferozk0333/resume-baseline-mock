@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { FileDrop } from "@/components/ui/file-drop";
 import { Check, Download, FlaskConical, Loader2, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError, get, post, put, type MarketPosting, type MarketRole, type MarketVersion, type Suggestion } from "@/lib/api";
+import { ApiError, get, post, put, useUploadLimit, type MarketPosting, type MarketRole, type MarketVersion, type Suggestion } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type FetchResult = { boards: number; seen: number; new: number; excluded_titles: number; closed: number; errors: string[];
@@ -216,7 +217,7 @@ function Suggestions() {
           <li key={s.id} className="flex flex-wrap items-center gap-2 py-2">
             <span className="font-medium">{s.name}</span><span className="text-muted-foreground">→</span>
             <select aria-label={`Merge ${s.name} into`} value={pick[s.id] ?? s.canonical ?? ""} onChange={(e) => setPick({ ...pick, [s.id]: e.target.value })}
-              className="h-8 rounded-md border border-input bg-white px-2 text-sm">
+              className="h-8 rounded-md border border-field-border bg-field px-2 text-sm">
               <option value="">Keep separate</option>
               {data.canonical.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -236,6 +237,7 @@ function AddPosting({ role, onAdded }: { role: MarketRole; onAdded: () => void }
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ company: "", tier: "mid", title: role.title, url: "", posted_at: "", text: "" });
   const [file, setFile] = useState<File | null>(null);
+  const maxBytes = useUploadLimit();
   const [busy, setBusy] = useState(false);
   async function submit() {
     setBusy(true);
@@ -260,13 +262,13 @@ function AddPosting({ role, onAdded }: { role: MarketRole; onAdded: () => void }
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1"><Label htmlFor="mp-company">Company</Label><Input id="mp-company" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} /></div>
             <div className="space-y-1"><Label htmlFor="mp-tier">Tier</Label>
-              <select id="mp-tier" value={f.tier} onChange={(e) => setF({ ...f, tier: e.target.value })} className="h-9 w-full rounded-lg border border-input bg-white px-2 text-sm">
+              <select id="mp-tier" value={f.tier} onChange={(e) => setF({ ...f, tier: e.target.value })} className="h-9 w-full rounded-lg border border-field-border bg-field px-2 text-sm">
                 <option value="large">Large tech</option><option value="mid">Mid-size</option><option value="startup">Small startup</option></select></div>
             <div className="space-y-1"><Label htmlFor="mp-title">Job title</Label><Input id="mp-title" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></div>
             <div className="space-y-1"><Label htmlFor="mp-date">Posted date</Label><Input id="mp-date" type="date" value={f.posted_at} onChange={(e) => setF({ ...f, posted_at: e.target.value })} /></div>
             <div className="space-y-1 sm:col-span-2"><Label htmlFor="mp-url">URL</Label><Input id="mp-url" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} /></div>
-            <div className="space-y-1 sm:col-span-2"><Label htmlFor="mp-file">File (PDF/DOCX)</Label>
-              <input id="mp-file" type="file" accept=".pdf,.docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="block text-sm" /></div>
+            <div className="sm:col-span-2"><FileDrop id="mp-file" label="File" what="posting" accept={[".pdf", ".docx"]}
+              typesLabel="PDF or DOCX" file={file} onFile={setFile} maxBytes={maxBytes} /></div>
             <div className="space-y-1 sm:col-span-2"><Label htmlFor="mp-text">Or paste the text</Label>
               <Textarea id="mp-text" value={f.text} disabled={!!file} onChange={(e) => setF({ ...f, text: e.target.value })} className="min-h-32" /></div>
           </div>

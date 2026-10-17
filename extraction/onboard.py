@@ -226,7 +226,7 @@ def extract_and_validate(conn: sqlite3.Connection, docs: list[SourceDoc], llm: S
 def finish_onboarding(conn: sqlite3.Connection, candidate_id: str, forms: Profile, profiles: list[Profile],
                       report: ValidationReport, warnings: list[str]) -> OnboardingResult:
     """Merge sources, save the profile and the dropped items. Form entries first so the user's details win."""
-    merged, merge_report = merge_profiles([forms, *profiles])
+    merged, merge_report = merge_profiles([forms, *profiles], _types(conn, candidate_id))
     # A dropped bullet's parent may have been merged into another role/project; point at the survivor.
     remap = {**merge_report.role_remap, **merge_report.project_remap}
     for d in report.dropped_items:
@@ -234,8 +234,27 @@ def finish_onboarding(conn: sqlite3.Connection, candidate_id: str, forms: Profil
             d.parent_id = remap[d.parent_id]
     store.save_profile(conn, candidate_id, merged)
     store.save_dropped(conn, candidate_id, report.dropped_items)
+    for e in store.list_evidence(conn, candidate_id):
+        if e["type"] in EXTRA_SOURCES and e["status"] != "failed":
+            read_extra(conn, candidate_id, e["id"], e["raw_text"] or "", merged)
     return OnboardingResult(candidate_id, merged, [*warnings, *report.warnings], scoring_blocker(merged),
                             dropped=report.dropped, kept=report.kept)
+
+
+EXTRA_SOURCES = ("resume", "linkedin_pdf")
+
+
+def _types(conn, candidate_id: str) -> dict[str, str]:
+    return {e["id"]: e["type"] for e in store.list_evidence(conn, candidate_id)}
+
+
+def read_extra(conn, candidate_id: str, evidence_id: str, text: str, profile: Profile) -> None:
+    """Education, languages, courses, patents and volunteering named in a document (display only, specs/19 Phase D).
+    Code only: no model call."""
+    from core.text import normalize_name
+    from extraction.extra import extra_items
+    employers = {normalize_name(r.employer) for r in profile.roles if r.employer}
+    store.merge_extracted_extra(conn, candidate_id, evidence_id, extra_items(text, evidence_id, employers))
 
 
 def run_onboarding(conn: sqlite3.Connection, inputs: OnboardingInputs, llm: StructuredLLM, *,
@@ -310,7 +329,7 @@ class ProgressiveSave:
                 from extraction.deletions import keep_deleted_out
                 profiles = [keep_deleted_out(conn, self.candidate_id, p) for p in profiles]
             current = store.load_profile(conn, self.candidate_id) if self.started else self.forms
-            merged, merge_report = merge_profiles([current, *profiles])
+            merged, merge_report = merge_profiles([current, *profiles], _types(conn, self.candidate_id))
             remap = {**merge_report.role_remap, **merge_report.project_remap}
             for d in sub.dropped_items:
                 while d.parent_id in remap:
@@ -323,6 +342,8 @@ class ProgressiveSave:
             self.started = True
             if doc.evidence_id in sub.failed:
                 store.set_evidence_status(conn, doc.evidence_id, "failed", error=str(result))
+            elif doc.type in EXTRA_SOURCES:
+                read_extra(conn, self.candidate_id, doc.evidence_id, doc.text, merged)
             if doc.evidence_id in sub.sources:
                 profile, own = sub.sources[doc.evidence_id]
                 if doc.evidence_id not in sub.failed:

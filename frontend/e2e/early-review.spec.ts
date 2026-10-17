@@ -37,7 +37,7 @@ async function earlyReview(page: Page, name: string, prefix: string) {
 
   await expect(still).toHaveCount(0, { timeout: 30_000 });                // LinkedIn finished: its items join
   await expect(page.getByRole("button", { name: "Remove Looker" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Remove Google Data Analytics Certificate" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete Google Data Analytics Certificate" })).toBeVisible();
   await expect(confirm).toBeEnabled();
   await page.screenshot({ path: `${OUT}/${prefix}3-review-all-read.png`, fullPage: true });
 }

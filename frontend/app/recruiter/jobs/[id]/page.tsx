@@ -17,7 +17,7 @@ import { ProfilePanel, TABS, type Tab } from "@/components/app/recruiter/profile
 import { get, patch, post, type ApplicantRow, type Job, type Panel, type Stage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const selectClass = "h-8 rounded-lg border border-input bg-white px-2 text-sm";
+const selectClass = "h-8 rounded-lg border border-field-border bg-field px-2 text-sm";
 type View = "ranked" | "pipeline" | "jd";
 type Nav = { view: View; tab: Tab; app: string | null };
 

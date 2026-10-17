@@ -94,7 +94,7 @@ function Scores() {
           <div className="flex items-center gap-1.5">
             <label htmlFor="add-role" className="sr-only">Add a role</label>
             <select id="add-role" value={adding} onChange={(e) => setAdding(e.target.value)} disabled={!!addTask}
-              className="h-8 rounded-lg border border-input bg-white px-2 text-sm">
+              className="h-8 rounded-lg border border-field-border bg-field px-2 text-sm">
               <option value="">Add a role…</option>
               {others.map((r) => <option key={r.baseline_id} value={r.baseline_id}>{r.title}</option>)}
             </select>

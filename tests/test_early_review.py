@@ -36,11 +36,11 @@ def inputs(candidate_id=None):
 
 
 def shape(profile) -> dict:
-    """A profile without ids (they are random), for comparing two runs."""
+    """A profile without ids (they are random; merged sources become a count), for comparing two runs."""
     d = asdict(profile)
-    strip = lambda x: {k: (strip(v) if isinstance(v, dict) else [strip(i) if isinstance(i, dict) else i for i in v]  # noqa: E731
-                           if isinstance(v, list) else v) for k, v in x.items()
-                       if k not in ("id", "evidence_id", "bullet_id", "role_id")}
+    strip = lambda x: {k: (len(v) if k == "sources" else strip(v) if isinstance(v, dict)  # noqa: E731
+                           else [strip(i) if isinstance(i, dict) else i for i in v] if isinstance(v, list) else v)
+                       for k, v in x.items() if k not in ("id", "evidence_id", "bullet_id", "role_id")}
     return strip(d)
 
 

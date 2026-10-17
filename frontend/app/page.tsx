@@ -82,7 +82,7 @@ function Home() {
                 <label htmlFor="strip-role" className="sr-only">Role</label>
                 {cards.length > 1 ? (
                   <select id="strip-role" value={card.baseline_id} onChange={(e) => setRole(e.target.value)}
-                    className="h-8 rounded-lg border border-input bg-white px-2 text-sm font-medium">
+                    className="h-8 rounded-lg border border-field-border bg-field px-2 text-sm font-medium">
                     {cards.map((c) => <option key={c.baseline_id} value={c.baseline_id}>{c.title}{c.is_primary ? " (primary)" : ""}</option>)}
                   </select>
                 ) : <span className="text-sm font-medium">{card.title}</span>}

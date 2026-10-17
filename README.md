@@ -208,6 +208,13 @@ human reviewers: don't send real personal data on the free tier.
   final profile is the one a single merge gives); Review opens once the resume is read, shows "Still reading
   LinkedIn…" per pending source, and Confirm waits for every source. Early-start judging runs again per source.
   An item deleted in Review is never re-added by a later source: Review shows "LinkedIn also mentions X · Add back".
+- **Review (specs/19):** one entry card for roles, projects, education, certifications and every "More proof" type:
+  the same field grid in view and edit, one card in edit at a time, bullets edited one by one (drag or ↑/↓, paste
+  splits lines), delete with Undo, grouped and searchable skills (`config/skill_groups.yaml`), a section menu,
+  "Needs your attention" and a sticky Confirm bar. Duplicates merge on a normalized name or
+  `config/claim_aliases.json` (never on similarity; near misses are listed by `scripts/dedupe_report.py`, which also
+  writes the offline before/after report to `timings/dedupe_report.md`). Education, patents, volunteering, courses
+  and languages are display only: shown to recruiters, never judged or scored.
 - **Gates:** `scripts/parser_gates.py` (offline; replays recorded judgments, `judges/replay_judge.py`) writes
   `timings/parser_gates.md`. `scripts/render_test_profiles.py --stress` renders the layout stress set.
   `scripts/readme_live_gate.py --estimate` counts the calls of the README gate on the latest live profile; `--run`

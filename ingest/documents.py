@@ -34,7 +34,8 @@ _BASE_NORMALIZER = f"pymupdf4llm-{pymupdf4llm.__version__}-classic+docx-md+clean
 
 def normalizer() -> str:
     """Hidden-text removal (REMOVE_HIDDEN_TEXT, specs/18 item 20) changes the text, so it is part of the key."""
-    return _BASE_NORMALIZER + ("+hidden-1" if config.REMOVE_HIDDEN_TEXT else "")
+    return _BASE_NORMALIZER + ("+hidden-1" if config.REMOVE_HIDDEN_TEXT else "") + \
+        ("+punct-1" if config.PUNCT_SPACING else "")
 
 
 NORMALIZER = _BASE_NORMALIZER
@@ -144,7 +145,19 @@ def clean_markdown(md: str) -> str:
             continue
         lines.append(line)
     text = "\n".join(lines)
+    if config.PUNCT_SPACING:
+        text = fix_punctuation_spacing(text)
     return re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
+
+
+# A space before closing punctuation that ends a word ("Python , SQL" / "( 2023 )"), never before ".NET" or ":---".
+_SPACE_BEFORE = re.compile(r"(?<=\S)[ \t]+([.,;:!?)])(?=[ \t]|$|[.,;:!?)\]\"'])", re.M)
+_SPACE_AFTER = re.compile(r"\([ \t]+(?=\S)")
+
+
+def fix_punctuation_spacing(text: str) -> str:
+    """No whitespace before . , ; : ! ? ) or after ( (specs/19 item 6). Line breaks are kept."""
+    return _SPACE_AFTER.sub("(", _SPACE_BEFORE.sub(r"\1", text))
 
 
 def normalize_document(filename: str, data: bytes, hidden: list | None = None) -> str:

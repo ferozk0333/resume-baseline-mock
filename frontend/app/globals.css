@@ -23,6 +23,11 @@
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
+  --color-field: var(--field);
+  --color-field-border: var(--field-border);
+  --color-field-foreground: var(--field-foreground);
+  --color-placeholder: var(--placeholder);
+  --color-readonly: var(--readonly);
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
@@ -66,6 +71,13 @@
   --border: oklch(0.92 0.004 260);
   --input: oklch(0.88 0.004 260);
   --ring: oklch(0.51 0.19 266);
+  /* Form fields (specs/19 item 3): white editable inputs with a 3:1 border, placeholders lighter than entered
+     values but still AA (4.6:1), read-only values on a subtle background with no input chrome. */
+  --field: #ffffff;
+  --field-border: #8a8f98;
+  --field-foreground: #1f2329;
+  --placeholder: #71757d;
+  --readonly: #f4f5f7;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -102,6 +114,15 @@
     70% { transform: scale(1.08); opacity: 1; }
     100% { transform: scale(1); opacity: 1; }
   }
+}
+
+/* Every form control, on candidate, recruiter and Admin screens alike (specs/19 item 3). */
+@layer base {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+  select, textarea {
+    color: var(--field-foreground);
+  }
+  ::placeholder { color: var(--placeholder); opacity: 1; }
 }
 
 /* Visible keyboard focus everywhere (specs/17 §10); components with their own focus ring keep it. */

@@ -83,7 +83,7 @@ export function StepCard({ v, act, busy, onSaveEmail, onReply, onScorecard }: {
         <div className="flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
           <Label htmlFor="other">Other next step</Label>
           <select id="other" value="" disabled={busy !== null} onChange={(e) => e.target.value && act({ action: "choose", option: e.target.value })}
-            className="h-7 rounded-md border border-input bg-white px-2 text-xs">
+            className="h-7 rounded-md border border-field-border bg-field px-2 text-xs">
             <option value="">Choose…</option>
             <option value="slots">Propose interview slots</option>
             <option value="answer">Draft an answer</option>
@@ -238,7 +238,7 @@ function Feedback({ s, act, busy, onScorecard }: { s: WorkflowStep; act: Act; bu
           <Input aria-label="Interviewer" placeholder="Interviewer name" value={form.interviewer}
             onChange={(e) => setForm({ ...form, interviewer: e.target.value })} className="h-8 bg-white" />
           <select aria-label="Recommendation" value={form.recommendation} onChange={(e) => setForm({ ...form, recommendation: e.target.value })}
-            className="h-8 rounded-md border border-input bg-white px-2 text-sm">
+            className="h-8 rounded-md border border-field-border bg-field px-2 text-sm">
             {Object.entries(REC).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
         </div>
@@ -247,7 +247,7 @@ function Feedback({ s, act, busy, onScorecard }: { s: WorkflowStep; act: Act; bu
             <span className="truncate" title={a}>{a}</span>
             <select aria-label={`${a} rating`} value={form.ratings[a].rating}
               onChange={(e) => setForm({ ...form, ratings: { ...form.ratings, [a]: { ...form.ratings[a], rating: Number(e.target.value) } } })}
-              className="h-8 rounded-md border border-input bg-white px-2">
+              className="h-8 rounded-md border border-field-border bg-field px-2">
               {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n} / 4</option>)}
             </select>
             <Input aria-label={`${a} notes`} placeholder="Notes" value={form.ratings[a].notes}

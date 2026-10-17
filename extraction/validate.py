@@ -13,8 +13,9 @@ from datetime import date, datetime
 from core import config
 from core.text import contains_phrase, normalize_name
 from extraction import schemas
+from extraction import dedupe
 from extraction.records import (
-    BulletRec, CertificationRec, ClaimRec, Profile, ProjectRec, RoleRec, new_id,
+    BulletRec, CertificationRec, ClaimRec, Profile, ProjectRec, RoleRec, new_id, sources_of,
 )
 from extraction.synonyms import CLAIM_SYNONYMS
 
@@ -482,12 +483,71 @@ def _fill(target, source, fields: tuple[str, ...]) -> None:
             setattr(target, f, getattr(source, f))
 
 
-def merge_profiles(profiles: list[Profile]) -> tuple[Profile, ValidationReport]:
-    """Merge per-source profiles in order (resume first). Earlier sources win on conflicts."""
+def _add_sources(into, other) -> None:
+    """Where a merged item came from, for the source chips (display only; never scored)."""
+    into.sources = [x for x in dict.fromkeys([*sources_of(into), *sources_of(other)]) if x != into.evidence_id]
+
+
+def claim_key(c: ClaimRec) -> tuple[str, str]:
+    """One claim per name (specs/19 item 17): awards apart from skills and tools."""
+    group = "award" if c.kind == "award" else "skill"
+    if not config.DEDUPE_NAMES:
+        return group, c.name_norm
+    k = dedupe.canonical(c.name_raw)
+    return group, CLAIM_SYNONYMS.get(k, k)
+
+
+def _same_project(a: ProjectRec, b: ProjectRec) -> bool:
+    if not config.DEDUPE_NAMES:
+        return normalize_name(a.name) == normalize_name(b.name)
+    if dedupe.canonical(a.name, project=True) == dedupe.canonical(b.name, project=True):
+        return True
+    ua, ub = dedupe.url_key(a.url), dedupe.url_key(b.url)
+    return bool(ua) and ua == ub
+
+
+def _same_certification(a: CertificationRec, b: CertificationRec) -> bool:
+    if not config.DEDUPE_NAMES:
+        return normalize_name(a.name) == normalize_name(b.name)
+    if dedupe.canonical(a.name) != dedupe.canonical(b.name):
+        return False
+    return not (a.issuer and b.issuer) or dedupe.canonical(a.issuer) == dedupe.canonical(b.issuer)
+
+
+CONFLICT = "sources_disagree_dates"
+
+
+def _flag_date_conflict(kept: RoleRec, other: RoleRec) -> None:
+    """Two documents give different months for the same role (Review's "Needs your attention"; display only, never
+    scored). Code: "sources_disagree_dates|<other evidence id>|<start>|<end or present>"."""
+    if not other.evidence_id or other.evidence_id == kept.evidence_id or kept.source == "user_edit":
+        return
+    def ym(d):
+        return d.strftime("%Y-%m") if d else ""
+    differ = (kept.start_date and other.start_date and kept.start_date != other.start_date) or \
+        (kept.is_current != other.is_current and (kept.end_date or other.end_date)) or \
+        (not kept.is_current and not other.is_current and kept.end_date and other.end_date
+         and kept.end_date != other.end_date)
+    if differ and not any(r.startswith(CONFLICT) for r in kept.review_reasons):
+        kept.review_reasons.append(f"{CONFLICT}|{other.evidence_id}|{ym(other.start_date)}|"
+                                   f"{'present' if other.is_current else ym(other.end_date)}")
+
+
+def _claim_strength(c: ClaimRec, artifacts: set) -> int:
+    """artifact > bullet > claimed only (specs/19 item 17)."""
+    return 2 if c.evidence_id in artifacts else 1 if c.bullet_id else 0
+
+
+def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | None = None
+                   ) -> tuple[Profile, ValidationReport]:
+    """Merge per-source profiles in order (resume first). Earlier sources win on conflicts. `evidence_types`
+    (evidence id → type) marks claims read from a repository or portfolio as backed by an artifact."""
     out, report = Profile(), ValidationReport()
     bullet_remap: dict[str, str] = {}
     role_remap: dict[str, str] = {}
     absorbed: dict[str, set] = {}          # kept role id → evidence ids already merged into it
+    artifacts = {e for e, t in (evidence_types or {}).items() if t in ("github_repo", "portfolio")} | \
+        {p.evidence_id for prof in profiles for p in prof.projects if p.is_github and p.evidence_id}
 
     for prof in profiles:
         for role in prof.roles:
@@ -500,9 +560,11 @@ def merge_profiles(profiles: list[Profile]) -> tuple[Profile, ValidationReport]:
                 absorbed[role.id] = {role.evidence_id}
                 continue
             absorbed.setdefault(match.id, set()).add(role.evidence_id)
-            _fill(match, role, ("employer", "industry", "start_date", "end_date", "team_size"))
+            _flag_date_conflict(match, role)
+            _fill(match, role, ("employer", "industry", "start_date", "end_date", "team_size", "location"))
             match.is_current = match.is_current or role.is_current
             bullet_remap.update(_merge_bullets(match.bullets, role.bullets))
+            _add_sources(match, role)
             role_remap[role.id] = match.id
             report.role_remap[role.id] = match.id
             report.merged += 1
@@ -511,7 +573,7 @@ def merge_profiles(profiles: list[Profile]) -> tuple[Profile, ValidationReport]:
             project.bullets = _dedupe_own_bullets(project.bullets, bullet_remap)
             if project.role_id in role_remap:
                 project.role_id = role_remap[project.role_id]
-            match = next((p for p in out.projects if normalize_name(p.name) == normalize_name(project.name)), None)
+            match = next((p for p in out.projects if _same_project(p, project)), None)
             if match is None:
                 out.projects.append(project)
                 continue
@@ -520,28 +582,43 @@ def merge_profiles(profiles: list[Profile]) -> tuple[Profile, ValidationReport]:
                 match.is_fork, match.own_commits = project.is_fork, project.own_commits
                 if project.end_date and (match.end_date is None or project.end_date > match.end_date):
                     match.end_date = project.end_date
+            if config.DEDUPE_NAMES and {match.kind, project.kind} == {"project", "repo"}:
+                match.kind = "project"             # a resume project and its repository: one project (item 16)
+            match.details = {**project.details, **match.details}
             bullet_remap.update(_merge_bullets(match.bullets, project.bullets))
+            _add_sources(match, project)
             report.project_remap[project.id] = match.id
             report.merged += 1
 
         for claim in prof.claims:
             if claim.bullet_id in bullet_remap:
                 claim.bullet_id = bullet_remap[claim.bullet_id]
-            match = next((c for c in out.claims if c.name_norm == claim.name_norm), None)
+            k = claim_key(claim)
+            match = next((c for c in out.claims if claim_key(c) == k), None)
             if match is None:
                 out.claims.append(claim)
-            elif match.bullet_id is None and claim.bullet_id is not None:
-                out.claims[out.claims.index(match)] = claim  # keep the in-bullet occurrence
-                report.merged += 1
+                continue
+            report.merged += 1
+            if config.DEDUPE_NAMES:
+                stronger = _claim_strength(claim, artifacts) > _claim_strength(match, artifacts)
             else:
-                report.merged += 1
+                stronger = match.bullet_id is None and claim.bullet_id is not None
+            if stronger:                           # keep the strongest evidence link, and every source
+                _add_sources(claim, match)
+                claim.skill_group = claim.skill_group or match.skill_group
+                out.claims[out.claims.index(match)] = claim
+            else:
+                _add_sources(match, claim)
 
         for cert in prof.certifications:
-            match = next((c for c in out.certifications if normalize_name(c.name) == normalize_name(cert.name)), None)
+            match = next((c for c in out.certifications if _same_certification(c, cert)), None)
             if match is None:
                 out.certifications.append(cert)
             else:
                 _fill(match, cert, ("issuer", "issued_date", "credential_id", "verify_url"))
+                if config.DEDUPE_NAMES and dedupe.exam_code(cert.name) and not dedupe.exam_code(match.name):
+                    match.name = cert.name         # keep the exam code for display
+                _add_sources(match, cert)
                 report.merged += 1
 
         out.references += prof.references

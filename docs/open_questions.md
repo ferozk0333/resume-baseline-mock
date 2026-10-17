@@ -192,3 +192,36 @@ ask if wanted.
     `scripts/phase2_compare.py`), a keyword-stuffer profile (ID 2) or a padded variant must not gain from a change unless
     its own evidence text changed; it is part of the DESIGN checks.
 
+
+## Spec 19 (Review UX, dedupe, more proof types)
+
+35. **Phase C after-scores need live judgments** [OPEN, decision]. Merging duplicates is done in code, but it creates
+    judge inputs that were never recorded: a merged project has a new text (resume project + its repository), and
+    the skills lists in the Tools / Role skills questions get shorter. Offline replay counts those as errors, so the
+    "after" scores in `timings/dedupe_report.md` understate the real result (e.g. AI3 70.18 → 47.12 with 41
+    unrecorded questions). 235 unique questions in all (Feroz test 10: 45; test profiles: 190). Every new project merge
+    on the test profiles is a resume project matched to its own repository by URL (item 16). Options: one live run
+    for those questions, or keep URL/slug project merges off until then.
+36. **market_synonyms.json in dedupe** (my interpretation; please confirm). It maps names to market *concepts* (MySQL →
+    SQL, AWS/Azure/GCP → Cloud platform), so it is used only for pairs that are one name: the same letters
+    (python3 → Python) or the initials (HF → Hugging Face, RAG, EDA, GTM, ML). Concept groupings never merge claims.
+37. **Display-only proof read by code** (my interpretation). Education, languages, courses, patents and volunteering
+    are read from the resume and LinkedIn text under their section headings (`extraction/extra.py`, no model call),
+    with the lines as the quote. A volunteering entry already read as a role is not shown twice.
+38. **Open-source contributions are kind "project"** with `details.proof_type = open_source` (my interpretation). A
+    `repo` needs GitHub data (own commits, fork); a typed GitHub link does not have it, and `project` and `repo` count
+    the same for Depth.
+39. **Typed awards are judged on name + issuer + what it was for**; an award with a source quote reads exactly as
+    before. Editing a claim clears its quote so the edited text is what gets judged (`source=user_edit`).
+40. **Resume vs LinkedIn date conflicts** are flagged in code at merge time (different start/end months for a merged
+    role); display only, cleared by editing or "The months are right".
+41. **Saved profiles keep their duplicates** until a source is read again (new reads use the new merge). A saved
+    profile can be re-merged with `extraction.store.remerge` (no model calls), not run on demo.db yet.
+42. **Section menu on mobile** is a dropdown in the sticky Confirm bar (the mobile site header is ~170 px tall, so a
+    top sticky menu would hide behind it). "Application details" is listed but disabled during onboarding ("After
+    your scores"): that step comes after scoring.
+43. **Skill groups**: `config/skill_groups.yaml` seeded from the baseline criteria, their aliases and
+    market_synonyms.json, plus common names marked `# added`, for review. "+ Add skill" stores kind `skill` and the
+    chosen group (display only).
+44. **Publication year** typed in More proof is saved as December of that year (the same as a year-only end date
+    read from a document).
