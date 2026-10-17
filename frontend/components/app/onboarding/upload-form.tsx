@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { post } from "@/lib/api";
+import { FileDrop } from "@/components/ui/file-drop";
+import { post, useUploadLimit } from "@/lib/api";
 
 type Cert = { name: string; issuer: string; credential_id: string; verify_url: string };
 type Ref = { name: string; relationship: string; contact: string; statement: string };
@@ -34,6 +35,7 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
   const [certs, setCerts] = useState<Cert[]>([]);
   const [refs, setRefs] = useState<Ref[]>([]);
   const [busy, setBusy] = useState(false);
+  const maxBytes = useUploadLimit();
   const badVideos = videos.filter((v) => v.trim() && !VIDEO.test(v.trim()));
 
   async function submit(e: React.FormEvent) {
@@ -71,19 +73,15 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
           <CardDescription>PDF or DOCX. Only the resume is required.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-5 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="resume">Resume *</Label>
-            <Input id="resume" type="file" accept=".pdf,.docx" required
-              onChange={(e) => setResume(e.target.files?.[0] ?? null)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="linkedin">LinkedIn profile (PDF)</Label>
-            <Input id="linkedin" type="file" accept=".pdf" onChange={(e) => setLinkedin(e.target.files?.[0] ?? null)} />
-            <Why>Confirms your resume (Trust)</Why>
-            <p className="text-xs text-muted-foreground">
-              On your LinkedIn profile, open <span className="font-medium">More → Save to PDF</span> and upload that file.
-            </p>
-          </div>
+          <FileDrop id="resume" label="Resume" required what="resume" accept={[".pdf", ".docx"]} typesLabel="PDF or DOCX"
+            file={resume} onFile={setResume} maxBytes={maxBytes} />
+          <FileDrop id="linkedin" label="LinkedIn profile (PDF)" what="LinkedIn PDF" accept={[".pdf"]} typesLabel="PDF"
+            file={linkedin} onFile={setLinkedin} maxBytes={maxBytes} hint={<>
+              <Why>Confirms your resume (Trust)</Why>
+              <p className="text-xs text-muted-foreground">
+                On your LinkedIn profile, open <span className="font-medium">More → Save to PDF</span> and upload that file.
+              </p>
+            </>} />
           <div className="space-y-1.5">
             <Label htmlFor="linkedin-url">LinkedIn profile URL</Label>
             <Input id="linkedin-url" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)}
@@ -94,13 +92,13 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="github">GitHub username or profile URL</Label>
-            <Input id="github" value={github} onChange={(e) => setGithub(e.target.value)} placeholder="octocat" />
+            <Input id="github" value={github} onChange={(e) => setGithub(e.target.value)} placeholder="your-username" />
             <Why>Shows real work (Expertise, Trust)</Why>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="portfolio">Portfolio URL</Label>
             <Input id="portfolio" type="url" value={portfolio} onChange={(e) => setPortfolio(e.target.value)}
-              placeholder="https://…" />
+              placeholder="https://your-site.com" />
             <Why>Shows finished work in context (Expertise)</Why>
           </div>
         </CardContent>
@@ -140,7 +138,7 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Certifications</CardTitle>
-            <CardDescription>A credential ID or link lets us count it as verified.</CardDescription>
+            <CardDescription>Adding a credential ID or link makes a certificate count as stronger proof (Trust).</CardDescription>
             <Why>Backs the skills you claim (Expertise, Trust)</Why>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -148,7 +146,7 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
               <div key={i} className="grid grid-cols-2 gap-2 rounded-lg border p-3">
                 {(["name", "issuer", "credential_id", "verify_url"] as const).map((f) => (
                   <Input key={f} aria-label={`Certification ${i + 1} ${f.replace("_", " ")}`} value={c[f]}
-                    placeholder={{ name: "Name", issuer: "Issuer", credential_id: "Credential ID", verify_url: "Verify URL" }[f]}
+                    placeholder={{ name: "Name", issuer: "Issuer", credential_id: "Credential ID (optional)", verify_url: "Link (optional)" }[f]}
                     onChange={(e) => setCerts(certs.map((x, j) => (j === i ? { ...x, [f]: e.target.value } : x)))} />
                 ))}
               </div>
@@ -172,7 +170,7 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
                   <Input aria-label={`Reference ${i + 1} name`} placeholder="Name" value={r.name}
                     onChange={(e) => setRefs(refs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
                   <select aria-label={`Reference ${i + 1} relationship`} value={r.relationship}
-                    className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+                    className="h-8 rounded-lg border border-field-border bg-field px-2 text-sm"
                     onChange={(e) => setRefs(refs.map((x, j) => (j === i ? { ...x, relationship: e.target.value } : x)))}>
                     <option value="">Relationship</option>
                     <option value="manager">Manager</option>

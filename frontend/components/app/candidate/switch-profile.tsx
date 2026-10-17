@@ -22,11 +22,15 @@ export function ViewingAs() {
 
   return (
     <>
-      <p className="text-xs text-muted-foreground">
-        Demo: {me ? <>viewing as <span className="font-medium text-foreground">{me.name || "Unnamed"}</span></> : "no profile yet"}
+      <p className="text-xs whitespace-nowrap text-muted-foreground">
+        {/* Short on laptop widths so the header stays on one row; the full sentence from 1280 px. */}
+        <span className="hidden xl:inline">Demo: </span>
+        {me ? <><span className="hidden xl:inline">viewing as </span>
+          <span className="inline-block max-w-[10rem] truncate align-bottom font-medium text-foreground xl:max-w-[16rem]"
+            title={me.name || "Unnamed"}>{me.name || "Unnamed"}</span></> : "no profile yet"}
         {" · "}
-        <button type="button" className="font-medium text-primary hover:underline" onClick={() => setOpen(true)}>
-          Switch profile</button>
+        <button type="button" aria-label="Switch profile" className="font-medium text-primary hover:underline" onClick={() => setOpen(true)}>
+          Switch<span className="hidden xl:inline"> profile</span></button>
       </p>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +32,7 @@ function Select({ id, label, value, options, onChange, blank = "Choose…" }: { 
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
       <select id={id} value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}
-        className="h-9 w-full rounded-lg border border-input bg-white px-2 text-sm focus-visible:outline-2 focus-visible:outline-ring">
+        className="h-9 w-full rounded-lg border border-field-border bg-field px-2 text-sm focus-visible:outline-2 focus-visible:outline-ring">
         {blank !== null && <option value="">{blank}</option>}
         {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
       </select>
@@ -126,7 +125,7 @@ export function DetailsForm({ candidateId, initial, onSaved, extra, saveLabel = 
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="q-links">Links (personal site, writing, talks)</Label>
             <textarea id="q-links" rows={2} value={links} onChange={(e) => setLinks(e.target.value)}
-              placeholder="https://…" className="w-full rounded-lg border border-input bg-white px-2.5 py-1.5 text-sm focus-visible:outline-2 focus-visible:outline-ring" />
+              placeholder="https://…" className="w-full rounded-lg border border-field-border bg-field px-2.5 py-1.5 text-sm focus-visible:outline-2 focus-visible:outline-ring" />
             <p className="text-xs text-muted-foreground">One per line.</p>
           </div>
         </CardContent>
@@ -135,11 +134,6 @@ export function DetailsForm({ candidateId, initial, onSaved, extra, saveLabel = 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Voluntary self-identification</CardTitle>
-          <div role="note" className="flex gap-2 rounded-md bg-muted px-3 py-2 text-sm">
-            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden />
-            <span>Answering is voluntary. Your answers never affect any score, are never shown to recruiters, and are
-              never read by an AI model. &ldquo;Decline to answer&rdquo; is always fine.</span>
-          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           {EEO.map((f) => (

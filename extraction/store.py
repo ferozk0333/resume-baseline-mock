@@ -10,7 +10,7 @@ from datetime import date
 
 from core.db import new_id, now_iso
 from extraction.records import (
-    BulletRec, CertificationRec, ClaimRec, Profile, ProjectRec, ReferenceRec, RoleRec,
+    BulletRec, CertificationRec, ClaimRec, ExtraItem, Profile, ProjectRec, ReferenceRec, RoleRec,
 )
 
 PROFILE_TABLES = ("roles", "projects", "bullets", "claims", "certifications", "references_")
@@ -22,6 +22,19 @@ def _iso(d: date | None) -> str | None:
 
 def _date(s: str | None) -> date | None:
     return date.fromisoformat(s) if s else None
+
+
+def _list(v: list | None) -> str | None:
+    return json.dumps(v) if v else None
+
+
+def _json(raw: str | None, empty):
+    return json.loads(raw) if raw else empty
+
+
+def _col(row, name: str):
+    """A column added later (specs/19): absent in a row read before the migration ran."""
+    return row[name] if name in row.keys() else None
 
 
 def create_candidate(conn: sqlite3.Connection, name: str | None = None, target_role: str | None = None,
@@ -74,11 +87,11 @@ def list_evidence(conn: sqlite3.Connection, candidate_id: str) -> list[dict]:
 def _insert_role(conn, candidate_id: str, r: RoleRec) -> None:
     conn.execute(
         "INSERT INTO roles (id, candidate_id, evidence_id, title, employer, industry, start_date, end_date, "
-        "is_current, team_size, quote, source, needs_review, review_reasons, method) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "is_current, team_size, quote, source, needs_review, review_reasons, method, location, sources) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (r.id, candidate_id, r.evidence_id, r.title, r.employer, r.industry, _iso(r.start_date),
          _iso(r.end_date), int(r.is_current), r.team_size, r.quote, r.source, int(r.needs_review),
-         json.dumps(r.review_reasons), r.method),
+         json.dumps(r.review_reasons), r.method, r.location, _list(r.sources)),
     )
     _insert_bullets(conn, candidate_id, r.bullets, role_id=r.id)
 
@@ -86,11 +99,12 @@ def _insert_role(conn, candidate_id: str, r: RoleRec) -> None:
 def _insert_project(conn, candidate_id: str, p: ProjectRec) -> None:
     conn.execute(
         "INSERT INTO projects (id, candidate_id, evidence_id, role_id, kind, name, description, url, "
-        "start_date, end_date, is_fork, own_commits, quote, source, needs_review, review_reasons, method) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "start_date, end_date, is_fork, own_commits, quote, source, needs_review, review_reasons, method, details, "
+        "sources) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (p.id, candidate_id, p.evidence_id, p.role_id, p.kind, p.name, p.description, p.url,
          _iso(p.start_date), _iso(p.end_date), None if p.is_fork is None else int(p.is_fork),
-         p.own_commits, p.quote, p.source, int(p.needs_review), json.dumps(p.review_reasons), p.method),
+         p.own_commits, p.quote, p.source, int(p.needs_review), json.dumps(p.review_reasons), p.method,
+         json.dumps(p.details) if p.details else None, _list(p.sources)),
     )
     _insert_bullets(conn, candidate_id, p.bullets, project_id=p.id)
 
@@ -106,19 +120,19 @@ def _insert_bullets(conn, candidate_id: str, bullets: list[BulletRec], role_id=N
 
 def _insert_claim(conn, candidate_id: str, c: ClaimRec) -> None:
     conn.execute(
-        "INSERT INTO claims (id, candidate_id, evidence_id, bullet_id, kind, name_raw, name_norm, quote, source, method) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO claims (id, candidate_id, evidence_id, bullet_id, kind, name_raw, name_norm, quote, source, method, "
+        "details, skill_group, sources) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (c.id, candidate_id, c.evidence_id, c.bullet_id, c.kind, c.name_raw, c.name_norm, c.quote, c.source,
-         c.method),
+         c.method, json.dumps(c.details) if c.details else None, c.skill_group, _list(c.sources)),
     )
 
 
 def _insert_certification(conn, candidate_id: str, c: CertificationRec) -> None:
     conn.execute(
         "INSERT INTO certifications (id, candidate_id, evidence_id, name, issuer, issued_date, credential_id, "
-        "verify_url, verified, source, method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "verify_url, verified, source, method, sources) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (c.id, candidate_id, c.evidence_id, c.name, c.issuer, _iso(c.issued_date), c.credential_id,
-         c.verify_url, int(c.verified), c.source, c.method),
+         c.verify_url, int(c.verified), c.source, c.method, _list(c.sources)),
     )
 
 
@@ -255,7 +269,8 @@ def load_profile(conn: sqlite3.Connection, candidate_id: str) -> Profile:
                 start_date=_date(r["start_date"]), end_date=_date(r["end_date"]), is_current=bool(r["is_current"]),
                 team_size=r["team_size"], quote=r["quote"], evidence_id=r["evidence_id"],
                 bullets=bullets.get(r["id"], []), review_reasons=json.loads(r["review_reasons"] or "[]"),
-                source=r["source"], method=r["method"])
+                source=r["source"], method=r["method"], location=_col(r, "location"),
+                sources=_json(_col(r, "sources"), []))
         for r in q("SELECT * FROM roles WHERE candidate_id = ? ORDER BY rowid")
     ]
     projects = [
@@ -264,19 +279,21 @@ def load_profile(conn: sqlite3.Connection, candidate_id: str) -> Profile:
                    evidence_id=p["evidence_id"], role_id=p["role_id"],
                    is_fork=None if p["is_fork"] is None else bool(p["is_fork"]), own_commits=p["own_commits"],
                    bullets=bullets.get(p["id"], []), review_reasons=json.loads(p["review_reasons"] or "[]"),
-                   source=p["source"], method=p["method"])
+                   source=p["source"], method=p["method"], details=_json(_col(p, "details"), {}),
+                   sources=_json(_col(p, "sources"), []))
         for p in q("SELECT * FROM projects WHERE candidate_id = ? ORDER BY rowid")
     ]
     claims = [
         ClaimRec(id=c["id"], kind=c["kind"], name_raw=c["name_raw"], name_norm=c["name_norm"], quote=c["quote"],
                  evidence_id=c["evidence_id"], bullet_id=c["bullet_id"], source=c["source"] or "extracted",
-                 method=c["method"])
+                 method=c["method"], details=_json(_col(c, "details"), {}), skill_group=_col(c, "skill_group"),
+                 sources=_json(_col(c, "sources"), []))
         for c in q("SELECT * FROM claims WHERE candidate_id = ? ORDER BY rowid")
     ]
     certs = [
         CertificationRec(id=c["id"], name=c["name"], issuer=c["issuer"], issued_date=_date(c["issued_date"]),
                          credential_id=c["credential_id"], verify_url=c["verify_url"], evidence_id=c["evidence_id"],
-                         source=c["source"] or "extracted", method=c["method"])
+                         source=c["source"] or "extracted", method=c["method"], sources=_json(_col(c, "sources"), []))
         for c in q("SELECT * FROM certifications WHERE candidate_id = ? ORDER BY rowid")
     ]
     refs = [
@@ -306,6 +323,7 @@ def reset_candidate_evidence(conn: sqlite3.Connection, candidate_id: str) -> Non
         conn.execute("DELETE FROM dropped_items WHERE candidate_id = ?", (candidate_id,))
         conn.execute("DELETE FROM deleted_items WHERE candidate_id = ?", (candidate_id,))       # a new read starts over
         conn.execute("DELETE FROM suppressed_items WHERE candidate_id = ?", (candidate_id,))
+        conn.execute("DELETE FROM extra_items WHERE candidate_id = ? AND source = 'extracted'", (candidate_id,))
 
 
 # --- Review-step edits (every edited or added row is source = user_edit) ---------------------------
@@ -355,7 +373,8 @@ def set_bullets(conn: sqlite3.Connection, candidate_id: str, texts: list[str], *
 
 def save_role(conn: sqlite3.Connection, candidate_id: str, *, role_id: str | None = None, title: str,
               employer: str | None, industry: str | None, start_date: date | None, end_date: date | None,
-              is_current: bool, team_size: int | None, bullets: list[str], today: date | None = None) -> str:
+              is_current: bool, team_size: int | None, bullets: list[str], today: date | None = None,
+              location: str | None = None) -> str:
     """Add (role_id=None) or update a role from the review step."""
     if not title.strip():
         raise ValueError("A role needs a title.")
@@ -364,35 +383,42 @@ def save_role(conn: sqlite3.Connection, candidate_id: str, *, role_id: str | Non
     with conn:
         conn.execute(
             "INSERT INTO roles (id, candidate_id, title, employer, industry, start_date, end_date, is_current, "
-            "team_size, quote, source, needs_review, review_reasons) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, "
-            "'user_edit', ?, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title, employer = excluded.employer, "
+            "team_size, quote, source, needs_review, review_reasons, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, "
+            "'user_edit', ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title, employer = excluded.employer, "
             "industry = excluded.industry, start_date = excluded.start_date, end_date = excluded.end_date, "
             "is_current = excluded.is_current, team_size = excluded.team_size, source = 'user_edit', "
-            "needs_review = excluded.needs_review, review_reasons = excluded.review_reasons",
+            "needs_review = excluded.needs_review, review_reasons = excluded.review_reasons, "
+            "location = excluded.location",
             (role_id, candidate_id, title.strip(), employer or None, industry or None, _iso(s), _iso(e), int(current),
-             team_size, int(bool(reasons)), json.dumps(reasons)),
+             team_size, int(bool(reasons)), json.dumps(reasons), (location or "").strip() or None),
         )
     set_bullets(conn, candidate_id, bullets, role_id=role_id)
     return role_id
 
 
+PROJECT_KINDS = ("project", "repo", "work_sample", "hackathon", "publication", "case_study", "presentation", "portfolio")
+
+
 def save_project(conn: sqlite3.Connection, candidate_id: str, *, project_id: str | None = None, kind: str, name: str,
                  description: str | None, url: str | None, start_date: date | None, end_date: date | None,
-                 bullets: list[str], today: date | None = None) -> str:
+                 bullets: list[str], today: date | None = None, role_id: str | None = None,
+                 details: dict | None = None) -> str:
     if not name.strip():
         raise ValueError("A project needs a name.")
+    if kind not in PROJECT_KINDS:
+        raise ValueError(f"Unknown project type {kind!r}.")
     s, e, _, reasons = _dates_and_reasons(start_date, end_date, False, False, today)
     project_id = project_id or str(uuid.uuid4())
     with conn:
         conn.execute(
             "INSERT INTO projects (id, candidate_id, kind, name, description, url, start_date, end_date, quote, source, "
-            "needs_review, review_reasons) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'user_edit', ?, ?) "
+            "needs_review, review_reasons, role_id, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'user_edit', ?, ?, ?, ?) "
             "ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, name = excluded.name, "
             "description = excluded.description, url = excluded.url, start_date = excluded.start_date, "
             "end_date = excluded.end_date, source = 'user_edit', needs_review = excluded.needs_review, "
-            "review_reasons = excluded.review_reasons",
+            "review_reasons = excluded.review_reasons, role_id = excluded.role_id, details = excluded.details",
             (project_id, candidate_id, kind, name.strip(), description or None, url or None, _iso(s), _iso(e),
-             int(bool(reasons)), json.dumps(reasons)),
+             int(bool(reasons)), json.dumps(reasons), role_id or None, _clean_details(details)),
         )
     set_bullets(conn, candidate_id, bullets, project_id=project_id)
     return project_id
@@ -414,14 +440,25 @@ def delete_item(conn: sqlite3.Connection, table: str, item_id: str) -> None:
         conn.execute(f"DELETE FROM {table} WHERE id = ?", (item_id,))
 
 
-def add_claim(conn: sqlite3.Connection, candidate_id: str, kind: str, name: str) -> str:
+def _clean_details(details: dict | None) -> str | None:
+    out = {k: str(v).strip() for k, v in (details or {}).items() if v is not None and str(v).strip()}
+    return json.dumps(out) if out else None
+
+
+def add_claim(conn: sqlite3.Connection, candidate_id: str, kind: str, name: str, *, skill_group: str | None = None,
+              details: dict | None = None, claim_id: str | None = None) -> str:
+    """Add (or, with claim_id, edit) a skill, tool or award typed in Review."""
     from extraction.validate import normalize_claim
     if kind not in ("skill", "tool", "award") or not name.strip():
         raise ValueError("A skill, tool or award needs a name.")
-    cid = str(uuid.uuid4())
+    cid = claim_id or str(uuid.uuid4())
     with conn:
-        conn.execute("INSERT INTO claims (id, candidate_id, kind, name_raw, name_norm, source) "
-                     "VALUES (?, ?, ?, ?, ?, 'user_edit')", (cid, candidate_id, kind, name.strip(), normalize_claim(name)))
+        conn.execute("INSERT INTO claims (id, candidate_id, kind, name_raw, name_norm, source, skill_group, details) "
+                     "VALUES (?, ?, ?, ?, ?, 'user_edit', ?, ?) ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, "
+                     "name_raw = excluded.name_raw, name_norm = excluded.name_norm, source = 'user_edit', quote = NULL, "
+                     "skill_group = COALESCE(excluded.skill_group, skill_group), details = excluded.details",
+                     (cid, candidate_id, kind, name.strip(), normalize_claim(name), skill_group or None,
+                      _clean_details(details)))
     return cid
 
 
@@ -430,13 +467,120 @@ def save_certification(conn: sqlite3.Connection, candidate_id: str, *, cert_id: 
                        verify_url: str | None) -> str:
     if not name.strip():
         raise ValueError("A certification needs a name.")
+    old = conn.execute("SELECT evidence_id, sources FROM certifications WHERE id = ?", (cert_id,)).fetchone() \
+        if cert_id else None                       # an edit keeps where it came from (source chips)
     rec = CertificationRec(name=name.strip(), issuer=issuer or None, issued_date=issued_date,
-                           credential_id=credential_id or None, verify_url=verify_url or None, evidence_id=None,
-                           source="user_edit", id=cert_id or str(uuid.uuid4()))
+                           credential_id=credential_id or None, verify_url=verify_url or None,
+                           evidence_id=old["evidence_id"] if old else None, source="user_edit",
+                           id=cert_id or str(uuid.uuid4()), sources=_json(old["sources"], []) if old else [])
     with conn:
         conn.execute("DELETE FROM certifications WHERE id = ?", (rec.id,))
         _insert_certification(conn, candidate_id, rec)
     return rec.id
+
+
+def confirm_dates(conn: sqlite3.Connection, table: str, item_id: str) -> None:
+    """ "The months are right": clears the year-only flags without changing the dates or the item's source."""
+    if table not in ("roles", "projects"):
+        raise ValueError(table)
+    row = conn.execute(f"SELECT review_reasons FROM {table} WHERE id = ?", (item_id,)).fetchone()
+    if row is None:
+        raise ValueError("Item not found.")
+    reasons = [r for r in json.loads(row[0] or "[]") if r not in ("year_only_start", "year_only_end")
+               and not r.startswith("sources_disagree_dates")]
+    with conn:
+        conn.execute(f"UPDATE {table} SET review_reasons = ?, needs_review = ? WHERE id = ?",
+                     (json.dumps(reasons), int(bool(reasons)), item_id))
+
+
+# --- Display-only proof types (specs/19 Phase D) -------------------------------------------------------------------
+
+EXTRA_TYPES = ("education", "patent", "volunteering", "course", "language")
+
+
+def list_extra(conn: sqlite3.Connection, candidate_id: str) -> list[ExtraItem]:
+    rows = conn.execute("SELECT * FROM extra_items WHERE candidate_id = ? ORDER BY position, rowid",
+                        (candidate_id,)).fetchall()
+    return [ExtraItem(type=r["type"], fields=json.loads(r["fields_json"] or "{}"), evidence_id=r["evidence_id"],
+                      quote=r["quote"], source=r["source"] or "extracted", id=r["id"]) for r in rows]
+
+
+def save_extra(conn: sqlite3.Connection, candidate_id: str, type: str, fields: dict, item_id: str | None = None) -> str:
+    """Add or edit one item typed in Review (source = user_edit)."""
+    if type not in EXTRA_TYPES:
+        raise ValueError(f"unknown proof type {type!r}")
+    clean = {k: str(v).strip() for k, v in fields.items() if v is not None and str(v).strip() and k != "_also"}
+    if not clean:
+        raise ValueError("Fill in at least one field.")
+    iid = item_id or str(uuid.uuid4())
+    if item_id:                                  # an edit keeps where it came from
+        old = conn.execute("SELECT fields_json FROM extra_items WHERE id = ?", (item_id,)).fetchone()
+        if old and json.loads(old[0] or "{}").get("_also"):
+            clean["_also"] = json.loads(old[0])["_also"]
+    pos = conn.execute("SELECT COALESCE(MAX(position), 0) + 1 FROM extra_items WHERE candidate_id = ?",
+                       (candidate_id,)).fetchone()[0]
+    with conn:
+        conn.execute("INSERT INTO extra_items (id, candidate_id, type, fields_json, source, position, created_at) "
+                     "VALUES (?, ?, ?, ?, 'user_edit', ?, ?) ON CONFLICT(id) DO UPDATE SET "
+                     "fields_json = excluded.fields_json, source = 'user_edit'",
+                     (iid, candidate_id, type, json.dumps(clean), pos, now_iso()))
+    return iid
+
+
+EXTRA_MAIN = {"education": ("school", "degree"), "language": ("language",), "course": ("name",),
+              "patent": ("title", "number"), "volunteering": ("organization", "role")}
+
+
+def extra_key(type: str, fields: dict) -> str:
+    from core.text import normalize_name
+    return type + ":" + "|".join(normalize_name(fields.get(f)) for f in EXTRA_MAIN.get(type, ()))
+
+
+def merge_extracted_extra(conn: sqlite3.Connection, candidate_id: str, evidence_id: str,
+                          items: list[ExtraItem]) -> None:
+    """A document's display-only items: earlier ones read from the same document go; one another document already
+    named gets this document as a source (and any field it lacked); one the candidate deleted stays deleted."""
+    with conn:
+        conn.execute("DELETE FROM extra_items WHERE candidate_id = ? AND evidence_id = ? AND source = 'extracted'",
+                     (candidate_id, evidence_id))
+    gone = {r[0] for r in conn.execute("SELECT key FROM deleted_items WHERE candidate_id = ? AND item_type = 'extra'",
+                                       (candidate_id,))}
+    have = {extra_key(x.type, x.fields): x for x in list_extra(conn, candidate_id)}
+    base = conn.execute("SELECT COALESCE(MAX(position), 0) FROM extra_items WHERE candidate_id = ?",
+                        (candidate_id,)).fetchone()[0]
+    with conn:
+        for i, x in enumerate(items):
+            k = extra_key(x.type, x.fields)
+            if k in gone:
+                continue
+            if k in have:
+                old = have[k]
+                fields = {**x.fields, **old.fields} if old.source == "extracted" else dict(old.fields)
+                fields["_also"] = list(dict.fromkeys([*old.fields.get("_also", []), evidence_id]))
+                conn.execute("UPDATE extra_items SET fields_json = ? WHERE id = ?", (json.dumps(fields), old.id))
+                continue
+            have[k] = x
+            conn.execute("INSERT INTO extra_items (id, candidate_id, evidence_id, type, fields_json, quote, source, "
+                         "position, created_at) VALUES (?, ?, ?, ?, ?, ?, 'extracted', ?, ?)",
+                         (x.id, candidate_id, evidence_id, x.type, json.dumps(x.fields), x.quote, base + i + 1,
+                          now_iso()))
+
+
+def delete_extra(conn: sqlite3.Connection, candidate_id: str, item_id: str) -> dict | None:
+    """Delete one item; returns its row so Undo can put it back."""
+    row = conn.execute("SELECT * FROM extra_items WHERE id = ? AND candidate_id = ?", (item_id, candidate_id)).fetchone()
+    if row is None:
+        return None
+    with conn:
+        conn.execute("DELETE FROM extra_items WHERE id = ?", (item_id,))
+    return dict(row)
+
+
+def restore_extra(conn: sqlite3.Connection, row: dict) -> None:
+    with conn:
+        conn.execute("INSERT OR REPLACE INTO extra_items (id, candidate_id, evidence_id, type, fields_json, quote, "
+                     "source, position, created_at) VALUES (:id, :candidate_id, :evidence_id, :type, :fields_json, "
+                     ":quote, :source, :position, :created_at)", row)
 
 
 SOURCE_ORDER = ["resume", "linkedin_pdf", "portfolio", "github_repo"]
@@ -468,6 +612,60 @@ def remerge_roles(conn: sqlite3.Connection, candidate_id: str) -> int:
             conn.execute("UPDATE dropped_items SET parent_id = ? WHERE candidate_id = ? AND parent_id = ?",
                          (new, candidate_id, old))
     return len(report.role_remap)
+
+
+def remerge(conn: sqlite3.Connection, candidate_id: str) -> dict:
+    """Re-run the whole cross-source merge on a saved profile (specs/19 Phase C; no extraction, no model calls).
+    Items are regrouped by the document they came from (resume, LinkedIn, portfolio, repos; typed ones last) and
+    merged with today's rules, so duplicates the old merge kept become one. Returns what merged: {type: [names]}."""
+    from extraction.validate import merge_profiles
+    profile = load_profile(conn, candidate_id)
+    types = {e["id"]: e["type"] for e in list_evidence(conn, candidate_id)}
+
+    def rank(eid):
+        t = types.get(eid)
+        return SOURCE_ORDER.index(t) if t in SOURCE_ORDER else len(SOURCE_ORDER)
+    groups: dict[object, Profile] = {}
+    for table in ("roles", "projects", "claims", "certifications"):
+        for rec in getattr(profile, table):
+            getattr(groups.setdefault(rec.evidence_id, Profile()), table).append(rec)
+    parts = [groups[k] for k in sorted(groups, key=lambda e: (rank(e), str(e)))] or [Profile()]
+    parts[0].references = profile.references
+    before = {t: [_name(x) for x in getattr(profile, t)] for t in ("roles", "projects", "claims", "certifications")}
+    merged, report = merge_profiles(parts, types)
+    _keep_order(profile, merged, report)
+    after_ids = {x.id for t in ("roles", "projects", "claims", "certifications") for x in getattr(merged, t)}
+    gone = {t: [_name(x) for x in getattr(profile, t) if x.id not in after_ids]
+            for t in ("roles", "projects", "claims", "certifications")}
+    save_profile(conn, candidate_id, merged)
+    with conn:
+        for old, new in {**report.role_remap, **report.project_remap}.items():
+            conn.execute("UPDATE dropped_items SET parent_id = ? WHERE candidate_id = ? AND parent_id = ?",
+                         (new, candidate_id, old))
+    return {"merged_away": {t: v for t, v in gone.items() if v}, "before": before}
+
+
+def _keep_order(before: Profile, merged: Profile, report) -> None:
+    """Items stay in their saved order (a merged item takes its group's first place): judge inputs that list items
+    (the skills list, artifacts) change only where something merged."""
+    from extraction.validate import _same_certification, _same_project, claim_key
+    remap = {**report.role_remap, **report.project_remap}
+    same = {"projects": _same_project, "certifications": _same_certification,
+            "claims": lambda a, b: claim_key(a) == claim_key(b)}
+    for table in ("roles", "projects", "claims", "certifications"):
+        old = getattr(before, table)
+        pos = {x.id: i for i, x in enumerate(old)}
+
+        def first(x, table=table, old=old, pos=pos):
+            group = [i for o, i in pos.items() if remap.get(o) == x.id]
+            if table in same:
+                group += [i for i, o in enumerate(old) if same[table](o, x)]
+            return min([pos.get(x.id, len(old)), *group])
+        getattr(merged, table).sort(key=first)
+
+
+def _name(x) -> str:
+    return getattr(x, "name_raw", None) or getattr(x, "name", None) or f"{x.title} @ {x.employer}"
 
 
 def remove_profile_repos(conn: sqlite3.Connection, candidate_id: str) -> list[str]:

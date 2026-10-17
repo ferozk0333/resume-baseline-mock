@@ -495,7 +495,28 @@ def panel(conn, app: dict, job: dict) -> dict:
             "linkedin_link": li.profile_link(cand, evidence),
             "resume_file": bool(resume and resume["file_path"]),
             "resume_file_kind": (resume["file_path"].rsplit(".", 1)[-1] if resume and resume["file_path"] else None),
+            **proof_shown(conn, app["candidate_id"], profile, evidence),
         },
+    }
+
+
+EXTRA_LABELS = {"education": "Education", "patent": "Patents", "volunteering": "Volunteering", "course": "Courses",
+                "language": "Languages"}
+
+
+def proof_shown(conn, candidate_id: str, profile, evidence: list[dict]) -> dict:
+    """Certifications with honest credential wording, and the display-only proof types (specs/19 Phase D: shown to
+    recruiters, not scored). Application details and EEO answers are never part of this."""
+    from backend.review import chips, credential_status
+    from extraction import store as st
+    types = {e["id"]: e["type"] for e in evidence}
+    extra = st.list_extra(conn, candidate_id)
+    return {
+        "certifications": [{"name": c.name, "issuer": c.issuer, "credential_status": credential_status(c),
+                            "sources": chips(c, types)} for c in profile.certifications],
+        "more": [{"type": x.type, "label": EXTRA_LABELS[x.type],
+                  "fields": {k: v for k, v in x.fields.items() if k != "_also"}} for x in extra
+                 if x.type in EXTRA_LABELS],
     }
 
 

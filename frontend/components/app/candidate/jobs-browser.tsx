@@ -128,7 +128,7 @@ export function JobsBrowser({ cid }: { cid: string }) {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
       {list}
       <div className="hidden lg:block">
-        <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl border bg-white p-5">
+        <div className="sticky top-[calc(var(--header-h)+1rem)] max-h-[calc(100vh-var(--header-h)-2rem)] overflow-y-auto rounded-xl border bg-white p-5">
           {selected ? <JobDetailView cid={cid} jobId={selected} onChanged={load} />
             : <p className="text-sm text-muted-foreground">Pick a job to see the details.</p>}
         </div>
@@ -172,7 +172,7 @@ function Empty({ title, text, children }: { title: string; text: string; childre
 }
 
 function FilterBar({ f, setF, data }: { f: Filters; setF: (f: Filters) => void; data: HomeJobs }) {
-  const sel = "h-8 rounded-lg border border-input bg-white px-2 text-sm";
+  const sel = "h-8 rounded-lg border border-field-border bg-field px-2 text-sm";
   return (
     <div role="group" aria-label="Filters" className="flex flex-wrap items-center gap-2 text-sm">
       <select aria-label="Role" className={sel} value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>

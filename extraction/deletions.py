@@ -52,35 +52,88 @@ def record(item_type: str, payload: str):
         return RoleRec(title=p["title"], employer=p["employer"], industry=p["industry"], start_date=_d(p["start_date"]),
                        end_date=_d(p["end_date"]), is_current=p["is_current"], team_size=p["team_size"],
                        quote=p["quote"], evidence_id=p["evidence_id"], bullets=bullets(p["bullets"]),
-                       review_reasons=p["review_reasons"], source=p["source"], method=p.get("method"), id=p["id"])
+                       review_reasons=p["review_reasons"], source=p["source"], method=p.get("method"), id=p["id"],
+                       location=p.get("location"), sources=p.get("sources") or [])
     if item_type == "project":
         return ProjectRec(kind=p["kind"], name=p["name"], description=p["description"], url=p["url"],
                           start_date=_d(p["start_date"]), end_date=_d(p["end_date"]), quote=p["quote"],
                           evidence_id=p["evidence_id"], role_id=None, is_fork=p.get("is_fork"),
                           own_commits=p.get("own_commits"), bullets=bullets(p["bullets"]),
-                          review_reasons=p["review_reasons"], source=p["source"], method=p.get("method"), id=p["id"])
+                          review_reasons=p["review_reasons"], source=p["source"], method=p.get("method"), id=p["id"],
+                          details=p.get("details") or {}, sources=p.get("sources") or [])
     if item_type == "claim":
         return ClaimRec(kind=p["kind"], name_raw=p["name_raw"], name_norm=p["name_norm"], quote=p["quote"],
                         evidence_id=p["evidence_id"], bullet_id=None, source=p["source"], method=p.get("method"),
-                        id=p["id"])
+                        id=p["id"], details=p.get("details") or {}, skill_group=p.get("skill_group"),
+                        sources=p.get("sources") or [])
     return CertificationRec(name=p["name"], issuer=p["issuer"], issued_date=_d(p["issued_date"]),
                             credential_id=p["credential_id"], verify_url=p["verify_url"], evidence_id=p["evidence_id"],
-                            source=p["source"], method=p.get("method"), id=p["id"])
+                            source=p["source"], method=p.get("method"), id=p["id"], sources=p.get("sources") or [])
 
 
-def remember(conn, candidate_id: str, table: str, item_id: str) -> None:
-    """Call before deleting the item."""
+def remember(conn, candidate_id: str, table: str, item_id: str) -> str | None:
+    """Call before deleting the item. Returns the id Undo uses (specs/19 item 7). What pointed at the item (a claim
+    named in one of its bullets, a project under a role, a claim's bullet) is kept so Undo restores the links."""
     item_type = TYPES.get(table)
     if item_type is None:
-        return
+        return None
     profile = store.load_profile(conn, candidate_id)
     rec = next((x for x in getattr(profile, table) if x.id == item_id), None)
     if rec is None:
-        return
+        return None
+    payload = json.loads(_payload(rec))
+    if item_type in ("role", "project"):
+        ids = {b.id for b in rec.bullets}
+        payload["_links"] = {"claims": {c.id: c.bullet_id for c in profile.claims if c.bullet_id in ids},
+                             "projects": [p.id for p in profile.projects if item_type == "role" and p.role_id == rec.id]}
+    elif item_type == "claim":
+        payload["_links"] = {"bullet_id": rec.bullet_id}
+    did = new_id()
     with conn:
         conn.execute("INSERT INTO deleted_items (id, candidate_id, item_type, key, label, payload, created_at) "
-                     "VALUES (?, ?, ?, ?, ?, ?, ?)", (new_id(), candidate_id, item_type, key_of(item_type, rec),
-                                                      label_of(item_type, rec), _payload(rec), now_iso()))
+                     "VALUES (?, ?, ?, ?, ?, ?, ?)", (did, candidate_id, item_type, key_of(item_type, rec),
+                                                      label_of(item_type, rec), json.dumps(payload), now_iso()))
+    return did
+
+
+def remember_extra(conn, candidate_id: str, row: dict) -> str:
+    """A display-only item (education, languages, …): a later document naming it does not bring it back."""
+    did = new_id()
+    fields = json.loads(row["fields_json"] or "{}")
+    with conn:
+        conn.execute("INSERT INTO deleted_items (id, candidate_id, item_type, key, label, payload, created_at) "
+                     "VALUES (?, ?, 'extra', ?, ?, ?, ?)", (did, candidate_id, store.extra_key(row["type"], fields),
+                                                            row["type"], json.dumps(row), now_iso()))
+    return did
+
+
+def undo(conn, candidate_id: str, deleted_id: str) -> None:
+    """Put a deleted item back exactly as it was (same ids, so saved judgments still apply) and forget the deletion."""
+    row = conn.execute("SELECT item_type, payload FROM deleted_items WHERE id = ? AND candidate_id = ?",
+                       (deleted_id, candidate_id)).fetchone()
+    if row is None:
+        raise ValueError("Nothing to undo.")
+    payload = json.loads(row["payload"])
+    with store.candidate_lock(candidate_id):
+        if row["item_type"] == "extra":
+            store.restore_extra(conn, payload)
+        else:
+            rec = record(row["item_type"], row["payload"])
+            links = payload.get("_links") or {}
+            if row["item_type"] == "claim" and links.get("bullet_id") and \
+                    conn.execute("SELECT 1 FROM bullets WHERE id = ?", (links["bullet_id"],)).fetchone():
+                rec.bullet_id = links["bullet_id"]
+            insert = {"role": store._insert_role, "project": store._insert_project, "claim": store._insert_claim,
+                      "certification": store._insert_certification}[row["item_type"]]
+            with conn:
+                insert(conn, candidate_id, rec)
+                for claim_id, bullet_id in (links.get("claims") or {}).items():
+                    conn.execute("UPDATE claims SET bullet_id = ? WHERE id = ? AND bullet_id IS NULL",
+                                 (bullet_id, claim_id))
+                for pid in links.get("projects") or []:
+                    conn.execute("UPDATE projects SET role_id = ? WHERE id = ? AND role_id IS NULL", (rec.id, pid))
+        with conn:
+            conn.execute("DELETE FROM deleted_items WHERE id = ?", (deleted_id,))
 
 
 def _same(item_type: str, row, rec) -> bool:

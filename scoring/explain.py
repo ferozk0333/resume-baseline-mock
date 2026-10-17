@@ -17,7 +17,7 @@ FORMULAS = {
     "scope_of_impact": "expected reach − best reach: ≤0 → 1 · 1 → 0.5 · ≥2 → 0",
     "recognition": "(relevant award + relevant publication) ÷ 2",
     "proof_density": "average best support per claim: artifact 1 · bullet 0.5 · claimed only 0",
-    "validation_strength": "manager/supervisor reference confirming relevant work 1 · verified relevant certificate 0.5",
+    "validation_strength": "manager/supervisor reference confirming relevant work 1 · relevant certificate with a credential ID or link 0.5",
     "consistency": "1 if LinkedIn, GitHub or portfolio aligns with the resume, else 0",
     "evidence_quality": "average over roles/projects of (yes checks ÷ 5)",
 }

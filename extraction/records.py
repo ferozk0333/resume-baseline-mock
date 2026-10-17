@@ -49,6 +49,8 @@ class RoleRec:
     source: str = "extracted"
     method: str | None = None
     id: str = field(default_factory=new_id)
+    location: str | None = None       # display only (specs/19 item 7)
+    sources: list[str] = field(default_factory=list)   # evidence ids merged into this item; display only (item 18)
 
     @property
     def needs_review(self) -> bool:
@@ -73,6 +75,8 @@ class ProjectRec:
     source: str = "extracted"
     method: str | None = None
     id: str = field(default_factory=new_id)
+    details: dict = field(default_factory=dict)        # type-specific fields shown in Review (venue, event, …)
+    sources: list[str] = field(default_factory=list)
 
     @property
     def needs_review(self) -> bool:
@@ -94,6 +98,9 @@ class ClaimRec:
     source: str = "extracted"
     method: str | None = None
     id: str = field(default_factory=new_id)
+    details: dict = field(default_factory=dict)        # awards added in Review: issuer, date, what it was for
+    skill_group: str | None = None    # a group the candidate picked when adding it (display only)
+    sources: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -107,6 +114,7 @@ class CertificationRec:
     source: str = "extracted"
     method: str | None = None
     id: str = field(default_factory=new_id)
+    sources: list[str] = field(default_factory=list)
 
     @property
     def verified(self) -> bool:
@@ -121,6 +129,24 @@ class ReferenceRec:
     contact: str | None
     statement: str | None
     id: str = field(default_factory=new_id)
+
+
+@dataclass
+class ExtraItem:
+    """A display-only proof type (specs/19 Phase D): education, patents, volunteering, courses, languages.
+    Never part of Profile, so it never reaches a judge or a score; shown in Review and to recruiters."""
+    type: str                         # education | patent | volunteering | course | language
+    fields: dict
+    evidence_id: str | None = None
+    quote: str | None = None
+    source: str = "extracted"         # extracted | user_edit
+    id: str = field(default_factory=new_id)
+
+
+def sources_of(rec) -> list[str]:
+    """Evidence ids an item came from (its own first); "user" for one typed in Review."""
+    own = [rec.evidence_id] if rec.evidence_id else (["user"] if rec.source == "user_edit" else [])
+    return list(dict.fromkeys([*own, *rec.sources]))
 
 
 @dataclass

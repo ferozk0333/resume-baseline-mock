@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { get, type Baseline, type Criterion } from "@/lib/api";
 
 const REACH = ["", "Own work", "Team", "Cross-functional", "Organization", "External"];
-const selectClass = "h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm";
+const selectClass = "h-8 w-full rounded-lg border border-field-border bg-field px-2 text-sm";
 
 export const EMPTY_BASELINE: Baseline = { title: "", level: "entry", required_years: 1, expected_reach: 2,
   scope_expectation: "", complexity_criteria: "", description: "", is_mock: true, criteria: [] };

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 // Typed client for the FastAPI backend (specs/10 §2).
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -44,16 +46,25 @@ export type Task = { id: string; kind: string; status: "running" | "done" | "err
 export type TaskEvent = { seq: number; step: string; message: string; percent: number | null; status: string };
 
 export type Bullet = { id: string; text: string; source: string };
-export type Role = { id: string; title: string; employer: string | null; start_date: string | null;
-  end_date: string | null; is_current: boolean; bullets: Bullet[]; review_reasons: string[]; quote: string | null;
-  source: string; industry: string | null; team_size: number | null };
-export type Project = { id: string; kind: string; name: string; description: string | null; url: string | null;
-  start_date: string | null; end_date: string | null; bullets: Bullet[]; review_reasons: string[];
-  quote: string | null; is_fork: boolean | null; own_commits: number | null; source: string };
+/** Review fields (specs/19): `sources` are chips ("Resume", "LinkedIn", "Added by you"); `review_codes` the raw
+ * date flags; `year_only` and `conflict` feed "Needs your attention". */
+type ReviewItem = { review_reasons: string[]; review_codes?: string[]; year_only?: boolean; conflict?: string | null;
+  sources?: string[] };
+export type Role = ReviewItem & { id: string; title: string; employer: string | null; start_date: string | null;
+  end_date: string | null; is_current: boolean; bullets: Bullet[]; quote: string | null;
+  source: string; industry: string | null; team_size: number | null; location?: string | null };
+export type Project = ReviewItem & { id: string; kind: string; name: string; description: string | null; url: string | null;
+  start_date: string | null; end_date: string | null; bullets: Bullet[];
+  quote: string | null; is_fork: boolean | null; own_commits: number | null; source: string; role_id?: string | null;
+  details?: Record<string, string> };
 export type Claim = { id: string; kind: string; name_raw: string; bullet_id: string | null; source: string;
-  quote: string | null };
+  quote: string | null; group?: string; sources?: string[]; details?: Record<string, string> };
 export type Certification = { id: string; name: string; issuer: string | null; credential_id: string | null;
-  verify_url: string | null; source: string };
+  verify_url: string | null; source: string; issued_date?: string | null; sources?: string[];
+  exam_code?: string | null; credential_status?: string | null };
+/** Display-only proof types (specs/19 Phase D): shown to recruiters, never scored. */
+export type ExtraItem = { id: string; type: "education" | "patent" | "volunteering" | "course" | "language";
+  fields: Record<string, string>; source: string; quote: string | null; sources: string[] };
 export type Dropped = { id: string; item_type: string; text: string; reason: string };
 export type MediaLink = { id: string; url: string; kind: "youtube" | "loom"; title: string | null; embed_url: string };
 export type ProfileResponse = {
@@ -67,6 +78,9 @@ export type ProfileResponse = {
   mentions?: { id: string; item_type: string; label: string; source: string }[];
   /** "We ignored hidden text in your resume." (hidden text the injection screen also flagged). */
   notices?: string[];
+  extra?: ExtraItem[]; skill_groups?: string[];
+  /** After a delete: the id that "Undo" sends back. */
+  undo?: string | null;
 };
 
 export type Judgment = { question: string; subject_type: string; subject: string; label: string | null;
@@ -119,7 +133,10 @@ export type Panel = ApplicantRow & {
     link: string | null; backing: string; evidence_id: string | null }[] };
   work: { videos: MediaLink[]; repos: Repo[]; portfolio: { name: string; description: string | null; url: string | null }[];
     portfolio_url: string | null; linkedin: { roles: Role[]; claims: Claim[]; certifications: Certification[] } | null;
-    resume_file: boolean; resume_file_kind: string | null; linkedin_link: { url: string; source: string } | null };
+    resume_file: boolean; resume_file_kind: string | null; linkedin_link: { url: string; source: string } | null;
+    certifications?: { name: string; issuer: string | null; credential_status: string | null; sources: string[] }[];
+    /** Display-only proof (specs/19 Phase D): shown to recruiters, not scored. */
+    more?: { type: string; label: string; fields: Record<string, string> }[] };
 };
 export type CompareColumn = { application_id: string; name: string | null; match: number | null; confidence: number | null;
   dimensions: Record<string, number | null> | null; must_haves_met: number; must_haves_total: number; scored: boolean;
@@ -336,3 +353,11 @@ export type MyApplication = { application_id: string; job_id: string; title: str
   timeline: { key: string; label: string; state: "done" | "current" | "upcoming" | "not_reached"; date: string | null }[];
   reasons: { title: string; detail: string; advice: string; link: string | null }[]; waiting: boolean;
   waiting_text: string | null };
+
+// --- Uploads (specs/19 item 2) ------------------------------------------------------------------------------------
+/** The upload size limit from the server's config (10 MB until it answers). */
+export function useUploadLimit(): number {
+  const [max, setMax] = useState(10 * 1024 * 1024);
+  useEffect(() => { get<{ max_bytes: number }>("/settings/uploads").then((s) => setMax(s.max_bytes)).catch(() => {}); }, []);
+  return max;
+}

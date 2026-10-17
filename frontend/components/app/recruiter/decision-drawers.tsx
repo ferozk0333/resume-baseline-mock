@@ -156,7 +156,7 @@ export function StageEmailDrawer({ open, onOpenChange, applicationId, name, stag
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           <div className="flex gap-2">
             <select aria-label="Stage" value={stageId} onChange={(e) => setStageId(e.target.value)}
-              className="h-8 flex-1 rounded-lg border border-input bg-white px-2 text-sm">
+              className="h-8 flex-1 rounded-lg border border-field-border bg-field px-2 text-sm">
               <option value="">Choose a stage…</option>
               {stages.filter((s) => !s.terminal).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>

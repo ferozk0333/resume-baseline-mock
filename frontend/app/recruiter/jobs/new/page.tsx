@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { FileDrop } from "@/components/ui/file-drop";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Copy, FilePlus2, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -9,12 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Stepper } from "@/components/app/jobs/job-form";
-import { get, post, type JobForm, type JobTemplate } from "@/lib/api";
+import { get, post, useUploadLimit, type JobForm, type JobTemplate } from "@/lib/api";
 
 /** Create job, step 1 (specs/14 §3): from a job description, a copy of an existing job, or from scratch. */
 export default function NewJob() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
+  const maxBytes = useUploadLimit();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
@@ -50,11 +52,8 @@ export default function NewJob() {
             <CardDescription>PDF, DOCX or text. Fields are filled for you and marked “From JD”; everything stays editable.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="jd-file">File</Label>
-              <input id="jd-file" type="file" accept=".pdf,.docx,.txt,.md" className="block w-full text-sm"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-            </div>
+            <FileDrop id="jd-file" label="File" what="job description" accept={[".pdf", ".docx", ".txt", ".md"]}
+              typesLabel="PDF, DOCX or text" file={file} onFile={setFile} maxBytes={maxBytes} />
             <div className="space-y-1">
               <Label htmlFor="jd-text">Or paste the text</Label>
               <Textarea id="jd-text" value={text} onChange={(e) => setText(e.target.value)} disabled={!!file}
@@ -74,7 +73,7 @@ export default function NewJob() {
           </CardHeader>
           <CardContent className="space-y-3">
             <select aria-label="Job to copy" value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}
-              className="h-9 w-full rounded-lg border border-input bg-white px-2 text-sm">
+              className="h-9 w-full rounded-lg border border-field-border bg-field px-2 text-sm">
               <option value="">Choose a job or template…</option>
               <optgroup label="Jobs">
                 {templates.filter((t) => t.kind === "job").map((t) => <option key={t.id} value={`job:${t.id}`}>{t.title} · {t.company}</option>)}
