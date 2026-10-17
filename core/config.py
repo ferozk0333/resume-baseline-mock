@@ -87,13 +87,14 @@ LIVE = _env("LIVE", "0") == "1"
 # take over only when it is exhausted, busy or overloaded. Override one list with ROUTE_<TASK>="model,model,…"
 # (a "claude-…" id at the top works with no code change).
 _ROUTE_DEFAULTS = {
-    # gemini-2.5-flash is not offered to new users any more (HTTP 404 in the first live run).
+    # gemini-2.5-flash is not offered to new users any more (HTTP 404 in the first live run); gemma-4-26b-it is not
+    # found on the v1beta API (every call in the README gate, 2026-10-17).
     "extract_document": "gemini/gemini-3.8-flash,gemini/gemini-3.7-flash,gemini/gemini-3.6-flash,"
                         "gemini/gemini-3-flash-preview",
     "extract_web": "gemini/gemini-3.5-flash-lite,gemini/gemini-3.1-flash-lite,gemini/gemma-4-31b-it,"
                    "groq/openai/gpt-oss-120b",
     "judge_single": "gemini/gemini-3.5-flash-lite,gemini/gemini-3.1-flash-lite,groq/openai/gpt-oss-120b,"
-                    "groq/qwen/qwen3.8-27b,groq/openai/gpt-oss-20b,gemini/gemma-4-31b-it,gemini/gemma-4-26b-it",
+                    "groq/qwen/qwen3.8-27b,groq/openai/gpt-oss-20b,gemini/gemma-4-31b-it",
     "judge_grouped": "gemini/gemini-3.5-flash-lite,gemini/gemini-3.1-flash-lite,gemini/gemma-4-31b-it",
     "plan": "gemini/gemini-3.8-flash,gemini/gemini-3.7-flash,gemini/gemini-3.6-flash",
 }

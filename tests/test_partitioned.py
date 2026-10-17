@@ -80,3 +80,24 @@ def test_with_partitions_adding_a_source_never_lowers_a_label(tmp_path, monkeypa
     assert resume_parts and all("garden" not in s for s in resume_parts)
     first = {c["_subject_id"] for k, c in judge.calls[:asked_before] if "#all@" in str(c.get("_subject_id"))}
     assert not first & set(resume_parts)                     # the resume's partitions were not asked again
+
+
+def test_a_sources_skills_list_comes_from_its_own_extraction(tmp_path, monkeypatch):
+    """Merging moves a listed skill to whichever source names it in a bullet; a partition must not see that."""
+    import json
+    from graph.context import open_ctx
+    from graph.nodes.expertise import _own_skills
+    monkeypatch.setattr(config, "PARTITIONED_BATCHES", True)
+    path = str(tmp_path / "o.db")
+    conn = db.init_app_db(path)
+    cid = candidate(conn)
+    resume = next(e for e in store.list_evidence(conn, cid) if e["type"] == "resume")
+    store.set_evidence_status(conn, resume["id"], "validated", extracted=store.load_profile(conn, cid))
+    profile = store.load_profile(conn, cid)
+    tableau = next(c for c in profile.claims if c.name_raw == "Tableau")
+    tableau.evidence_id, tableau.bullet_id = "repo-1", profile.all_bullets()[0].id   # merged into a repo's bullet
+    store.save_profile(conn, cid, profile)
+    with open_ctx(Deps(path, FakeJudge(script=script), today=TODAY), {"candidate_id": cid, "baseline_id": DS},
+                  with_relevance=False) as ctx:
+        assert "Tableau" in _own_skills(ctx)[resume["id"]]
+    assert json.loads(store.list_evidence(conn, cid)[0]["extracted_json"])["claims"]

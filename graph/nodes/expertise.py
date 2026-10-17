@@ -77,9 +77,8 @@ def _partitions(ctx: Ctx, key: str, c: BaselineCriterion, base_id: str, tools: b
     parts: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
     for text, eid in sourced_lines(ctx):
         parts[eid or "manual"]["bullets"].append(text)
-    for cl in ctx.profile.claims:
-        if cl.kind in ("skill", "tool") and cl.bullet_id is None:
-            parts[cl.evidence_id or "manual"]["skills_list"].append(cl.name_raw)
+    for eid, names in _own_skills(ctx).items():
+        parts[eid]["skills_list"] += names
     if tools:
         for p in ctx.counted_projects():
             if p.is_github:
@@ -98,6 +97,28 @@ def _partitions(ctx: Ctx, key: str, c: BaselineCriterion, base_id: str, tools: b
         context["skills_list"] = part["skills_list"]
         asks.append(_all_bullets(key, c, context, f"{base_id}{ALL_BULLETS}{PART}{eid}"))
     return asks
+
+
+def _own_skills(ctx: Ctx) -> dict[str, list[str]]:
+    """Each source's listed skills from its own extraction, not from the merged profile: merging moves a claim to
+    whichever source mentions it in a bullet, so another source changing would change this one's input."""
+    import json
+    out: dict[str, list[str]] = {}
+    seen_sources = set()
+    for eid, row in ctx.evidence.items():
+        raw = row.get("extracted_json") if isinstance(row, dict) else None
+        if not raw:
+            continue
+        seen_sources.add(eid)
+        names = [c["name_raw"] for c in json.loads(raw).get("claims", [])
+                 if c.get("kind") in ("skill", "tool") and c.get("bullet_id") is None]
+        if names:
+            out[eid] = names
+    for cl in ctx.profile.claims:                     # typed in Review, or a source with no saved extraction
+        key = cl.evidence_id or "manual"
+        if cl.kind in ("skill", "tool") and cl.bullet_id is None and key not in seen_sources:
+            out.setdefault(key, []).append(cl.name_raw)
+    return out
 
 
 def _everything(ctx: Ctx, key: str, c: BaselineCriterion, context: dict, subject_id: str | None = None,
