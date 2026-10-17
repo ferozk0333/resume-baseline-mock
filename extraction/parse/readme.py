@@ -5,7 +5,8 @@ license / contributing sections are dropped; overview, features, architecture an
 the rest ("describes what was built" / "a result or outcome" are kept; setup and other are dropped). Kept "what
 was built" blocks, verbatim and in order, become the project description (after the repository's own description,
 capped at README_MAX_CHARS); kept "result or outcome" blocks become the project's bullets, one per sentence, list
-item or table row, verbatim (Phase 3 review), so the outcome and impact judges see them as they see LLM bullets. Claims: the repository languages from the GitHub API, and vocabulary names inside kept
+item, verbatim (a results table is one bullet: its header and up to README_TABLE_MAX_ROWS rows), so the outcome and
+impact judges see them as they see LLM bullets. Claims: the repository languages from the GitHub API, and vocabulary names inside kept
 blocks that Jev confirms the candidate used. Too many blocks still unclear after Jev → the README goes to the LLM.
 """
 from __future__ import annotations
@@ -117,6 +118,9 @@ def blocks(readme: str) -> list[Block]:
             heading = raw.strip().strip("*: ")
             continue
         line = _clean(raw)
+        if not line and kind == "table" and raw.strip().startswith("|"):
+            raw_lines.append(raw.rstrip())                # a table's separator row: part of the verbatim quote
+            continue
         if not line:
             if raw.strip() == "" or not cur:
                 flush()
@@ -282,15 +286,25 @@ _MARKER = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
 
 
 def units(b: Block) -> list[tuple[str, str]]:
-    """A result block as (bullet text, quote) pairs: one per list item, table row (not the header) or sentence. The
-    quote is the source as written; the text drops Markdown marks only."""
+    """A result block as (bullet text, quote) pairs: one per list item or sentence; a table is one bullet. The quote
+    is the source as written; the text drops Markdown marks only."""
     out: list[tuple[str, str]] = []
     lines = [x for x in b.raw.splitlines() if x.strip()]
     if b.kind == "table":
-        rows = [x for x in lines if not re.fullmatch(r"\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?", x.strip())]
-        for row in rows[1:]:                                  # the first row is the header
-            cells = [_clean(c) for c in row.strip().strip("|").split("|")]
-            out.append((" | ".join(c for c in cells if c), row.strip()))
+        # One bullet for the whole table (Phase 3 review): the header row plus up to README_TABLE_MAX_ROWS data rows,
+        # verbatim. The quote is the source lines as written (the separator row included, so it is one span).
+        sep = re.compile(r"\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?")
+        keep, data = [], 0
+        for x in lines:
+            if not sep.fullmatch(x.strip()) and keep and data >= config.README_TABLE_MAX_ROWS:
+                break
+            keep.append(x.strip())
+            if not sep.fullmatch(x.strip()) and len(keep) > 1:
+                data += 1
+        rows = [r for r in keep if not sep.fullmatch(r)]
+        text = "\n".join(" | ".join(c for c in (_clean(c) for c in r.strip("|").split("|")) if c) for r in rows)
+        if rows:
+            out.append((text, "\n".join(keep)))
     elif b.kind == "list":
         items: list[str] = []
         for x in lines:

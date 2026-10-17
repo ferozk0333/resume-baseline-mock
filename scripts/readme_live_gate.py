@@ -75,8 +75,14 @@ def db_copy(src: Path, dst: Path) -> None:
 
 
 def latest_live(conn) -> str:
-    from parser_gates import latest_live_candidate
-    return latest_live_candidate(conn)
+    """The latest real profile with a finished run for every gate role (the profile the review names)."""
+    q = " AND ".join(f"EXISTS (SELECT 1 FROM runs r WHERE r.candidate_id = c.id AND r.baseline_id = '{b}' "
+                     "AND r.status = 'done')" for b in ROLES.values())
+    row = conn.execute(f"SELECT c.id FROM candidates c WHERE c.data_source IS NULL AND {q} "
+                       "ORDER BY c.created_at DESC LIMIT 1").fetchone()
+    if row is None:
+        sys.exit("No profile with finished runs for every gate role.")
+    return row[0]
 
 
 def sources(conn, cid: str, readme=None):
@@ -210,6 +216,21 @@ class Hybrid:
     def __init__(self, replay, live):
         self.replay, self.live, self.asked = replay, live, Counter()
         self.fallback = _HybridRoute(self)
+        self.CLAUDE_ONLY = getattr(live, "CLAUDE_ONLY", set())
+
+    def group(self, keys, context):
+        """Several questions about one item: saved answers first, the rest in one live (Jev) request."""
+        from judges.base import JudgeError
+        out, rest = {}, []
+        for k in keys:
+            try:
+                out[k] = self.replay._get(k, context)
+            except JudgeError:
+                rest.append(k)
+        if rest:
+            self.asked.update(rest)
+            out.update(self.live.group(rest, context))
+        return out
 
     def models_for(self, key):
         return sorted(set(self.replay.models_for(key)) | set(self.live.models_for(key)))
@@ -246,29 +267,74 @@ class _HybridRoute:
 def run() -> None:
     if not config.LIVE:
         sys.exit("Live run: set LIVE=1 (and only after the go).")
+    import time
+    from graph.context import Deps
+    from graph.pipeline import Pipeline
     from judges.replay_judge import ReplayJudge
     from judges.service import get_judge
     from parser_gates import final_of
+    from extraction.validate import validate_extraction  # noqa: F401
+    started = time.time()
+    db_copy(ROOT / "data" / "demo.db", WORK)
     conn = db.connect(str(WORK))
     orig = latest_live(conn)
     runs = current_runs(conn, orig)
     vocab = vocabulary(conn)
     lab = RecordedLabeller(JEV_RECORD, JevLabeller())
+    t0 = time.time()
     cid, merged, parsed = build(conn, "readme gate live", orig, lambda repo: parse_readme(repo, vocab, lab))
-    report = {"parsed": {k: {"outcome": r.report.outcome, "reasons": r.report.reasons, "items": r.report.items}
-                         for k, r in parsed.items()}, "roles": {}}
+    parse_seconds = time.time() - t0
+    jev_parse = {"requests": lab.live_labeller.counts.requests, "questions": lab.live_labeller.counts.questions,
+                 "unanswered": lab.counts.unanswered}
+    rep = {"candidate": orig, "parse_seconds": round(parse_seconds, 1), "jev_parse": jev_parse, "readmes": {},
+           "roles": {}}
+    llm = {}
+    for e in store.list_evidence(conn, orig):
+        if e["type"] == "github_repo" and e["extracted_json"]:
+            llm[repo_from_text(e["raw_text"]).name] = json.loads(e["extracted_json"])
+    for name, r in parsed.items():
+        old = llm.get(name, {"projects": [], "claims": []})
+        rep["readmes"][name] = {
+            "outcome": r.report.outcome, "reasons": r.report.reasons, "notes": r.report.notes,
+            "parser_claims": [c.name for c in r.extract.claims] if r.extract else None,
+            "llm_claims": [c["name_raw"] for c in old.get("claims", [])],
+            "parser_bullets": [b.text for b in r.extract.projects[0].bullets] if r.extract else None,
+            "llm_bullets": [b["text"] for p in old.get("projects", []) for b in p.get("bullets", [])]}
+    judge = None
     for label, run_id in runs.items():
-        h = Hybrid(ReplayJudge(conn, (orig,)), get_judge())
-        res = score(str(WORK), cid, ROLES[label], run_date(conn, run_id), h)
-        before, s0 = final_of(conn, run_id)
-        after, s1 = final_of(conn, res["run_id"])
-        report["roles"][label] = {"current": before.final, "parser": after.final, "asked": dict(h.asked),
-                                  "subcategories": {k: [s0[k]["score"], s1[k]["score"]] for k in s0
-                                                    if s0[k]["score"] != s1[k]["score"]}}
+        judge = Hybrid(ReplayJudge(conn, (orig,)), judge.live if judge else get_judge())
+        pipe = Pipeline(Deps(str(WORK), judge, planner=None, today=run_date(conn, run_id)), print_timings=False)
+        t1 = time.time()
+        res = pipe.score(cid, ROLES[label], plan=False)
+        seconds = time.time() - t1
+        summary = next(iter(pipe.recorders.values())).summary() if pipe.recorders else {}
+        entry = {"seconds": round(seconds, 1), "asked": dict(judge.asked), "paused": res.get("paused"),
+                 "errors": len(res.get("errors") or []), "calls_by_task": summary.get("calls_by_task"),
+                 "model_calls": summary.get("model_calls"), "failovers": summary.get("failovers"),
+                 "rate_limits": summary.get("rate_limits")}
+        if res.get("run_id"):
+            before, s0 = final_of(conn, run_id)
+            after, s1 = final_of(conn, res["run_id"])
+            entry.update(current=before.final, parser=after.final, run_id=res["run_id"],
+                         proof_density=[s0["proof_density"]["score"], s1["proof_density"]["score"]],
+                         subcategories={k: [s0[k]["status"], s0[k]["score"], s1[k]["status"], s1[k]["score"]]
+                                        for k in s0 if (s0[k]["score"], s0[k]["status"]) != (s1[k]["score"], s1[k]["status"])})
+        rep["roles"][label] = entry
+        judge.asked = Counter()
+        if res.get("paused"):
+            rep["stopped"] = res["paused"]
+            break
+    rows = conn.execute("SELECT method, model_version, used, COUNT(*) FROM judgments WHERE candidate_id = ? "
+                        "AND model_version != 'rule-v0.1' GROUP BY 1, 2, 3", (cid,)).fetchall()
+    rep["judgments_saved"] = [list(r) for r in rows]
+    rep["jev_to_route_fallbacks"] = conn.execute(
+        "SELECT COUNT(*) FROM judgments WHERE candidate_id = ? AND method = 'jev' AND used = 0", (cid,)).fetchone()[0]
+    rep["total_seconds"] = round(time.time() - started, 1)
     out = ROOT / "timings" / "readme_live_gate.json"
-    out.write_text(json.dumps(report, indent=1, default=str))
-    print(json.dumps(report, indent=1, default=str))
-    del normalize_name
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(json.dumps(rep, indent=1, default=str))
+    print(json.dumps({k: v for k, v in rep.items() if k != "readmes"}, indent=1, default=str))
+    print(f"\nwritten to {out}")
 
 
 def main() -> None:

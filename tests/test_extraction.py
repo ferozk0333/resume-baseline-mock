@@ -677,6 +677,7 @@ def test_groq_request_uses_strict_schema_and_fits_the_token_limit(monkeypatch):
     assert out.projects == []
     body = session.bodies[0]
     assert body["model"] == "openai/gpt-oss-120b" and body["reasoning_effort"] == "low"
+    assert body["temperature"] == 0                                               # determinism (CLAUDE.md rule 7)
     assert body["max_completion_tokens"] == 8000 - (3300 // 3 + 200)              # prompt + completion ≤ TPM
     schema = body["response_format"]["json_schema"]
     assert schema["strict"] is True

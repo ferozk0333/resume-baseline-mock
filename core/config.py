@@ -256,6 +256,7 @@ PARSE_SHADOW_CALLS = _env("PARSE_SHADOW_CALLS", "0") == "1"   # shadow parser ma
 REMOVE_HIDDEN_TEXT = _env("REMOVE_HIDDEN_TEXT", "0") == "1"   # white-on-white, tiny or off-page text (spec item 20)
 PARSER_MAX_UNCLEAR = int(_env("PARSER_MAX_UNCLEAR", "3"))     # more unclear lines after Jev → LLM fallback
 README_MAX_CHARS = int(_env("README_MAX_CHARS", "1500"))       # kept README blocks, verbatim, as the description
+README_TABLE_MAX_ROWS = int(_env("README_TABLE_MAX_ROWS", "10"))   # data rows in a kept results table (one bullet)
 JEV_PARSE_BATCH = int(_env("JEV_PARSE_BATCH", "20"))           # questions per Jev request when parsing
 HIDDEN_MIN_FONT_PT = 4.0         # smaller text is hidden
 HIDDEN_MIN_CONTRAST = 1.6        # text/background contrast ratio below this is hidden (white on white = 1.0)

@@ -153,6 +153,7 @@ PR-AUC **0.81** on a held-out month; the top decile catches 46% of churners. Use
 | Model | PR-AUC |
 |---|---|
 | XGBoost tuned with Optuna | 0.81 |
+| Logistic regression | 0.64 |
 
 ## Odd heading
 We ran the model each Monday for the retention team.
@@ -187,7 +188,7 @@ def test_readme_blocks_by_rule_and_jev_for_the_unclear_one():
     assert [b.text for b in bullets] == [
         "PR-AUC 0.81 on a held-out month; the top decile catches 46% of churners.",
         "Used weekly by 3 retention managers.", "Cut manual review time from 6 hours to 1 a week.",
-        "Two teams adopted it.", "XGBoost tuned with Optuna | 0.81"]
+        "Two teams adopted it.", "Model | PR-AUC\nXGBoost tuned with Optuna | 0.81\nLogistic regression | 0.64"]
     assert bullets[0].source.quote == "PR-AUC **0.81** on a held-out month; the top decile catches 46% of churners."
     assert {res.method_of(b) for b in bullets} == {"parser"}
     assert res.method_of(res.extract.projects[0]) == "jev"
@@ -195,6 +196,14 @@ def test_readme_blocks_by_rule_and_jev_for_the_unclear_one():
     assert claims["Python"] == "parser" and claims.get("XGBoost") == "jev" and "Dockerfile" not in claims
     assert any(k.startswith("block_") for k in seen)
     assert [b.kind for b in blocks(README)][:2] == ["prose", "code"]
+
+
+def test_a_results_table_is_one_bullet_capped_in_rows(monkeypatch):
+    monkeypatch.setattr(config, "README_TABLE_MAX_ROWS", 1)
+    res = parse_readme(repo(), VOCAB, FakeLabeller(lambda a: ("built", 0.9) if a.kind == "choice" else ("no", 0.9)))
+    table = res.extract.projects[0].bullets[-1]
+    assert table.text == "Model | PR-AUC\nXGBoost tuned with Optuna | 0.81"
+    assert table.source.quote == "| Model | PR-AUC |\n|---|---|\n| XGBoost tuned with Optuna | 0.81 |"
 
 
 def test_readme_bullets_pass_the_quote_check_and_reach_the_repo_project():

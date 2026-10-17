@@ -157,4 +157,10 @@ ask if wanted.
     project above them and any item not found in the source. DOCX tables are still parsed (14 of 16 correct, 0 wrong).
 28. **Replays prefer the candidate's own answers.** The same text judged for two candidates can get different answers
     (a low-confidence Jev label falls back to an LLM); DS4 replayed 74.7 instead of 74.8 for that reason. Fixed.
+29. **Reuse saved answers for identical text across candidates for job-independent checks (consistency vs hiding
+    model variance)** [OPEN]. Today a saved judgment is reused only for the same candidate and item. The same text
+    judged for two candidates can get different answers: DS4 and DS4_padded share a project whose evidence-quality
+    check 4 Jev answered below the threshold both times (0.28 and 0.24); the Flash-Lite fallback said "yes" for DS4 and
+    "no" three minutes later for DS4_padded, so identical text scored differently. Reusing the first answer makes scores
+    consistent but hides that the model is unsure; re-asking shows the variance. To decide.
 
