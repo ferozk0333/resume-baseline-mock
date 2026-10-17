@@ -55,8 +55,9 @@ def chunks(text: str) -> list[str]:
 
 
 def parse_score(content: str) -> float:
-    """The model's answer as P(attack). Groq returns the classifier's output as the message text: a number, or a label
-    ("MALICIOUS" / "BENIGN"). [verify] the exact form on the first live call."""
+    """The model's answer as P(attack). Confirmed on the first live call (2026-10-17): Groq returns the score as the
+    message text, e.g. "0.001365689910016954" (a 1,200-character chunk was 296 prompt tokens). A label ("MALICIOUS" /
+    "BENIGN") is read too, in case the format changes."""
     s = (content or "").strip()
     try:
         return float(json.loads(s)) if s[:1] in "0123456789." else float(s)

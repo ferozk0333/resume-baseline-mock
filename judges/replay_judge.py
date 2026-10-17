@@ -32,6 +32,7 @@ class ReplayJudge:
         self.misses: list[str] = []                # questions with no recording (main judge: Jev first)
         self.route_misses: list[str] = []          # … asked through the fallback (route) judge directly
         self.missed_inputs: set[tuple[str, str, bool]] = set()   # (question, input hash, via route): unique asks
+        self.missed_subjects: list[tuple[str, str, bool]] = []    # (question, subject id, via route)
         self._lock = threading.Lock()
         self.fallback = _Route(self)               # Deps uses judge.fallback for asks that need a quote
 
@@ -44,6 +45,7 @@ class ReplayJudge:
             if j is None:
                 (self.route_misses if route else self.misses).append(key)
                 self.missed_inputs.add((key, input_hash(key, context), route))
+                self.missed_subjects.append((key, str(context.get("_subject_id")), route))
             else:
                 self.hits += 1
         if j is None:
