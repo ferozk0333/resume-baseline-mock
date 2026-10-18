@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,15 +81,11 @@ export default function DemoTools() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Demo tools: score a profile against a role</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pick a target role, then start with a resume or continue with a saved candidate.
-        </p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Target role</CardTitle>
-          <CardDescription>The baseline the profile is scored against.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {baselines.map((b) => (
@@ -106,7 +103,6 @@ export default function DemoTools() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">New candidate</CardTitle>
-            <CardDescription>Upload a resume on the next screen.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
@@ -121,7 +117,6 @@ export default function DemoTools() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Saved candidates</CardTitle>
-            <CardDescription>Review their profile again, or open a past score.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {candidates.length === 0 ? (
@@ -169,10 +164,7 @@ export default function DemoTools() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Apply to a job</CardTitle>
-          <CardDescription>
-            Open jobs. Applying uses the selected candidate&apos;s confirmed profile and scores it against the job; the
-            recruiter sees the application.{!selected && " Pick a saved candidate first."}
-          </CardDescription>
+          {!selected && <CardDescription>Pick a saved candidate first.</CardDescription>}
         </CardHeader>
         <CardContent>
           {jobs.length === 0 ? <p className="text-sm text-muted-foreground">No open jobs right now.</p> : (
@@ -195,6 +187,34 @@ export default function DemoTools() {
           )}
         </CardContent>
       </Card>
+
+      <MarketFixtures />
     </div>
+  );
+}
+
+/** Market test fixtures (moved here from Market baselines, cleanup round). */
+function MarketFixtures() {
+  const [roles, setRoles] = useState<{ key: string; title: string }[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => { get<{ roles: { key: string; title: string }[] }>("/market/roles").then((d) => setRoles(d.roles)).catch(() => {}); }, []);
+  async function load(key: string, title: string) {
+    setBusy(key);
+    try {
+      const out = await post<{ added: number }>(`/market/${key}/fixtures`);
+      toast.success(`${title}: ${out.added} test posting${out.added === 1 ? "" : "s"} loaded`);
+    } catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
+  }
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Market test fixtures</CardTitle></CardHeader>
+      <CardContent className="flex flex-wrap gap-2">
+        {roles.map((r) => (
+          <Button key={r.key} size="sm" variant="outline" disabled={busy !== null} onClick={() => load(r.key, r.title)}>
+            <FlaskConical /> Load test fixtures: {r.title}
+          </Button>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

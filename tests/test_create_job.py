@@ -118,8 +118,8 @@ def test_fallback_when_the_model_is_unavailable(tmp_path):
         api = make(path, llm)
         form = read(api)
         d = form["draft"]
-        assert d["extraction"]["status"] == "unavailable" and "could" in d["extraction"]["notice"] or \
-            "needs a model" in d["extraction"]["notice"]
+        assert d["extraction"]["status"] == "unavailable" and d["extraction"]["notice"].startswith(
+            "The job description could not be read.") and "model" not in d["extraction"]["notice"].lower()
         assert d["requirements"] == [] and d["details"]["title"] == "" and "Brightwater" in form["jd_text"]
 
 

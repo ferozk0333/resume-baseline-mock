@@ -108,8 +108,7 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
         <CardHeader>
           <CardTitle className="text-base">Project demo videos</CardTitle>
           <CardDescription>
-            Short walkthroughs of your projects: show the demo, explain the architecture and the design choices you
-            made. 1–2 minutes each is ideal. Up to 3 YouTube or Loom links.
+            Up to 3 YouTube or Loom links, 1–2 minutes each.
           </CardDescription>
           <Why>Lets recruiters see your work for themselves (shown to recruiters, not scored)</Why>
         </CardHeader>
@@ -160,7 +159,6 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
         <Card>
           <CardHeader>
             <CardTitle className="text-base">References</CardTitle>
-            <CardDescription>A manager or supervisor confirming relevant work counts most.</CardDescription>
             <Why>A manager reference is the strongest proof (Trust)</Why>
           </CardHeader>
           <CardContent className="space-y-3">

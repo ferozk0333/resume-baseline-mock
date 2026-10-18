@@ -74,7 +74,7 @@ function Scores() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">My scores</h1>
-          <p className="text-sm text-muted-foreground">Your baseline score per role, from <EeatTip />. Where you stand on average for the role, not for one job.</p>
+          <p className="text-sm text-muted-foreground">Your baseline score per role (<EeatTip />).</p>
         </div>
         <Link href="/market" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
           What the market asks for <ArrowRight className="size-4" /></Link>
@@ -141,7 +141,7 @@ function Scores() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Remove {removing?.title}?</DialogTitle>
-            <DialogDescription>It is no longer shown on Home or here. Your saved score stays, and adding the role back reuses it.</DialogDescription>
+            <DialogDescription>Your saved score stays.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoving(null)}>Cancel</Button>

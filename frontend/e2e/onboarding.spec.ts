@@ -56,7 +56,7 @@ async function firstRun(page: Page, name: string, prefix: string, mobile = false
   const other = page.getByTestId("score-card-baseline-ai-engineer-entry");
   await expect(primary.getByText("Build an A/B test project")).toBeVisible({ timeout: 60_000 });
   await expect(primary.getByText(/Percentile not available yet: fewer than \d+ other candidates have been scored for Data Scientist/)).toBeVisible();
-  await expect(other.getByText("Your plan for this role is prepared when you open it.", { exact: false })).toBeVisible();
+  await expect(other.getByText("Your biggest gaps so far:", { exact: false })).toBeVisible();
   await expect(page.getByText("EEAT", { exact: true })).toHaveCount(1);
   await page.reload();                                                 // resumable
   await expect(primary).toBeVisible({ timeout: 30_000 });

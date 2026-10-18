@@ -193,7 +193,7 @@ export function MoreProof({ projects, claims, extra }: { projects: Project[]; cl
   const empty = rows.filter((r) => r.items.length === 0 && adding !== r.t.key);
   return (
     <div className="space-y-5">
-      {open.length === 0 && <p className="text-sm text-muted-foreground">Nothing here yet. Add what applies to you; skip the rest.</p>}
+      {open.length === 0 && <p className="text-sm text-muted-foreground">Nothing here yet.</p>}
       {open.map(({ t, items }) => (
         <ProofSection key={t.key} t={t} items={items} adding={adding === t.key} setAdding={(b) => setAdding(b ? t.key : null)} />
       ))}

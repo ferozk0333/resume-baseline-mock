@@ -43,7 +43,6 @@ export function useStartLoop(jobId: string, onDone?: () => void) {
           <DialogTitle>Move to Shortlisted and start?</DialogTitle>
           <DialogDescription>
             {ask?.message ? `Not shortlisted yet: ${ask.message.slice(1, -1)}.` : "This candidate is not shortlisted yet."}
-            {" "}The interview loop starts from Shortlisted. Nothing is sent until you approve each email.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

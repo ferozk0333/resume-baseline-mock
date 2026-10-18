@@ -151,14 +151,14 @@ def templates(conn) -> list[dict]:
             for j in listing(conn) if j["status"] != "draft"]
     roles = [{"kind": "template", "id": b.id, "title": b.title, "company": "Role template", "status": None,
               "level": b.level} for b in db.list_baselines(conn)]
-    # Published Market versions: full ones first; a test version says it has too little data.
+    # Published Market versions, with what each is based on (no minimum amount of data: cleanup round).
+    from market.baseline import basis
     market = [{"kind": "template", "id": r["baseline_id"],
-               "title": f"{r['title']} (Market v{r['version']})" + (" · Test version – insufficient data"
-                                                                    if r["test_version"] else ""),
-               "company": "Market template", "status": None, "level": r["level"], "test_version": bool(r["test_version"])}
-              for r in conn.execute("SELECT v.baseline_id, v.version, v.level, v.test_version, b.title FROM "
+               "title": f"{r['title']} (Market v{r['version']}) · {basis(dict(r))}",
+               "company": "Market template", "status": None, "level": r["level"]}
+              for r in conn.execute("SELECT v.baseline_id, v.version, v.level, v.postings, v.companies, b.title FROM "
                                     "market_versions v JOIN baselines b ON b.id = v.baseline_id WHERE "
-                                    "v.status = 'published' ORDER BY v.test_version, b.title, v.version DESC")]
+                                    "v.status = 'published' ORDER BY b.title, v.version DESC")]
     return jobs + roles + market
 
 

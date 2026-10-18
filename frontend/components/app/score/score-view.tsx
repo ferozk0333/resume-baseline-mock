@@ -102,8 +102,7 @@ export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { i
           {onOpenPlan ? <h2 className="text-lg font-semibold tracking-tight">Score</h2>
             : <h1 className="text-2xl font-semibold tracking-tight">Score</h1>}
           <p className="text-sm text-muted-foreground">Against {baseline?.title ?? "…"} ({baseline?.level ?? ""})
-            {pct?.demo_pool && <Badge variant="outline" className="ml-2 border-amber-300 bg-amber-50 text-amber-800"
-              title={`Comparisons use a small demo pool (minimum ${pct.min_pool}); real use needs at least 20.`}>demo pool</Badge>}
+            {pct?.demo_pool && <Badge variant="outline" className="ml-2 border-amber-300 bg-amber-50 text-amber-800">demo pool</Badge>}
           </p>
         </div>
         <div className="flex gap-2">
@@ -165,7 +164,7 @@ export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { i
           <DialogHeader>
             <DialogTitle>Check everything again?</DialogTitle>
             <DialogDescription>
-              Saved answers for this role are cleared and every part of your profile is checked again. This takes a few minutes.
+              This takes a few minutes.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

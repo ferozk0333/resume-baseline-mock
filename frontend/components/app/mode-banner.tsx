@@ -13,8 +13,7 @@ export function ModeBanner() {
   return (
     <div role="status" className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-center text-sm text-amber-900">
       <FlaskConical className="mr-1.5 inline size-4" />
-      Demo mode: uploads are not read. Reading, scoring and the plan are scripted, so every profile gets the same
-      preset scores. For real processing, stop the demo and run <code className="font-mono">make live</code>.
+      Demo mode: uploads are not read, and every profile gets the same preset scores.
     </div>
   );
 }

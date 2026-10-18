@@ -195,18 +195,35 @@ def test_hysteresis_keeps_items_near_a_boundary():
 # --- Versions, publishing, the toggle ------------------------------------------------------------------------------------------
 
 def published_test_version(conn, roles):
+    """Three fixture postings publish directly: no minimum amount of data (cleanup round); a person publishes."""
     pipeline.load_fixtures(conn, roles["ai_engineer"])
-    v = mb.recompute(conn, roles["ai_engineer"], test=True, at=NOW)
-    assert v["insufficient"] and v["model_calls"] == 0
-    with pytest.raises(ValueError, match="Insufficient data"):
-        mb.publish(conn, v["id"])
-    mb.set_setting(conn, "allow_test_versions", "1")
+    v = mb.recompute(conn, roles["ai_engineer"], at=NOW)            # every posting already read: no model
+    assert v["model_calls"] == 0 and v["basis"] == "Based on 3 postings from 3 companies"
+    assert "insufficient" not in v and "test_version" not in v
     return mb.publish(conn, v["id"])
+
+
+def test_one_posting_is_enough_to_build_and_publish(conn, roles):
+    pipeline.load_fixtures(conn, roles["ai_engineer"])
+    keep = conn.execute("SELECT id FROM market_postings WHERE role = 'ai_engineer' LIMIT 1").fetchone()[0]
+    with conn:
+        conn.execute("UPDATE market_postings SET status = 'closed' WHERE role = 'ai_engineer' AND id != ?", (keep,))
+    v = mb.recompute(conn, roles["ai_engineer"], at=NOW)
+    assert v["basis"] == "Based on 1 posting from 1 company"
+    assert mb.publish(conn, v["id"])["status"] == "published"
+
+
+def test_recompute_asks_the_model_only_when_a_posting_needs_reading(conn, roles):
+    pipeline.load_fixtures(conn, roles["ai_engineer"])
+    assert mb.needs_reading(conn, "ai_engineer", NOW) == 0
+    ms.add_posting(conn, role="ai_engineer", company="Brightwater Systems", tier="mid", source="manual",
+                   title="AI Engineer", text=JD, seen_at=NOW.isoformat())
+    assert mb.needs_reading(conn, "ai_engineer", NOW) == 1
 
 
 def test_fixtures_to_a_published_test_version_without_a_model(conn, roles):
     v = published_test_version(conn, roles)
-    assert v["status"] == "published" and v["test_version"] and v["baseline_id"] == "market-ai_engineer-entry-v1"
+    assert v["status"] == "published" and v["baseline_id"] == "market-ai_engineer-entry-v1"
     b = db.get_baseline(conn, v["baseline_id"])
     req = {c.name for c in b.criteria if c.priority == "required"}
     assert {"Python", "LLM application development"} <= req and b.required_years == 1
@@ -255,8 +272,8 @@ def test_toggle_scores_with_the_market_baseline_after_a_warning(tmp_path, monkey
     first = tasks.wait(api.post(f"/candidates/{cid}/score", json={"baseline_id": "baseline-ai-engineer-entry"}).json()["task_id"])
     assert api.post("/market/ai_engineer/source", json={"source": "market"}).status_code == 422       # nothing published
     api.post("/market/ai_engineer/fixtures")
-    v = api.post("/market/ai_engineer/recompute", json={"test": True}).json()
-    assert api.put("/market/settings", json={"allow_test_versions": True}).status_code == 200
+    v = api.post("/market/ai_engineer/recompute", json={}).json()
+    assert api.put("/market/settings", json={"allow_test_versions": True}).status_code in (404, 405)   # setting gone
     pub = api.post(f"/market/versions/{v["id"]}/publish").json()
     assert pub.get("status") == "published", pub
     r = api.post("/market/ai_engineer/source", json={"source": "market"})
@@ -269,7 +286,7 @@ def test_toggle_scores_with_the_market_baseline_after_a_warning(tmp_path, monkey
     from scoring import benchmarks
     assert benchmarks.baseline_pool(conn, "market-ai_engineer-entry-v1") is not None   # pools are per baseline version
     templates = api.get("/jobs/templates").json()
-    assert any(t["title"] == "AI Engineer (Market v1) · Test version – insufficient data" for t in templates)
+    assert any(t["title"] == "AI Engineer (Market v1) · Based on 3 postings from 3 companies" for t in templates)
 
 
 def test_dry_run_counts_without_a_model(conn, roles):
@@ -323,11 +340,11 @@ def test_score_page_switch_and_the_candidate_market_view(tmp_path, monkeypatch):
     assert opts["current"] == "standard" and opts["market"] is None              # no published version: no Market option
     assert api.get("/market-view/ai_engineer").status_code == 404
     api.post("/market/ai_engineer/fixtures")
-    v = api.post("/market/ai_engineer/recompute", json={"test": True}).json()
-    api.put("/market/settings", json={"allow_test_versions": True})
+    v = api.post("/market/ai_engineer/recompute", json={}).json()
     api.post(f"/market/versions/{v['id']}/publish")
     opts = api.get(f"/runs/{rid}/baselines").json()
-    assert opts["market"]["version"] == 1 and "Test version – insufficient data" in opts["market"]["label"]
+    assert opts["market"]["version"] == 1 and opts["market"]["basis"] == "Based on 3 postings from 3 companies"
+    assert "Test version" not in json.dumps(opts)
     r = api.post(f"/runs/{rid}/switch-baseline", json={"source": "market"})
     assert r.status_code == 409 and r.json()["detail"]["calls"] > 0                 # the re-score notice first
     t = tasks.wait(api.post(f"/runs/{rid}/switch-baseline", json={"source": "market", "confirm": True}).json()["task_id"])
@@ -338,7 +355,7 @@ def test_score_page_switch_and_the_candidate_market_view(tmp_path, monkeypatch):
     r = api.post(f"/runs/{new['id']}/switch-baseline", json={"source": "standard"})
     assert r.json()["detail"]["reused"] is True and r.json()["detail"]["calls"] == 0  # standard judgments are saved
     view = api.get("/market-view/ai_engineer").json()
-    assert view["test"] and view["companies"] == 3
+    assert view["basis"] == "Based on 3 postings from 3 companies" and view["companies"] == 3
     py = next(c for c in view["criteria"] if c["name"] == "Python")
     assert py == {"name": "Python", "kind": "tool", "category": "required", "company_share": 1.0, "share": 1.0,
                   "postings": 3, "companies": 3}

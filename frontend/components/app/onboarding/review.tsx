@@ -105,13 +105,13 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
             </ul>
           )}
 
-          <Section id="sec-roles" title="Roles" description="Your work experience. Edit anything that was read wrongly.">
+          <Section id="sec-roles" title="Roles">
             {roles.length === 0 && <p className="text-sm text-muted-foreground">No roles found.</p>}
             {roles.map((r) => <RoleCard key={r.id} role={r} />)}
             <AddButton id="new-role" label="Add role" render={(done) => <RoleCard role={null} onDone={done} />} />
           </Section>
 
-          <Section id="sec-projects" title="Projects" description="Projects, repositories and work samples. Publications, talks and the like are under More proof.">
+          <Section id="sec-projects" title="Projects">
             {projects.length === 0 && <p className="text-sm text-muted-foreground">No projects found.</p>}
             {projects.map((p) => <ProjectCard key={p.id} project={p} />)}
             <AddButton id="new-project" label="Add project" render={(done) => <ProjectCard project={null} onDone={done} />} />
@@ -123,7 +123,7 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
             <AddButton id="new-education" label="Add education" render={(done) => <ProofCard t={EDUCATION} item={null} onDone={done} />} />
           </Section>
 
-          <Section id="sec-skills" title="Skills and tools" description="Named in your documents, grouped to make them easy to check.">
+          <Section id="sec-skills" title="Skills and tools">
             <Skills claims={skills} groups={data.skill_groups ?? ["Other"]} />
           </Section>
 
@@ -134,11 +134,11 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
             <AddButton id="new-certification" label="Add certification" render={(done) => <CertificationCard cert={null} onDone={done} />} />
           </Section>
 
-          <Section id="sec-more" title="More proof" description="Publications, talks, awards and more. Add what applies to you.">
+          <Section id="sec-more" title="More proof">
             <MoreProof projects={data.profile.projects} claims={claims} extra={extra} />
           </Section>
 
-          <Section id="sec-sources" title="Source text" description="Each document as we read it, after clean-up. Quotes are checked against this text.">
+          <Section id="sec-sources" title="Source text">
             {data.sources.map((s) => (
               <details key={s.id} className="rounded-lg border bg-card">
                 <summary className="cursor-pointer px-3 py-2 text-sm font-medium">

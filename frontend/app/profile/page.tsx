@@ -69,7 +69,7 @@ function Profile() {
         <CardHeader>
           <CardTitle className="text-base">Your proof</CardTitle>
           <CardDescription>
-            What your scores are built from: {p.roles.length} roles, {p.projects.length} projects and {p.claims.length} skills and tools.
+            {p.roles.length} roles, {p.projects.length} projects, {p.claims.length} skills and tools
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -89,7 +89,6 @@ function Profile() {
             <Button variant="outline" onClick={() => restart("review")}>Review your profile again</Button>
             <Link href="/scores" className={buttonVariants({ variant: "ghost" })}>My scores</Link>
           </div>
-          <p className="text-xs text-muted-foreground">Both re-score your target roles when you confirm.</p>
         </CardContent>
       </Card>
 

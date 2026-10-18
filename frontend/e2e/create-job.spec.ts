@@ -83,6 +83,8 @@ test("copy an existing job and start from scratch", async ({ page }) => {
   await expect(page.getByRole("table", { name: "Requirements" }).getByLabel("Requirement 1 name")).not.toHaveValue("");
 
   await page.goto("/recruiter/jobs/new");
+  // The templates list fills only once the page is hydrated: a click before that does nothing (dev server).
+  await expect(page.getByLabel("Job to copy").locator("optgroup").first()).toBeAttached({ timeout: 20_000 });
   await page.getByRole("button", { name: "Start from scratch" }).click();
   await expect(page.getByLabel(/^Title/)).toHaveValue("", { timeout: 20_000 });
   await page.getByLabel(/^Title/).fill("Analytics Engineer");

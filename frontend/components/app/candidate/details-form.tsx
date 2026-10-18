@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { put, type ApplicationDetails } from "@/lib/api";
@@ -73,7 +73,6 @@ export function DetailsForm({ candidateId, initial, onSaved, extra, saveLabel = 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Work authorization</CardTitle>
-          <CardDescription>Answer once; you won&apos;t retype it for every application.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -93,7 +92,6 @@ export function DetailsForm({ candidateId, initial, onSaved, extra, saveLabel = 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Frequent questions</CardTitle>
-          <CardDescription>Used to fill applications and job filters for you.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">

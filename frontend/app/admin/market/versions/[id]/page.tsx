@@ -42,17 +42,14 @@ function Insights() {
           <h1 className="text-2xl font-semibold tracking-tight">Market insights · {v.role_title} · version {v.version}</h1>
           <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <Badge variant={v.status === "published" ? "default" : "secondary"} className="capitalize">{v.status === "published" ? "active" : v.status}</Badge>
-            {v.insufficient && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Insufficient data</Badge>}
-            {v.test_version && <Badge variant="outline">test version</Badge>}
-            {v.postings} postings · {v.companies} companies · window {v.window_start} → {v.window_end} ·
+            {v.basis} · {v.window_start} → {v.window_end} ·
             {" "}{Object.entries(c.tiers).map(([t, n]) => `${t} ${n.companies}/${n.postings}`).join(", ")} (companies/postings)
           </p>
         </div>
         {v.status === "draft" && (
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => act("discard")}>Discard</Button>
-            <Button disabled={!v.can_publish} onClick={() => act("publish")}
-              title={v.can_publish ? undefined : "Insufficient data: turn on “Allow test versions” to publish"}>Publish</Button>
+            <Button disabled={!v.can_publish} onClick={() => act("publish")}>Publish</Button>
           </div>
         )}
       </div>
@@ -100,7 +97,6 @@ function Insights() {
           <p><span className="text-muted-foreground">Minimum years (median):</span> {c.required_years ?? "—"} · <span className="text-muted-foreground">Reach (most common):</span> {c.expected_reach ? REACH[c.expected_reach] : "—"}</p>
           <p><span className="text-muted-foreground">Scope:</span> {c.scope_expectation ?? "—"}</p>
           <p><span className="text-muted-foreground">Complexity:</span> {c.complexity_criteria ?? "—"}</p>
-          <p className="text-xs text-muted-foreground">Text: {v.summary_method}.</p>
         </section>
         <SideBySidePanel s={v.side_by_side} />
       </div>

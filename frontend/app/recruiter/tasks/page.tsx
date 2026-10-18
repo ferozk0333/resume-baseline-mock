@@ -1,19 +1,18 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarClock, ChevronRight, ClipboardList, Hourglass, Inbox, Mail, MessageSquareReply, Scale, Send } from "lucide-react";
+import { CalendarClock, ChevronRight, ClipboardList, Hourglass, Inbox as InboxIcon, Mail, MessageSquareReply, Scale, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { get, post, type RecruiterTask } from "@/lib/api";
 
-type Inbox = { enabled: boolean; every_minutes: number; user: string | null;
-  last_poll: { at: string; fetched: number; matched: { subject: string }[]; skipped: { subject: string; why: string }[];
-    error: string | null } | null };
+type Inbox = { enabled: boolean; last_check: { at: string; failed: boolean } | null };
 
 const ICON: Record<string, typeof Mail> = { approve_email: Send, confirm_slot: CalendarClock, enter_feedback: ClipboardList,
-  decide: Scale, reply: Inbox, confirm_withdrawal: MessageSquareReply, choose: Mail, closure: Hourglass };
+  decide: Scale, reply: InboxIcon, confirm_withdrawal: MessageSquareReply, choose: Mail, closure: Hourglass };
 
 const ago = (iso: string) => {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -44,27 +43,23 @@ export default function TasksPage() {
   }, []);
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
-        <p className="text-sm text-muted-foreground">Everything waiting for you, oldest first. Each opens the candidate&apos;s workflow at that step. Applications that have waited too long for an answer
-          are listed too. Nothing is sent until you approve it.</p>
+        {inbox?.enabled && (
+          <Tooltip>
+            <TooltipTrigger render={<Button size="xs" variant="outline" disabled={checking} onClick={checkNow} />}>
+              <InboxIcon /> {checking ? "Checking…" : "Check inbox now"}
+            </TooltipTrigger>
+            <TooltipContent>
+              {inbox.last_check ? `${inbox.last_check.failed ? "Last check failed" : "Last checked"} at ${new Date(inbox.last_check.at).toLocaleTimeString()}`
+                : "Not checked yet"}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
-      {inbox?.enabled && (
-        <div aria-label="Inbox" className="flex flex-wrap items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
-          <Inbox className="size-4 text-primary" />
-          <span>Replies are read from {inbox.user ?? "the demo inbox"} every {inbox.every_minutes} min.</span>
-          <span className="text-muted-foreground">
-            {inbox.last_poll ? inbox.last_poll.error ? `Last check failed: ${inbox.last_poll.error}`
-              : `Last check ${new Date(inbox.last_poll.at).toLocaleTimeString()}: ${inbox.last_poll.matched.length} matched, ${inbox.last_poll.skipped.length} skipped.`
-              : "Not checked yet since the server started."}
-          </span>
-          <Button size="xs" variant="outline" className="ml-auto" disabled={checking} onClick={checkNow}>
-            {checking ? "Checking…" : "Check inbox now"}</Button>
-        </div>
-      )}
       {tasks === null ? <Skeleton className="h-48" /> : tasks.length === 0 ? (
         <p className="rounded-xl border border-dashed bg-white px-4 py-8 text-center text-sm text-muted-foreground">
-          Nothing waiting. Start an interview loop from a job to see steps here.</p>
+          Nothing waiting.</p>
       ) : (
         <ul aria-label="Tasks" className="divide-y rounded-xl border bg-white">
           {tasks.map((t) => {

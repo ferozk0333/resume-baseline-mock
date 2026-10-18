@@ -4,7 +4,7 @@ import { Loader2, RefreshCw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { EmailEditor, SendNotice } from "@/components/app/recruiter/email-editor";
 import { get, post, put, type Email, type Reason, type Stage } from "@/lib/api";
@@ -69,7 +69,6 @@ export function RejectDrawer({ open, onOpenChange, applicationId, name, onSent }
       <SheetContent className="w-full gap-0 data-[side=right]:sm:max-w-2xl">
         <SheetHeader className="border-b">
           <SheetTitle>Not moving forward · {name ?? "applicant"}</SheetTitle>
-          <SheetDescription>Pick the reasons; the draft uses only these. Nothing is sent until you click Send.</SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
           <section aria-label="Reasons" className="space-y-1.5">
@@ -151,7 +150,6 @@ export function StageEmailDrawer({ open, onOpenChange, applicationId, name, stag
       <SheetContent className="w-full gap-0 data-[side=right]:sm:max-w-2xl">
         <SheetHeader className="border-b">
           <SheetTitle>Stage email · {name ?? "applicant"}</SheetTitle>
-          <SheetDescription>Invite the candidate to a stage. Sending moves them there.</SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           <div className="flex gap-2">

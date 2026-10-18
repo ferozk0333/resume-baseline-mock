@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import date
 
 from core import config, db
@@ -26,7 +27,7 @@ TAG_MIN_SCORE = 0.8               # proposal (specs/11 §5): subcategory scores 
 MAX_TAGS = 3
 STALE_YEARS = 3                   # proposal (specs/11 §6.2): best evidence older than this → a question
 TEMPLATE_MODEL = "template-v1"
-DEMO_LABELS = {"demo_parsed": "Demo data: parsed from structured profile",
+DEMO_LABELS = {"demo_parsed": "Demo data",
                "archetype": "Test archetype"}
 STATUSES = ("new", "shortlisted", "in_loop", "not_moving_forward")
 # [OPEN] presets: storage and UI exist, but every preset equals the team table until the team sets values.
@@ -231,7 +232,7 @@ def _evidence_items(profile: Profile, evidence: dict) -> list[dict]:
         items.append({"text": c.name, "kind": "certification", "id": c.id, "source": "certification", "link": None,
                       "quote": c.name})
     for c in profile.claims:
-        if c.bullet_id is None:
+        if c.bullet_id is None and c.kind in ("skill", "tool"):          # awards are not a skills list
             items.append({"text": c.name_raw, "kind": "listed", "id": c.id, "source": "skills list", "link": None,
                           "quote": c.name_raw})
     return items
@@ -491,7 +492,10 @@ def panel(conn, app: dict, job: dict) -> dict:
             "repos": repos,
             "portfolio": [{"name": p.name, "description": p.description, "url": p.url} for p in portfolio],
             "portfolio_url": cand.get("portfolio_url"),
-            "linkedin": json.loads(linkedin["extracted_json"]) if linkedin and linkedin["extracted_json"] else None,
+            # The LinkedIn tab shows the uploaded PDF itself (cleanup item 4), never a parsed list.
+            "linkedin_uploaded": linkedin is not None,
+            "linkedin_file": bool(linkedin and linkedin["file_path"] and linkedin["file_path"].lower().endswith(".pdf")
+                                  and os.path.exists(linkedin["file_path"])),
             "linkedin_link": li.profile_link(cand, evidence),
             "resume_file": bool(resume and resume["file_path"]),
             "resume_file_kind": (resume["file_path"].rsplit(".", 1)[-1] if resume and resume["file_path"] else None),

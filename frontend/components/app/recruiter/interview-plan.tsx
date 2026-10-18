@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { del, get, patch, post, put, type JobSettings, type Stage } from "@/lib/api";
@@ -51,7 +51,6 @@ export function InterviewPlan({ jobId }: { jobId: string }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Interview plan</CardTitle>
-          <CardDescription>Stages the Pipeline board shows. Drag to reorder; focus areas are what each stage checks.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <ol className="space-y-1.5">
@@ -99,7 +98,6 @@ export function InterviewPlan({ jobId }: { jobId: string }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Scheduling</CardTitle>
-            <CardDescription>Used in interview-loop emails. Calendar integration is out of scope.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1"><Label htmlFor="rname">Recruiter name</Label>

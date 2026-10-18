@@ -116,8 +116,8 @@ ask if wanted.
     public and unauthenticated, built for careers pages. None publishes a read rate limit or a separate terms page
     for third-party aggregation. The fetchers read each board once per weekly fetch, with an identifying User-Agent,
     and stop a board on 429. Please confirm this use is acceptable before adding real companies.
-14. **Market thresholds are proposals.** REQ_SHARE 0.5, PREF_SHARE 0.2, MARGIN 0.05, MIN_COMPANIES 8, MIN_POSTINGS 20,
-    equal tier weights. They are not tuned on any data.
+14. **Market thresholds are proposals.** REQ_SHARE 0.5, PREF_SHARE 0.2, MARGIN 0.05, equal tier weights (MIN_COMPANIES
+    and MIN_POSTINGS were removed in the cleanup round: no minimum data; a person publishes). They are not tuned on any data.
 15. **Synonym map location.** The spec names `data/market_synonyms.json`, but `data/` is gitignored (databases). The
     reviewed map lives in `config/market_synonyms.json` so approvals are versioned.
 16. **Baseline scores don't apply to demo jobs (specs/17).** Before, a real-judge run on a role baseline also applied
@@ -228,3 +228,24 @@ ask if wanted.
     chosen group (display only).
 44. **Publication year** typed in More proof is saved as December of that year (the same as a year-only end date
     read from a document).
+
+## Cleanup round (feature/cleanup)
+
+45. **Awards are listed under "Skills and tools" in the Consistency judge's source summary** [OPEN]
+    (`graph/nodes/trust.py` `_summary`). Found with the LinkedIn Honors-Awards bug (item 5). It is a judge input: fixing
+    it changes the text the source-alignment question reads, so it needs re-judging (live calls) and may move
+    Consistency. Not changed in this round (no live calls).
+46. **Recompute skips the model automatically** (my interpretation; please confirm): the model is used only when a
+    posting in the window has never been read. Then the version also gets a new summary; otherwise the previous scope,
+    complexity and description text is kept (no summary call), and new names are only suggested, not proposed by a
+    model.
+47. **Kept on purpose in the sweep** (my interpretation; please confirm): the one-line "why it helps" notes on the
+    upload form ("Confirms your resume (Trust)" …) and the "Good to know" tips on the wait screens (both product
+    decisions of spec 17, no model or provider names); the bullet editor's tip (paste to split, Alt+↑/↓), the only
+    place those keyboard and paste features are mentioned; the empty and error states ("Percentile not available yet:
+    fewer than N other candidates…", "No slots could be read from the availability windows. Enter a time."); the
+    "demo pool" and "Demo text" badges (real facts about the data shown); the score-definition hints ("The Trust score
+    (0–100): …", "Share of the final score after N/A and errors are excluded"). The Admin Screening page keeps its data
+    (parser log, flags); only its explanation and the provider-named columns changed.
+48. **The material-change rule stays** (a draft identical to the active version can't be published). It is not a
+    minimum-data rule.

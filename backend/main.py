@@ -226,7 +226,7 @@ class ApplyIn(BaseModel):
 
 
 class RecomputeIn(BaseModel):
-    test: bool = False                   # no model: only postings whose extraction is cached or hand-labelled
+    test: bool | None = None             # None: the model only when a posting needs reading; True/False forces it
 
 
 class DecideIn(BaseModel):
@@ -273,10 +273,6 @@ class SaveJobPrefIn(BaseModel):
 
 class HideJobIn(BaseModel):
     reason: Literal["location", "salary", "role", "seniority", "other"] | None = None
-
-
-class MarketSettingsIn(BaseModel):
-    allow_test_versions: bool
 
 
 class WorkflowStart(BaseModel):
@@ -1400,10 +1396,9 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                                            "placeholders": sum(c2.placeholder for c2 in r.companies),
                                            "fetchable": sum(1 for c2 in r.companies if not c2.placeholder and
                                                             c2.source != "manual" and c2.source_id)}})
-            return {"roles": out, "allow_test_versions": mb.allow_test_versions(c),
+            return {"roles": out,
                     "thresholds": {"WINDOW_DAYS": config.WINDOW_DAYS, "REQ_SHARE": config.REQ_SHARE,
-                                   "PREF_SHARE": config.PREF_SHARE, "MARGIN": config.MARGIN,
-                                   "MIN_COMPANIES": config.MIN_COMPANIES, "MIN_POSTINGS": config.MIN_POSTINGS}}
+                                   "PREF_SHARE": config.PREF_SHARE, "MARGIN": config.MARGIN}}
 
     @app.get("/market/{role}/versions", tags=["market"])
     def market_versions(role: str):
@@ -1451,7 +1446,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
         def work():
             with conn() as c:
-                return mb.recompute(c, r, llm=state.job_llm, test=bool(body and body.test))
+                return mb.recompute(c, r, llm=state.job_llm, test=body.test if body else None)
         return await asyncio.to_thread(work)
 
     @app.post("/market/{role}/fixtures", tags=["market"])
@@ -1467,7 +1462,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             v = mb.get_version(c, vid) or not_found("Version")
             r = msrc.load()[v["role"]]
             return {**v, "diff": mb.diff(c, vid), "side_by_side": mb.side_by_side(c, r, vid), "role_title": r.title,
-                    "can_publish": (not v["insufficient"] or mb.allow_test_versions(c)) and v["status"] == "draft"}
+                    "can_publish": v["status"] == "draft"}
 
     @app.post("/market/versions/{vid}/publish", tags=["market"])
     def market_publish(vid: str):
@@ -1505,12 +1500,6 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 raise HTTPException(409, est)
             mb.set_setting(c, f"source:{role}", body.source)
             return {"source": body.source, **est}
-
-    @app.put("/market/settings", tags=["market"])
-    def market_settings(body: MarketSettingsIn):
-        with conn() as c:
-            mb.set_setting(c, "allow_test_versions", "1" if body.allow_test_versions else "0")
-            return {"allow_test_versions": body.allow_test_versions}
 
     @app.get("/runs/{run_id}/baselines", tags=["market"])
     def run_baselines(run_id: str):
@@ -1774,10 +1763,10 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     @app.get("/workflows/inbox", tags=["hiring"])
     def inbox_status():
-        """Whether replies are read from the demo inbox, and the last poll (also in the API log: "inbox:")."""
+        """Whether replies are read from the demo inbox, and when it was last checked. Never the address itself."""
         last = getattr(state._hiring, "last_poll", None) if state._hiring else None
-        return {"enabled": config.REPLY_INBOX == "imap", "every_minutes": config.IMAP_POLL_MINUTES,
-                "user": config.IMAP_USER or None, "last_poll": last}
+        return {"enabled": config.REPLY_INBOX == "imap",
+                "last_check": {"at": last["at"], "failed": bool(last.get("error"))} if last else None}
 
     @app.get("/recruiter/tasks", tags=["hiring"])
     def recruiter_tasks():
@@ -1859,18 +1848,20 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
 
-    @app.get("/candidates/{candidate_id}/files/resume", tags=["candidates"])
-    def resume_file(candidate_id: str):
-        """The uploaded (or rendered demo) resume, for the inline viewer."""
+    @app.get("/candidates/{candidate_id}/files/{kind}", tags=["candidates"])
+    def candidate_file(candidate_id: str, kind: Literal["resume", "linkedin"]):
+        """The uploaded (or rendered demo) resume or LinkedIn PDF, for the recruiter's inline viewer."""
         from fastapi.responses import FileResponse
+        etype = {"resume": "resume", "linkedin": "linkedin_pdf"}[kind]
         with conn() as c:
-            ev = next((e for e in store.list_evidence(c, candidate_id) if e["type"] == "resume" and e["file_path"]), None)
+            ev = next((e for e in store.list_evidence(c, candidate_id) if e["type"] == etype and e["file_path"]), None)
         if ev is None or not os.path.exists(ev["file_path"]):
-            not_found("Resume file")
-        kind = "application/pdf" if ev["file_path"].endswith(".pdf") else \
+            not_found("Resume file" if kind == "resume" else "LinkedIn PDF")
+        ext = ev["file_path"].rsplit(".", 1)[-1].lower()
+        media = "application/pdf" if ext == "pdf" else \
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        return FileResponse(ev["file_path"], media_type=kind,
-                            headers={"Content-Disposition": f'inline; filename="resume.{ev["file_path"].rsplit(".", 1)[-1]}"'})
+        return FileResponse(ev["file_path"], media_type=media,
+                            headers={"Content-Disposition": f'inline; filename="{kind}.{ext}"'})
 
     @app.get("/config/mode", tags=["scoring"])
     def mode():

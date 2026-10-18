@@ -20,7 +20,6 @@ export default function OutboxPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Outbox</h1>
-        <p className="text-sm text-muted-foreground">Emails sent from the recruiter view, with their full text.</p>
       </div>
       <SendNotice />
       <div role="group" aria-label="Filter" className="flex w-fit rounded-lg border bg-muted p-0.5 text-sm">

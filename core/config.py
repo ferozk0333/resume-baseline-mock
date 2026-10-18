@@ -496,8 +496,6 @@ FETCH_DAYS = 7                                          # weekly fetch; only upd
 REQ_SHARE = float(_env("REQ_SHARE", "0.5"))             # required if listed as required by ≥ this share (proposal)
 PREF_SHARE = float(_env("PREF_SHARE", "0.2"))           # preferred if listed at all by ≥ this share (proposal)
 MARGIN = float(_env("MARGIN", "0.05"))                  # hysteresis: a category changes only past threshold ± margin
-MIN_COMPANIES = int(_env("MIN_COMPANIES", "8"))
-MIN_POSTINGS = int(_env("MIN_POSTINGS", "20"))
 TIER_WEIGHTS = {"large": 1.0, "mid": 1.0, "startup": 1.0}   # equal by default
 DEDUPE_SIMILARITY = 0.92                                # same company + this text similarity = one posting
 MARKET_USER_AGENT = "RightStaff-market-baseline/0.1 (local research mock; weekly)"

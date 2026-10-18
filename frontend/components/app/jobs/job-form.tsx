@@ -152,7 +152,7 @@ export function JobFormPage({ jobId }: { jobId: string }) {
       )}
       {d.extraction?.status === "ok" && step === 2 && (
         <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
-          Read from the job description by {d.extraction.model}. Hover “From JD” to see the sentence each field came from. Check everything before publishing.
+          Read from the job description.
           {(d.extraction.dropped?.length ?? 0) > 0 && <> {d.extraction.dropped!.length} item{d.extraction.dropped!.length === 1 ? " was" : "s were"} left out
             ({d.extraction.dropped!.map((x) => `${x.text}: ${x.reason}`).join("; ")}).</>}
         </p>
@@ -188,8 +188,7 @@ export function JobFormPage({ jobId }: { jobId: string }) {
           <DialogHeader>
             <DialogTitle>Re-score applicants?</DialogTitle>
             <DialogDescription>
-              {impact?.applicants} applicant{impact?.applicants === 1 ? "" : "s"} will be re-scored. About {impact?.calls} model call{impact?.calls === 1 ? "" : "s"}.
-              {" "}Requirements or “What good looks like” changed; saved judgments that don&apos;t depend on the job are reused.
+              {impact?.applicants} applicant{impact?.applicants === 1 ? "" : "s"} will be re-scored.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -253,7 +252,6 @@ function StepRole({ d, update, aside }: { d: JobDraft; update: Upd; aside: React
             <select id="level" value={det.level} onChange={(e) => set({ level: e.target.value })} className={field}>
               {["entry", "mid", "senior", "lead"].map((l) => <option key={l} value={l}>{titleCase(l)}</option>)}
             </select>
-            <Hint>A label for the posting. Scoring uses the minimum years: up to 2 years is entry level.</Hint>
           </div>
           <div className="space-y-1">
             <Label htmlFor="role_family">Role family</Label>
@@ -262,14 +260,12 @@ function StepRole({ d, update, aside }: { d: JobDraft; update: Upd; aside: React
               {families.map((f) => <option key={f.id} value={f.id!}>{f.title}</option>)}
               <option value="none">None</option>
             </select>
-            <Hint>{det.role_family_auto !== false ? "Suggested from the title. " : ""}Candidates&apos; preview match for this
-              job starts from their baseline score for this role. Doesn&apos;t change how you rank applicants.</Hint>
+            {det.role_family_auto !== false && <Hint>Suggested from the title.</Hint>}
           </div>
           <div className="space-y-1">
             <Label htmlFor="min_years" className="flex items-center gap-1.5">Minimum years<span className="text-red-600">*</span><FromJd quote={q.min_years} /></Label>
             <Input id="min_years" type="number" min={0} step={0.5} value={det.min_years ?? ""} className="bg-white"
               onChange={(e) => set({ min_years: e.target.value === "" ? null : Number(e.target.value) })} />
-            <Hint>Relevant experience is measured against this (0 counts as 1 year).</Hint>
           </div>
           <div className="space-y-1 md:col-span-2">
             <Label htmlFor="short_description">Short description shown to candidates</Label>
@@ -302,7 +298,7 @@ function Requirements({ d, update, required }: { d: JobDraft; update: Upd; requi
     criterion_id: null, name: "", kind: "skill", priority: "required", must_have: false, aliases: [], suggested_aliases: [],
     description: "", from_jd: false, quote: null }] }));
   return (
-    <Section title="Requirements" hint="Required items count twice as much as preferred ones in the skills and tools scores. Must-haves don't change the score; the applicant list flags who lacks them.">
+    <Section title="Requirements">
       {required > 12 && (
         <p className="flex gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"><AlertTriangle className="mt-0.5 size-4 shrink-0" />
           {required} required items. Job descriptions are often wish lists: consider marking some as preferred.</p>
@@ -393,18 +389,16 @@ function StepSetup({ d, update }: { d: JobDraft; update: Upd }) {
   const q = d.good_quotes ?? {};
   return (
     <>
-      <Section title="What good looks like" hint="Plain answers; each one is what a part of the score is judged against.">
+      <Section title="What good looks like">
         <div className="space-y-1">
           <Label htmlFor="scope" className="flex items-center gap-1.5">What will this person own?<FromJd quote={q.scope_expectation} /></Label>
           <Textarea id="scope" value={g.scope_expectation} onChange={(e) => setGood({ scope_expectation: e.target.value })} className="min-h-16 bg-white text-sm"
             placeholder="e.g. Well-defined components end to end, such as a retrieval pipeline." />
-          <Hint>Ownership is judged against this, using the candidate&apos;s most recent relevant role.</Hint>
         </div>
         <div className="space-y-1">
           <Label htmlFor="complexity" className="flex items-center gap-1.5">What makes the work hard?<FromJd quote={q.complexity_criteria} /></Label>
           <Textarea id="complexity" value={g.complexity_criteria} onChange={(e) => setGood({ complexity_criteria: e.target.value })} className="min-h-16 bg-white text-sm"
             placeholder="e.g. Answer quality and cost on messy documents in production." />
-          <Hint>Each relevant role or project is graded against this.</Hint>
         </div>
         <div className="space-y-1">
           <Label htmlFor="reach" className="flex items-center gap-1.5">How far does their work reach?<FromJd quote={q.expected_reach} /></Label>
@@ -412,10 +406,9 @@ function StepSetup({ d, update }: { d: JobDraft; update: Upd }) {
             <option value="">Not set (team)</option>
             {Object.entries(REACH).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
-          <Hint>Scope of impact: full marks at this reach or above, half one level below.</Hint>
         </div>
       </Section>
-      <Section title="Ranking emphasis" hint="Changes the order of applicants only; no model calls.">
+      <Section title="Ranking emphasis">
         <div role="radiogroup" aria-label="Ranking preset" className="flex flex-wrap gap-2">
           {[null, ...PRESETS].map((p) => (
             <button key={p ?? "team"} type="button" role="radio" aria-checked={d.ranking.preset === p}
@@ -425,7 +418,6 @@ function StepSetup({ d, update }: { d: JobDraft; update: Upd }) {
             </button>
           ))}
         </div>
-        <Hint>All presets equal the team table until the team sets values.</Hint>
         <button type="button" className="text-sm text-primary hover:underline" onClick={() => setAdvanced(!advanced)} aria-expanded={advanced}>
           {advanced ? "Hide" : "Advanced"}: dimension weights</button>
         {advanced && (
@@ -442,7 +434,7 @@ function StepSetup({ d, update }: { d: JobDraft; update: Upd }) {
           </div>
         )}
       </Section>
-      <Section title="Interview plan" hint="Used by the hiring workflow; no effect on the score.">
+      <Section title="Interview plan">
         <ol className="space-y-1.5">
           {stages.map((s, i) => (
             <li key={`${s}-${i}`} className="flex items-center gap-2">
@@ -471,7 +463,7 @@ function StepSetup({ d, update }: { d: JobDraft; update: Upd }) {
             <Input id="recruiter" value={d.plan.recruiter_name} onChange={(e) => setPlan({ recruiter_name: e.target.value })} className="bg-white" /></div>
           <div className="space-y-1"><Label htmlFor="availability">Availability windows</Label>
             <Input id="availability" value={d.plan.availability} placeholder="Mon–Wed 10:00–14:00 ET" onChange={(e) => setPlan({ availability: e.target.value })} className="bg-white" />
-            <Hint>Interview slots are proposed from these windows.</Hint></div>
+            </div>
           <div className="space-y-1"><Label htmlFor="link">Or a scheduling link</Label>
             <Input id="link" value={d.plan.scheduling_link} placeholder="https://…" onChange={(e) => setPlan({ scheduling_link: e.target.value })} className="bg-white" /></div>
         </div>

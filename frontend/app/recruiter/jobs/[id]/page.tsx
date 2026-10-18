@@ -119,14 +119,13 @@ function Workspace() {
   const loopIds = picked.length ? picked : panel ? [panel.application_id] : [];
   const loop = useStartLoop(id, refresh);
 
-  const weightsLabel = job?.preset ? `${job.preset} preset` : "the team weights table";
   return (
     <div className="flex h-[calc(100vh-5.125rem)] min-h-[36rem] flex-col gap-3">
       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
         <Link href="/recruiter" aria-label="Jobs" className="text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /></Link>
         <div className="min-w-0">
           <h1 className="text-lg leading-tight font-semibold tracking-tight">{job?.title ?? "…"}</h1>
-          <p className="text-xs text-muted-foreground">{job?.company} · ranked with {weightsLabel}</p>
+          <p className="text-xs text-muted-foreground">{job?.company}</p>
         </div>
         <div role="group" aria-label="View" className="flex rounded-lg border bg-muted p-0.5 text-sm">
           {(["ranked", "pipeline", "jd"] as const).map((v) => (
@@ -160,7 +159,7 @@ function Workspace() {
         <PipelineBoard jobId={id} />
       ) : rows !== null && rows.length === 0 && !status && !allMust && !minScore ? (
         <p className="rounded-xl border border-dashed bg-white px-4 py-10 text-center text-sm text-muted-foreground">
-          No applicants yet. Candidates can apply from the candidate side once the job is open.
+          No applicants yet.
         </p>
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)] gap-3">

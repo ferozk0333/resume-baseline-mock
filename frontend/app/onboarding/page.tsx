@@ -55,7 +55,7 @@ function Onboarding() {
             {step === "done" ? "You're set up" : mine?.candidate.name ? `Welcome, ${mine.candidate.name}` : "Set up your profile"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {step === "done" ? "Your scores and plan are saved." : "Show your proof once. See where you stand for the roles you want, and how to get stronger."}
+            {step === "done" ? "Your scores and plan are saved." : null}
           </p>
         </div>
         {cid && step !== "done" && (
@@ -76,7 +76,7 @@ function Onboarding() {
             <PartyPopper className="size-8 text-primary" aria-hidden />
             <div>
               <p className="text-lg font-semibold">You&apos;re set up.</p>
-              <p className="text-sm text-muted-foreground">Next: apply to jobs. Your baseline scores and plan stay under My scores.</p>
+              <p className="text-sm text-muted-foreground">Next: apply to jobs.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => router.push("/")}>Start applying</Button>
@@ -123,7 +123,6 @@ function ProofStep({ cid, name: saved, onStarted }: { cid: string | null; name: 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Add your proof</CardTitle>
-          <CardDescription>Your resume is enough to start. Every extra source below makes your scores more trustworthy.</CardDescription>
         </CardHeader>
         {!cid && (
           <CardContent>
@@ -180,7 +179,7 @@ function RolesStep({ state, reload, onContinue, onRetry }: { state: OnboardingSt
       <Card className="h-fit">
         <CardHeader>
           <CardTitle className="text-base">Which roles are you aiming for?</CardTitle>
-          <CardDescription>Pick 1 to 3. We score your proof against each role. Your primary role leads your Home page.</CardDescription>
+          <CardDescription>Pick 1 to 3.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div role="group" aria-label="Roles" className="grid gap-2 sm:grid-cols-2">
@@ -278,8 +277,7 @@ function ScoresStep({ state, onContinue, onBack }: { state: OnboardingState; onC
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Each baseline score uses <EeatTip /> to compare your proof with what the role usually asks for, from 0 to 100.
-        It shows where you stand on average for the role, not for one specific job.
+        Scores from 0 to 100 (<EeatTip />).
       </p>
       <div className="grid gap-4 lg:grid-cols-2">
         {cards.map((c) => <RoleScoreCard key={c.baseline_id} card={c} />)}
@@ -302,7 +300,7 @@ function DetailsStep({ cid, onDone }: { cid: string; onDone: () => void }) {
   if (!details) return <Skeleton className="h-96" />;
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Optional. Answer the questions most applications ask, once. You can change them any time under Profile.</p>
+      <p className="text-sm text-muted-foreground">Optional.</p>
       <DetailsForm candidateId={cid} initial={details} onSaved={onDone}
         extra={<Button type="button" variant="outline" onClick={onDone}>Skip for now</Button>} />
     </div>

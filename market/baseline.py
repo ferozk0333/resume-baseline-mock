@@ -10,8 +10,8 @@ Aggregation, for a role and level over the postings in the window:
    threshold by MARGIN;
 5. required_years = median stated minimum years; expected_reach = the most common reach (lower on a tie);
 6. scope, complexity and description: one summarizing call with quotes; otherwise the previous text is kept.
-Publishing needs MIN_COMPANIES companies and MIN_POSTINGS postings ("Insufficient data" otherwise), unless
-"Allow test versions" is on, and a material change against the active version.
+Publishing needs a person and a material change against the active version; there is no minimum amount of data
+(cleanup round): every version says what it is based on ("Based on N postings from M companies").
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from market import store as ms
 CATEGORIES = ("required", "preferred", "dropped")
 
 
-# --- Settings: the toggle and test versions --------------------------------------------------------------------------
+# --- Settings: the Manual/Market toggle ------------------------------------------------------------------------------
 
 def setting(conn, key: str, default: str | None = None) -> str | None:
     row = conn.execute("SELECT value FROM market_settings WHERE key = ?", (key,)).fetchone()
@@ -43,10 +43,6 @@ def setting(conn, key: str, default: str | None = None) -> str | None:
 def set_setting(conn, key: str, value: str) -> None:
     with conn:
         conn.execute("INSERT OR REPLACE INTO market_settings (key, value) VALUES (?, ?)", (key, value))
-
-
-def allow_test_versions(conn) -> bool:
-    return setting(conn, "allow_test_versions", "0") == "1"
 
 
 def source_of(conn, role: str) -> str:
@@ -220,8 +216,15 @@ def summarize(llm, role: sources.Role, responsibilities: list[str], previous: di
 def version_row(r) -> dict:
     v = dict(r)
     v["content"] = json.loads(v.pop("content_json") or "{}")
-    v["insufficient"], v["test_version"] = bool(v["insufficient"]), bool(v["test_version"])
+    v.pop("insufficient", None), v.pop("test_version", None)      # no minimum-data rule any more (cleanup round)
+    v["basis"] = basis(v)
     return v
+
+
+def basis(v: dict) -> str:
+    """The neutral fact shown wherever a Market version appears."""
+    p, c = v.get("postings") or 0, v.get("companies") or 0
+    return f"Based on {p} posting{'' if p == 1 else 's'} from {c} compan{'y' if c == 1 else 'ies'}"
 
 
 def get_version(conn, vid: str) -> dict | None:
@@ -261,10 +264,18 @@ def material_change(new: dict, old: dict | None) -> list[str]:
     return out
 
 
+def needs_reading(conn, role: str, at: datetime | None = None) -> int:
+    """Postings in the window that have never been read (the only reason Recompute calls a model)."""
+    return sum(1 for p in ms.postings(conn, role, at=at or ms.now()) if ms.cached(conn, p["text_hash"]) is None)
+
+
 def recompute(conn, role: sources.Role, *, llm=None, level: str = "entry", at: datetime | None = None,
-              test: bool = False) -> dict:
-    """Extract new postings (cached), set levels, normalize names, aggregate, summarize: a new draft version."""
+              test: bool | None = None) -> dict:
+    """Extract new postings (cached), set levels, normalize names, aggregate, summarize: a new draft version.
+    The model is skipped automatically when no posting needs reading (`test` forces either way, for tests)."""
     at = at or ms.now()
+    if test is None:
+        test = needs_reading(conn, role.key, at) == 0
     m = normalize.load_map()
     items, responsibilities, calls = [], [], 0
     manual = db.get_baseline(conn, role.manual_baseline)
@@ -292,10 +303,8 @@ def recompute(conn, role: sources.Role, *, llm=None, level: str = "entry", at: d
     content = {**agg, **{k: summary[k] for k in ("scope_expectation", "complexity_criteria", "description")},
                "summary_quotes": summary["summary_quotes"],
                "thresholds": {"REQ_SHARE": config.REQ_SHARE, "PREF_SHARE": config.PREF_SHARE, "MARGIN": config.MARGIN,
-                              "MIN_COMPANIES": config.MIN_COMPANIES, "MIN_POSTINGS": config.MIN_POSTINGS,
                               "TIER_WEIGHTS": config.TIER_WEIGHTS}}
     content["material"] = material_change(content, prev["content"] if prev else None)
-    insufficient = agg["companies"] < config.MIN_COMPANIES or agg["postings"] < config.MIN_POSTINGS
     n = (conn.execute("SELECT MAX(version) FROM market_versions WHERE role = ? AND level = ?", (role.key, level))
          .fetchone()[0] or 0) + 1
     vid = new_id()
@@ -305,7 +314,7 @@ def recompute(conn, role: sources.Role, *, llm=None, level: str = "entry", at: d
                      "summary_method, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, NULL, ?, ?)",
                      (vid, role.key, level, n, (at - timedelta(days=config.WINDOW_DAYS)).date().isoformat(),
                       at.date().isoformat(), agg["postings"], agg["companies"], json.dumps(content),
-                      content_hash(content), int(insufficient), int(test), summary["summary_method"], now_iso()))
+                      content_hash(content), 0, 0, summary["summary_method"], now_iso()))
     return get_version(conn, vid) | {"model_calls": calls}
 
 
@@ -332,9 +341,6 @@ def publish(conn, vid: str) -> dict:
     v = get_version(conn, vid)
     if v is None or v["status"] != "draft":
         raise ValueError("Only a draft version can be published.")
-    if v["insufficient"] and not allow_test_versions(conn):
-        raise ValueError(f"Insufficient data ({v['companies']} companies, {v['postings']} postings; needs "
-                         f"{config.MIN_COMPANIES} and {config.MIN_POSTINGS}). Turn on “Allow test versions” to publish it as a test.")
     prev = active(conn, v["role"], v["level"])
     if not material_change(v["content"], prev["content"] if prev else None):
         raise ValueError("No material change; active version kept.")
@@ -346,7 +352,7 @@ def publish(conn, vid: str) -> dict:
         conn.execute("UPDATE market_versions SET status = 'retired' WHERE role = ? AND level = ? AND status = 'published'",
                      (v["role"], v["level"]))
         conn.execute("UPDATE market_versions SET status = 'published', baseline_id = ?, published_at = ?, "
-                     "test_version = ? WHERE id = ?", (b.id, now_iso(), int(v["insufficient"]), vid))
+                     "test_version = 0 WHERE id = ?", (b.id, now_iso(), vid))
     return get_version(conn, vid)
 
 
@@ -405,8 +411,7 @@ def role_of_baseline(conn, baseline_id: str) -> sources.Role | None:
 
 def label_of(v: dict) -> dict:
     return {"version": v["version"], "date": (v["published_at"] or v["created_at"])[:10], "baseline_id": v["baseline_id"],
-            "test": v["test_version"], "label": f"Market baseline (v{v['version']}, {(v['published_at'] or v['created_at'])[:10]})"
-            + (" · Test version – insufficient data" if v["test_version"] else "")}
+            "basis": v["basis"], "label": f"Market baseline (v{v['version']}, {(v['published_at'] or v['created_at'])[:10]})"}
 
 
 def run_options(conn, run: dict) -> dict:

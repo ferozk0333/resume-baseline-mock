@@ -48,7 +48,7 @@ function Home() {
       <Card className="max-w-xl">
         <CardHeader>
           <CardTitle>Finish setting up your profile</CardTitle>
-          <CardDescription>Step {at + 1} of {STEP_LABELS.length}: {STEP_LABELS[at].label}. Your progress is saved.</CardDescription>
+          <CardDescription>Step {at + 1} of {STEP_LABELS.length}: {STEP_LABELS[at].label}</CardDescription>
         </CardHeader>
         <CardContent><Link href="/onboarding" className={buttonVariants()}>Continue</Link></CardContent>
       </Card>
@@ -109,7 +109,6 @@ function Home() {
                 <p className="text-sm text-muted-foreground">You&apos;ve marked every action in your plan done.</p>
               ) : (
                 <>
-                  <p className="text-sm text-muted-foreground">Open your plan for {card.title} to see what adds the most.</p>
                   <Link href={`/scores?role=${card.baseline_id}&tab=plan`} className={buttonVariants({ size: "sm", variant: "outline" })}>Open the plan</Link>
                 </>
               )}
@@ -129,7 +128,7 @@ function Home() {
           <CardContent className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-medium">Finish your profile</p>
-              <p className="text-sm text-muted-foreground">Answer the questions most applications ask, once: work authorization, start date, salary.</p>
+              <p className="text-sm text-muted-foreground">Work authorization, start date, salary.</p>
             </div>
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={() => {

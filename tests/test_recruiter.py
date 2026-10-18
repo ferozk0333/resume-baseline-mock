@@ -70,7 +70,7 @@ def test_ranked_list_tags_and_demo_labels(api):
     assert top["tags"] and len(top["tags"]) <= 3 and top["must_haves_met"] == 4 and 0 <= top["confidence"] <= 100
     assert top["demo"] == "Test archetype"
     assert top["percentile"] is None                    # scripted runs never enter a percentile pool
-    assert any(r["demo"] == "Demo data: parsed from structured profile" for r in rows)
+    assert any(r["demo"] == "Demo data" for r in rows)
 
 
 def test_sort_and_filters(api):
@@ -176,7 +176,8 @@ def test_parsed_profile_panel_shows_work_before_scoring(api):
     assert not p["scored"] and p["why_points"] == [] and p["generated_label"] is None
     repos = {r["name"]: r for r in p["work"]["repos"]}
     assert repos["rag-eval-kit"]["own_commits"] == 112 and repos["rag-eval-kit"]["readme_excerpt"]
-    assert p["work"]["linkedin"]["roles"]
+    assert "linkedin" not in p["work"] and p["work"]["linkedin_uploaded"] is True   # the tab shows the PDF itself
+    assert p["work"]["linkedin_file"] in (True, False)
     assert p["work"]["resume_file"] is True or p["work"]["resume_file"] is False
 
 

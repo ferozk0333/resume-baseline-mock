@@ -132,7 +132,7 @@ export type Panel = ApplicantRow & {
   differentiators: { tags: string[]; evidence: { name: string; quote: string | null; source: string | null;
     link: string | null; backing: string; evidence_id: string | null }[] };
   work: { videos: MediaLink[]; repos: Repo[]; portfolio: { name: string; description: string | null; url: string | null }[];
-    portfolio_url: string | null; linkedin: { roles: Role[]; claims: Claim[]; certifications: Certification[] } | null;
+    portfolio_url: string | null; linkedin_uploaded: boolean; linkedin_file: boolean;
     resume_file: boolean; resume_file_kind: string | null; linkedin_link: { url: string; source: string } | null;
     certifications?: { name: string; issuer: string | null; credential_status: string | null; sources: string[] }[];
     /** Display-only proof (specs/19 Phase D): shown to recruiters, not scored. */
@@ -251,7 +251,7 @@ export type MarketCriterion = { name: string; kind: string; share: number; requi
   quotes: string[] };
 export type MarketVersion = { id: string; role: string; level: string; version: number; window_start: string;
   window_end: string; postings: number; companies: number; status: "draft" | "published" | "discarded" | "retired";
-  insufficient: boolean; test_version: boolean; baseline_id: string | null; summary_method: string; created_at: string;
+  basis: string; baseline_id: string | null; summary_method: string; created_at: string;
   published_at: string | null;
   content: { criteria: MarketCriterion[]; required_years: number | null; expected_reach: number | null;
     scope_expectation: string | null; complexity_criteria: string | null; description: string | null;
@@ -260,7 +260,7 @@ export type MarketVersion = { id: string; role: string; level: string; version: 
 export type MarketRole = { key: string; title: string; manual_baseline: string; source: "manual" | "market";
   active: MarketVersion | null; latest: MarketVersion | null; postings: number; companies: number;
   configured: { companies: number; placeholders: number; fetchable: number }; levels: Record<string, number> };
-export type MarketLabel = { version: number; date: string; baseline_id: string; test: boolean; label: string };
+export type MarketLabel = { version: number; date: string; baseline_id: string; basis: string; label: string };
 export type RunBaselines = { role: string | null; role_title?: string; current: "standard" | "market";
   current_version?: number | null; standard: { baseline_id: string; label: string } | null; market: MarketLabel | null };
 export type MarketView = MarketLabel & { role: string; title: string; postings: number; companies: number;

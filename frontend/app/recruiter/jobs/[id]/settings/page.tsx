@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { InterviewPlan } from "@/components/app/recruiter/interview-plan";
@@ -49,7 +49,6 @@ function Settings() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Weights</CardTitle>
-          <CardDescription>Changing them re-ranks the applicants at once; no model is asked again.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -57,7 +56,6 @@ function Settings() {
             {(job.presets ?? []).map((p) => (
               <Button key={p} size="sm" variant={job.preset === p ? "default" : "outline"} onClick={() => save({ preset: p })}>{p}</Button>
             ))}
-            <span className="text-xs text-muted-foreground">{job.presets_note}</span>
           </div>
           <div className="grid gap-5 md:grid-cols-2">
             {DIMENSIONS.map((d) => (
@@ -92,7 +90,6 @@ function Settings() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Must-haves</CardTitle>
-          <CardDescription>Shown as “x of y met” on each applicant. Must-haves do not change the score.</CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="grid gap-2 md:grid-cols-2">

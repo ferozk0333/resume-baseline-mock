@@ -35,7 +35,7 @@ test("open job → select applicant → panel → compare 2 → shortlist", asyn
 
   // A parsed demo profile shows its work before scoring
   await (await reveal(list, list.getByRole("button", { name: /^Sofia Lindqvist/ }))).click();
-  await expect(page.getByRole("article", { name: /Profile of Sofia Lindqvist/ }).getByText(/^Not scored yet: see Work/)).toBeVisible();
+  await expect(page.getByRole("article", { name: /Profile of Sofia Lindqvist/ }).getByText("Not scored yet.", { exact: true })).toBeVisible();
 
   // Compare 2 (the list is virtualized: scroll back to the top rows first)
   await list.evaluate((el) => { el.scrollTop = 0; el.dispatchEvent(new Event("scroll")); });
@@ -81,7 +81,8 @@ test("open job → select applicant → panel → compare 2 → shortlist", asyn
   await page.getByRole("link", { name: "Job settings" }).click();
   await expect(page.getByText("Interview plan")).toBeVisible();
   await page.getByRole("link", { name: "Job settings" }).click();
-  await expect(page.getByText("Must-haves do not change the score.")).toBeVisible();
+  await expect(page.getByText("Must-haves", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Must-haves do not change the score.")).toHaveCount(0);   // cleanup round
   await page.screenshot({ path: "e2e/.tmp/recruiter-settings.png", fullPage: true });
   expect(problems).toEqual([]);
 });

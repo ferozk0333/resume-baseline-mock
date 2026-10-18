@@ -100,8 +100,6 @@ export function JobDetailView({ cid, jobId, onChanged }: { cid: string; jobId: s
                 <div className="text-lg font-medium tabular-nums">{d.jobmatch.must_haves_met}/{d.jobmatch.must_haves_total}</div>
               </div>
             )}
-            <p className="min-w-0 flex-1 basis-60 text-sm text-muted-foreground">
-              Sample value. JobMatch compares your evidence to this job&apos;s requirements and is coming soon.</p>
           </div>
         ) : <p className="text-sm text-muted-foreground">JobMatch is coming soon.</p>}
         <p className="mt-3 border-t pt-3 text-sm" data-testid="baseline-under-jobmatch">
@@ -142,7 +140,7 @@ export function JobDetailView({ cid, jobId, onChanged }: { cid: string; jobId: s
         <h3 className="font-semibold">What would raise your match</h3>
         {d.raise.length > 0 ? (
           <>
-            {d.raise_fallback && <p className="text-sm text-muted-foreground">None of your plan&apos;s actions name this job&apos;s requirements; your top action:</p>}
+            {d.raise_fallback && <p className="text-sm text-muted-foreground">Your top action:</p>}
             <ol className="space-y-2">
               {d.raise.map((a, i) => (
                 <li key={i} className="rounded-xl border bg-white px-4 py-3 text-sm">
@@ -157,7 +155,7 @@ export function JobDetailView({ cid, jobId, onChanged }: { cid: string; jobId: s
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            {d.role.run_id ? <>Your plan for {d.role.title} is prepared when you open it. <Link
+            {d.role.run_id ? <><Link
               href={`/scores?role=${d.role.baseline_id}&tab=plan`} className="font-medium text-primary hover:underline">Open the plan</Link></>
               : "Add this role in My scores to get a plan for it."}
           </p>

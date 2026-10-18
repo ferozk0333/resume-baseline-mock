@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadError } from "@/components/app/candidate/load-error";
 import { get, type MarketView } from "@/lib/api";
@@ -28,7 +27,6 @@ export default function MarketAsks() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">What the market asks for</h1>
-        <p className="text-sm text-muted-foreground">From recent entry-level job postings: how many companies list each skill or tool, and whether it is usually required.</p>
       </div>
       <div role="tablist" aria-label="Role" className="flex w-fit max-w-full flex-wrap rounded-lg border bg-muted p-0.5 text-sm">
         {roles.map((r) => (
@@ -41,8 +39,7 @@ export default function MarketAsks() {
       ) : (
         <section aria-label="Market criteria" className="space-y-3 rounded-xl border bg-white p-4 sm:p-5">
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span>{view.postings} postings from {view.companies} companies · {view.window[0]} to {view.window[1]} · version {view.version}</span>
-            {view.test && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Test version – insufficient data</Badge>}
+            <span>{view.basis} · {view.window[0]} to {view.window[1]} · version {view.version}</span>
           </div>
           <p className="text-sm">Typical minimum experience: <b>{view.required_years ?? "—"} year{view.required_years === 1 ? "" : "s"}</b> · Typical reach of the work: <b>{view.expected_reach ?? "—"}</b></p>
           <div className="-mx-2 overflow-x-auto">

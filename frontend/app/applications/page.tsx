@@ -43,7 +43,6 @@ function Applications() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">My applications</h1>
-        <p className="text-sm text-muted-foreground">Every application gets an answer. Here is where each one stands.</p>
       </div>
       {error ? (
         <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">

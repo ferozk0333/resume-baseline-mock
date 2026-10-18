@@ -158,10 +158,10 @@ test("full path, every status, closure, Mark done, plan empty state, Role family
   await expect(page.getByLabel("Role family")).toHaveValue("none");
   await request.delete(`${API}/jobs/${draft.job_id}/draft`);
 
-  // 10. Market templates in "Copy an existing job": test versions labelled, full ones first
+  // 10. Market templates in "Copy an existing job": each says what it is based on
   await page.goto("/recruiter/jobs/new");
   const select = page.getByLabel("Job to copy");
-  await expect(select.locator("optgroup[label^='Market templates'] option").first()).toHaveText(/Test version – insufficient data/);
+  await expect(select.locator("optgroup[label^='Market templates'] option").first()).toHaveText(/Based on \d+ postings? from \d+ compan(y|ies)/);
   await select.evaluate((el) => {
     (el as HTMLSelectElement).size = 12; el.style.height = "auto";
     el.querySelector("optgroup[label^='Market templates']")?.scrollIntoView({ block: "end" });

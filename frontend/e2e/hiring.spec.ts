@@ -72,7 +72,7 @@ test("hiring workflow: invite → reply → slot → feedback → advance", asyn
   await step.getByRole("button", { name: /Summarize feedback/ }).click();
 
   await expect(step.getByRole("heading", { name: "Decide the next step" })).toBeVisible();
-  await expect(step.getByText("The summary makes no recommendation.")).toBeVisible();
+  await expect(step.getByText(/makes no recommendation|summarized by|code summary/)).toHaveCount(0);   // cleanup round
   await page.screenshot({ path: "e2e/.tmp/wf-7-decide.png" });
   await step.getByRole("button", { name: /^Advance to Interview/ }).click();
   await expect(step.getByRole("heading", { name: "Approve scheduling email" })).toBeVisible();

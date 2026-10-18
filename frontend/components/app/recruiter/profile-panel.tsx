@@ -34,7 +34,7 @@ export function ProfilePanel({ p, tab, onTab, stages, onStatus, onStage, onRejec
     + (p.work.certifications?.length ?? 0) + (p.work.more?.length ?? 0);
   const has: Record<Tab, boolean> = {
     overview: true, requirements: p.requirements.length > 0, eeat: !!p.dimensions, resume: p.work.resume_file,
-    work: workCount > 0 || !!p.work.portfolio_url, linkedin: !!p.work.linkedin || !!p.work.linkedin_link, activity: true,
+    work: workCount > 0 || !!p.work.portfolio_url, linkedin: !!p.work.linkedin_uploaded || !!p.work.linkedin_link, activity: true,
   };
   const label: Record<Tab, string> = { overview: "Overview", requirements: "Requirements", eeat: "EEAT",
     resume: "Resume", work: `Work (${workCount})`, linkedin: "LinkedIn", activity: "Activity" };
@@ -131,7 +131,7 @@ function Line({ text, className }: { text: string; className?: string }) {
 function Overview({ p }: { p: Panel }) {
   if (!p.scored) {
     return <p className="rounded-lg border border-dashed bg-white px-4 py-3 text-sm text-muted-foreground">
-      Not scored yet: see Work, Resume and LinkedIn. Scores, “why” and questions appear after judging.</p>;
+      Not scored yet.</p>;
   }
   return (
     <div className="grid gap-x-8 gap-y-5 xl:grid-cols-2">
@@ -230,7 +230,7 @@ function Eeat({ p }: { p: Panel }) {
                   </summary>
                   <div className="space-y-1 px-8 pb-2 text-muted-foreground">
                     {s.evidence.length === 0 && <p>{s.guidance ?? (s.status === "scored"
-                      ? "Computed in code from the roles' and projects' relevance and dates (see Relevance)."
+                      ? "Based on the roles' and projects' relevance and dates (see Relevance)."
                       : "No evidence judged.")}</p>}
                     {s.evidence.map((e, i) => (
                       <p key={i}><span className={cn("font-medium", e.supported ? "text-emerald-700" : "text-muted-foreground")}>
@@ -262,7 +262,6 @@ function Work({ p }: { p: Panel }) {
       {p.work.videos.length > 0 && (
         <div>
           <h4 className="text-sm font-medium">Project demo videos</h4>
-          <p className="mb-2 text-xs text-muted-foreground">Walkthroughs of the demo, architecture and design choices, from the candidate.</p>
           <div className="grid gap-3 lg:grid-cols-2">
             {p.work.videos.map((v) => (
               <iframe key={v.id} src={v.embed_url} title={v.title ?? `${v.kind} demo video`} loading="lazy"
@@ -340,7 +339,6 @@ function Work({ p }: { p: Panel }) {
 }
 
 function LinkedIn({ p }: { p: Panel }) {
-  const li = p.work.linkedin;
   const link = p.work.linkedin_link;
   return (
     <div className="space-y-3 text-sm">
@@ -353,27 +351,10 @@ function LinkedIn({ p }: { p: Panel }) {
           <span className="text-xs text-muted-foreground">Profile link {link.source}</span>
         </p>
       )}
-      {!li && <p className="text-xs text-muted-foreground">No LinkedIn PDF uploaded.</p>}
-      {li && <LinkedInPdf li={li} />}
-    </div>
-  );
-}
-
-function LinkedInPdf({ li }: { li: NonNullable<Panel["work"]["linkedin"]> }) {
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">From the uploaded LinkedIn PDF</p>
-      <ul className="space-y-2">
-        {li.roles.map((r) => (
-          <li key={r.id}>
-            <div className="font-medium">{r.title}{r.employer ? ` — ${r.employer}` : ""}</div>
-            <div className="text-xs text-muted-foreground">{[r.start_date, r.is_current ? "present" : r.end_date].filter(Boolean).join(" to ")}</div>
-            {r.bullets.length > 0 && <ul className="mt-1 list-disc pl-5 text-xs">{r.bullets.map((b) => <li key={b.id}>{b.text}</li>)}</ul>}
-          </li>
-        ))}
-      </ul>
-      {li.claims.length > 0 && <p className="text-xs text-muted-foreground">Skills: {li.claims.map((c) => c.name_raw).join(", ")}</p>}
-      {li.certifications.length > 0 && <p className="text-xs text-muted-foreground">Certifications: {li.certifications.map((c) => c.name).join(", ")}</p>}
+      {p.work.linkedin_file ? (
+        <iframe src={`${API}/candidates/${p.candidate_id}/files/linkedin`} title="LinkedIn PDF"
+          className="h-[calc(100vh-17rem)] w-full rounded-lg border bg-white" />
+      ) : <p className="text-sm text-muted-foreground" data-testid="no-linkedin-pdf">No LinkedIn PDF uploaded</p>}
     </div>
   );
 }
@@ -382,7 +363,7 @@ function ActivityTab({ id, refresh }: { id: string; refresh: number }) {
   const [items, setItems] = useState<Activity[] | null>(null);
   useEffect(() => { get<Activity[]>(`/applications/${id}/activity`).then(setItems).catch(() => setItems([])); }, [id, refresh]);
   if (items === null) return null;
-  if (!items.length) return <p className="text-sm text-muted-foreground">No activity yet: stage moves, emails and decisions appear here.</p>;
+  if (!items.length) return <p className="text-sm text-muted-foreground">No activity yet.</p>;
   return (
     <ol className="space-y-3 text-sm">
       {items.map((a) => (

@@ -146,7 +146,7 @@ export function JobsBrowser({ cid }: { cid: string }) {
       <Dialog open={showHidden} onOpenChange={setShowHidden}>
         <DialogContent>
           <DialogHeader><DialogTitle>Hidden jobs</DialogTitle>
-            <DialogDescription>Jobs you marked Not interested. Hiding a job never changes a score.</DialogDescription></DialogHeader>
+            <DialogDescription>Jobs you marked Not interested.</DialogDescription></DialogHeader>
           <ul className="divide-y text-sm">
             {data.hidden_jobs.map((h) => (
               <li key={h.id} className="flex items-center justify-between gap-3 py-2">
@@ -233,7 +233,7 @@ function NotInterested({ job, onClose, onDone }: { job: HomeJob | null; onClose:
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Not interested in {job?.title}?</DialogTitle>
-          <DialogDescription>We&apos;ll hide it. A reason is optional and helps us show better jobs. It never changes a score.</DialogDescription>
+          <DialogDescription>A reason is optional.</DialogDescription>
         </DialogHeader>
         <fieldset className="space-y-1.5 text-sm">
           <legend className="mb-1 font-medium">Reason (optional)</legend>

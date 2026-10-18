@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { get, type Candidate } from "@/lib/api";
 import { useCurrentCandidate } from "@/lib/current-candidate";
 import { cn } from "@/lib/utils";
@@ -36,7 +36,6 @@ export function ViewingAs() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Switch profile</DialogTitle>
-            <DialogDescription>The demo has no sign-in. Pick whose candidate view to see.</DialogDescription>
           </DialogHeader>
           <ul aria-label="Saved profiles" className="max-h-72 space-y-1 overflow-y-auto">
             {(list ?? []).map((c) => (

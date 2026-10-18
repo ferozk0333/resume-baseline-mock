@@ -160,7 +160,7 @@ export function ProjectCard({ project: p, onDone }: { project: Project | null; o
     { key: "name", label: "Name", htmlFor: `${id}-name`, view: p?.name,
       edit: <Input id={`${id}-name`} required value={f.name} onChange={(e) => set({ name: e.target.value })} /> },
     { key: "kind", label: "Type", htmlFor: `${id}-kind`, view: TYPE_LABEL[p?.kind ?? ""] ?? p?.kind,
-      edit: f.kind === "repo" ? <p className="py-1.5 text-sm text-muted-foreground">GitHub repository (from GitHub)</p> : (
+      edit: f.kind === "repo" ? <p className="py-1.5 text-sm text-muted-foreground">GitHub repository</p> : (
         <select id={`${id}-kind`} value={f.kind} onChange={(e) => set({ kind: e.target.value })}
           className="h-8 w-full rounded-lg border border-field-border bg-field px-2 text-sm">
           {PROJECT_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
