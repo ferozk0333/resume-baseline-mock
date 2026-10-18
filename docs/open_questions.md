@@ -231,10 +231,12 @@ ask if wanted.
 
 ## Cleanup round (feature/cleanup)
 
-45. **Awards are listed under "Skills and tools" in the Consistency judge's source summary** [OPEN]
-    (`graph/nodes/trust.py` `_summary`). Found with the LinkedIn Honors-Awards bug (item 5). It is a judge input: fixing
-    it changes the text the source-alignment question reads, so it needs re-judging (live calls) and may move
-    Consistency. Not changed in this round (no live calls).
+45. **Awards were listed under "Skills and tools" in the Consistency judge's source summary** — fixed (Feroz's go
+    for live calls): `graph/nodes/trust.py` `_summary` lists them on their own "Awards:" line. Only Feroz's profiles have
+    award claims; `scripts/consistency_live.py` re-scored their 14 current scores live (229 questions; Consistency
+    unchanged in all 14: the 18 re-asked alignment questions gave the same answers) and applied them to demo.db with
+    recorded answers only (identical results). The other movements (−0.87 to +1.55) are the spec 19 dedupe catching up
+    on Feroz tests 3, 4, 7, 8 and 9, which were re-merged but not re-scored then.
 46. **Recompute skips the model automatically** (my interpretation; please confirm): the model is used only when a
     posting in the window has never been read. Then the version also gets a new summary; otherwise the previous scope,
     complexity and description text is kept (no summary call), and new names are only suggested, not proposed by a

@@ -80,9 +80,13 @@ def _summary(extracted: dict) -> list[str]:
         dates = f"{r.get('start_date') or '?'} to {'present' if r.get('is_current') else r.get('end_date') or '?'}"
         lines.append(f"Role: {r['title']}" + (f" at {r['employer']}" if r.get("employer") else "") + f" ({dates})")
     lines += [f"Project: {p['name']}" for p in extracted.get("projects", [])]
-    claims = [c["name_raw"] for c in extracted.get("claims", [])]
-    if claims:
-        lines.append("Skills and tools: " + ", ".join(claims))
+    claims = extracted.get("claims", [])
+    skills = [c["name_raw"] for c in claims if c.get("kind") in ("skill", "tool")]
+    awards = [c["name_raw"] for c in claims if c.get("kind") == "award"]
+    if skills:
+        lines.append("Skills and tools: " + ", ".join(skills))
+    if awards:                                       # an award is never a skill (cleanup round, open question 45)
+        lines.append("Awards: " + ", ".join(awards))
     return lines
 
 
