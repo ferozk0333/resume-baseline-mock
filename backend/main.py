@@ -10,12 +10,13 @@ import importlib
 import json
 import logging
 import os
+import re
 from contextlib import contextmanager
 from typing import Literal
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend import media
@@ -359,9 +360,45 @@ def start_ticker(state: State) -> None:
     threading.Thread(target=loop, name="workflow-tick", daemon=True).start()
 
 
+UPLOAD_PATHS = re.compile(r"^/candidates/[^/]+/onboard$|^/jobs/drafts/read$|^/market/[^/]+/postings$")
+
+
+class UploadRateLimit:
+    """Per-address upload limit (deploy item 6): at most UPLOAD_RATE_PER_HOUR upload requests per client address in
+    any hour, kept in memory (the API runs as one process). Behind the proxy the address is the first X-Forwarded-For
+    entry (TRUST_PROXY=1); otherwise the socket's peer."""
+
+    def __init__(self, per_hour: int, clock=None):
+        import threading
+        import time
+        self.per_hour, self.clock = per_hour, clock or time.time
+        self.seen: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def address(request: Request) -> str:
+        fwd = request.headers.get("x-forwarded-for", "") if config.TRUST_PROXY else ""
+        return fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+    def wait_seconds(self, addr: str) -> int:
+        """0 and counted when allowed; else seconds until the oldest upload in the window ages out."""
+        now = self.clock()
+        with self._lock:
+            hits = [t for t in self.seen.get(addr, []) if now - t < 3600]
+            if len(hits) >= self.per_hour:
+                self.seen[addr] = hits
+                return int(3600 - (now - hits[0])) + 1
+            hits.append(now)
+            self.seen[addr] = hits
+            return 0
+
+
 def create_app(deps: Deps | None = None) -> FastAPI:
     from contextlib import asynccontextmanager
+    if config.REQUIRE_DEMO_EMAIL_TO and not config.DEMO_EMAIL_TO:
+        raise RuntimeError("DEMO_EMAIL_TO must be set: every email goes to that address only (REQUIRE_DEMO_EMAIL_TO=1).")
     state = State(deps)
+    uploads = UploadRateLimit(config.UPLOAD_RATE_PER_HOUR)
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -379,6 +416,22 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         except Exception as exc:                            # noqa: BLE001
             log.exception("request failed: %s %s", request.method, request.url.path)
             return JSONResponse(status_code=500, content={"detail": clean_error(exc)})
+
+    @app.middleware("http")
+    async def upload_rate_limit(request: Request, call_next):
+        if request.method == "POST" and config.UPLOAD_RATE_PER_HOUR > 0 and UPLOAD_PATHS.match(request.url.path):
+            wait = uploads.wait_seconds(UploadRateLimit.address(request))
+            if wait:
+                return JSONResponse(status_code=429, headers={"Retry-After": str(wait)}, content={
+                    "detail": f"Too many uploads from this address. Try again in {max(1, round(wait / 60))} min."})
+        return await call_next(request)
+
+    @app.get("/healthz", tags=["ops"], response_class=PlainTextResponse)
+    def healthz():
+        """Liveness for the proxy and Docker: the app answers and its database opens."""
+        with conn() as c:
+            c.execute("SELECT 1").fetchone()
+        return "ok"
 
     app.add_middleware(CORSMiddleware, allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
                        allow_methods=["*"], allow_headers=["*"])     # local mock: any local web port

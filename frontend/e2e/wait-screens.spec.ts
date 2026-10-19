@@ -4,7 +4,7 @@ import { expect, test, type APIRequestContext, type Page, type Route } from "@pl
 
 // Onboarding wait screens (specs/17): reading and scoring progress, driven here by scripted progress answers so
 // every state can be checked; "Good to know" tips with a controlled clock; one primary-role control.
-const API = "http://localhost:8010";
+const API = process.env.E2E_API ?? "http://localhost:8010";
 const OUT = "e2e/.tmp/spec17-wait";
 const CV = path.join(__dirname, ".tmp/cv.pdf");
 const DS = "baseline-data-scientist-entry", AI = "baseline-ai-engineer-entry";
@@ -115,8 +115,10 @@ for (const [w, h, tag] of [[1440, 900, "desktop"], [390, 844, "mobile"]] as cons
     await expect(page.getByTestId(`role-card-${AI}`)).toContainText("Primary");
     await expect(page.getByTestId(`role-card-${DS}`)).toContainText("Make primary");
     await page.screenshot({ path: `${OUT}/${tag}-reading-3-done-primary.png`, fullPage: true });
-    const saved = await (await request.get(`${API}/candidates/${cid}/onboarding`)).json();
-    expect(saved.targets.find((t: { is_primary: boolean }) => t.is_primary).baseline_id).toBe(AI);
+    await expect.poll(async () => {                                // the page saves in the background
+      const saved = await (await request.get(`${API}/candidates/${cid}/onboarding`)).json();
+      return saved.targets.find((t: { is_primary: boolean }) => t.is_primary)?.baseline_id;
+    }).toBe(AI);
   });
 
   test(`scoring wait: rows, segments, Ready, error + Retry, auto-advance (${tag})`, async ({ page, request }) => {

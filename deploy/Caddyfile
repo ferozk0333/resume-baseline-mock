@@ -1,0 +1,33 @@
+# Reverse proxy for the prototype (docs/deploy.md): plain HTTP on :80, no TLS. The web app at /, the API at /api
+# (prefix stripped), /healthz from the API. Server-sent events are passed through unbuffered (flush_interval -1).
+{
+	auto_https off
+	admin off
+}
+
+:80 {
+	encode gzip
+
+	handle /healthz {
+		reverse_proxy api:8000
+	}
+
+	handle_path /api/* {
+		# Whole request: two uploads of UPLOAD_MAX_MB (resume + LinkedIn PDF) and the form; the API checks each file.
+		request_body {
+			max_size {$PROXY_MAX_BODY_MB:21}MiB
+		}
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

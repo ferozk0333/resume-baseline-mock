@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, PartyPopper } from "lucide-react";
@@ -153,15 +153,22 @@ function RolesStep({ state, reload, onContinue, onRetry }: { state: OnboardingSt
   const failed = state.read_task?.status === "error";
   const canReview = (done || resumeRead) && !failed;
 
-  async function save(next: Target[]) {
+  // Saves go out one at a time, in click order, and only the latest one's answer is shown: two quick clicks (add a
+  // role, then make it primary) can never be stored in the wrong order.
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const latest = useRef(0);
+  function save(next: Target[]) {
     const before = picked;
     setPicked(next);
     if (next.length === 0) return;
-    try {
-      const out = await put<Target[]>(`/candidates/${cid}/targets`, { baseline_ids: next.map((t) => t.baseline_id),
-        primary: next.find((t) => t.is_primary)?.baseline_id ?? next[0].baseline_id });
-      setPicked(out);
-    } catch (e) { setPicked(before); toast.error((e as Error).message); }
+    const n = ++latest.current;
+    queue.current = queue.current.then(async () => {
+      try {
+        const out = await put<Target[]>(`/candidates/${cid}/targets`, { baseline_ids: next.map((t) => t.baseline_id),
+          primary: next.find((t) => t.is_primary)?.baseline_id ?? next[0].baseline_id });
+        if (n === latest.current) setPicked(out);
+      } catch (e) { if (n === latest.current) setPicked(before); toast.error((e as Error).message); }
+    });
   }
   function toggle(id: string, title: string) {
     const on = picked.some((t) => t.baseline_id === id);

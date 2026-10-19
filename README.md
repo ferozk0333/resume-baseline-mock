@@ -268,3 +268,7 @@ afterwards, and writes a timing table, token counts and an estimated Claude cost
 - Everything else in `requirements.txt` is under a permissive licence (MIT, BSD or Apache-2.0).
 - The code-first parsers (specs/18 phase 3) add no dependency: they use PyMuPDF and python-docx already listed, and
   their own date parser. OpenResume (AGPL) informed the ideas only; no code was copied.
+
+## Prototype deployment
+
+One EC2 instance with Docker Compose (API, web app, reverse proxy on :80): see [docs/deploy.md](docs/deploy.md). `make archive` and `make reseed` build a clean demo database from the synthetic profiles' saved judgments (no model calls).

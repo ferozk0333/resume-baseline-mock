@@ -67,7 +67,7 @@ test("market baseline from the test fixtures", async ({ page }) => {
 
 // Candidate side: "What the market asks for" (counts only) and the Score page's "Scored against" switch.
 test("candidate sees the market view and switches a score to the Market baseline", async ({ page, request }) => {
-  const API = "http://localhost:8010";
+  const API = process.env.E2E_API ?? "http://localhost:8010";
   await page.setViewportSize({ width: 1440, height: 900 });
   await request.post(`${API}/market/data_scientist/fixtures`);
   const v = await (await request.post(`${API}/market/data_scientist/recompute`, { data: {} })).json();

@@ -80,7 +80,6 @@ test("open job → select applicant → panel → compare 2 → shortlist", asyn
   // Job settings: must-haves, weights, interview plan
   await page.getByRole("link", { name: "Job settings" }).click();
   await expect(page.getByText("Interview plan")).toBeVisible();
-  await page.getByRole("link", { name: "Job settings" }).click();
   await expect(page.getByText("Must-haves", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Must-haves do not change the score.")).toHaveCount(0);   // cleanup round
   await page.screenshot({ path: "e2e/.tmp/recruiter-settings.png", fullPage: true });

@@ -139,6 +139,11 @@ class ClaudeLLM:
         from core.routing import Overloaded, Throttled
         if self._real:
             require_live("Claude")
+            from core.spend import SpendCapReached, charge
+            try:
+                charge("claude")                       # daily cap (deploy item 6)
+            except SpendCapReached as exc:
+                raise LLMError(str(exc)) from exc
         request = self._request(model, system, user, output_type)
         try:
             with claude_slots:                     # timed by the router (one span per model call, with its task)

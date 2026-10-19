@@ -87,7 +87,7 @@ test("hiring workflow: invite → reply → slot → feedback → advance", asyn
 
 // Report screenshots: Tasks with several kinds of steps, the board with status badges, the .ics email in the Outbox.
 test("tasks and board across several workflows", async ({ page, request }) => {
-  const API = "http://localhost:8010";
+  const API = process.env.E2E_API ?? "http://localhost:8010";
   await page.setViewportSize({ width: 1440, height: 900 });
   const jobs = await (await request.get(`${API}/jobs`)).json();
   const job = jobs.find((j: { title: string }) => j.title === "AI Engineer");

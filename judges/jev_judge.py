@@ -108,6 +108,12 @@ class JevJudge:
     def _post(self, body: dict) -> dict:
         if self._real and not config.LIVE:
             raise JevError("Real Jev calls are off: set LIVE=1 to call providers (make live does).")
+        if self._real:
+            from core.spend import SpendCapReached, charge
+            try:
+                charge("jev")                          # daily cap (deploy item 6): past it, the free route judges
+            except SpendCapReached as exc:
+                raise JevError(str(exc)) from exc
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         for attempt in range(self.max_retries + 1):
             try:

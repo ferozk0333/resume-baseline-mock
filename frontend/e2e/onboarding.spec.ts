@@ -91,7 +91,7 @@ test("first run: onboarding at 1440×900, then Home, My scores and Profile", asy
   // Home: primary role strip, next best action; the finish card is gone (details saved)
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByText("Next best action")).toBeVisible();
-  await expect(page.getByText("Build an A/B test project")).toBeVisible();
+  await expect(page.getByText("Build an A/B test project").first()).toBeVisible();
   await expect(page.getByText("Finish your profile")).toHaveCount(0);
   await expect(page.getByText(/Demo: viewing as Priya Natarajan/)).toBeVisible();
   await shot(page, "desktop-7-home");

@@ -5,7 +5,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // Cleanup round: Tasks (no inbox sentence, no address; one "Check inbox now" with the last check in its tooltip) and the
 // recruiter LinkedIn tab (the uploaded PDF in a viewer, or "No LinkedIn PDF uploaded"). Screenshots: e2e/.tmp/cleanup.
 const OUT = "e2e/.tmp/cleanup";
-const API = "http://localhost:8010";
+const API = process.env.E2E_API ?? "http://localhost:8010";
 const CV = path.join(__dirname, ".tmp/cv.pdf");
 const LINKEDIN = path.join(__dirname, ".tmp/linkedin-slow.pdf");
 fs.mkdirSync(OUT, { recursive: true });

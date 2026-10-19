@@ -468,6 +468,17 @@ EMAIL_FROM = _env("EMAIL_FROM", "")
 # Demo redirect: while set, every email goes to this address only (subject and body name the intended recipient).
 # Set DEMO_EMAIL_TO= (empty) to turn the redirect off.
 DEMO_EMAIL_TO = os.getenv("DEMO_EMAIL_TO", "you@example.com").split("#", 1)[0].strip()
+# Prototype deployment (docs/deploy.md): the API refuses to start without the demo redirect.
+REQUIRE_DEMO_EMAIL_TO = _env("REQUIRE_DEMO_EMAIL_TO", "0") == "1"
+
+# --- Spending and abuse limits (deploy item 6) --------------------------------------------------------------------
+# Daily request caps on the paid providers (core/spend.py); 0 = no paid calls. Free tiers keep their own limits.
+JEV_DAILY_MAX_REQUESTS = int(_env("JEV_DAILY_MAX_REQUESTS", "300"))
+CLAUDE_DAILY_MAX_REQUESTS = int(_env("CLAUDE_DAILY_MAX_REQUESTS", "20"))
+# Uploads per client address per hour (resume/LinkedIn, job descriptions, market postings); 0 = no limit.
+UPLOAD_RATE_PER_HOUR = int(_env("UPLOAD_RATE_PER_HOUR", "20"))
+# Behind the reverse proxy, the client address is the first X-Forwarded-For entry (set TRUST_PROXY=1 only there).
+TRUST_PROXY = _env("TRUST_PROXY", "0") == "1"
 REJECTION_MAX_WORDS = 150
 SCHEDULING_MAX_WORDS = 120
 

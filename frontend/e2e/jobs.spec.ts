@@ -4,7 +4,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 
 // Candidate experience, phase B (specs/17 §4–§6, §9): Home with the ranked jobs list and detail pane, the JobMatch
 // preview, job detail evidence, the apply sheet, Not interested and the empty states. Screenshots: e2e/.tmp/spec17b.
-const API = "http://localhost:8010";
+const API = process.env.E2E_API ?? "http://localhost:8010";
 const OUT = "e2e/.tmp/spec17b";
 const CV = path.join(__dirname, ".tmp/cv.pdf");
 const DS = "baseline-data-scientist-entry", AI = "baseline-ai-engineer-entry";
