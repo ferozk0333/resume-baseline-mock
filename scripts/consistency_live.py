@@ -4,7 +4,7 @@
     LIVE=1 LLM_PROVIDER=gemini RIGHTSTAFF_DB=data/demo.db python scripts/consistency_live.py --run
     RIGHTSTAFF_DB=data/demo.db python scripts/consistency_live.py --apply   # demo.db, replay only, no calls
 
-Scope: every candidate with an award claim in a read document (only Feroz's own profiles), each score they hold: the
+Scope: every candidate with an award claim in a read document (only the owner's live profiles), each score they hold: the
 latest run per baseline and every application. Scored on a copy of demo.db (data/consistency-live.db, resumable):
 saved answers for the same input are reused, the rest is asked live; a daily limit stops cleanly. --apply copies the
 new judgments into demo.db, re-scores the same scores with recorded answers only (a score that would need a new

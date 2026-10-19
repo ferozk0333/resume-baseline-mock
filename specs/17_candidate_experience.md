@@ -1,6 +1,6 @@
 # Spec 17 — Candidate experience: onboarding, Home, job detail, my applications
 
-Status: approved direction (Feroz, 2026-10-16). Items marked **[proposal]** are Claude (chat) suggestions Feroz accepted in principle; mark anything you add beyond this spec as "my interpretation; please confirm".
+Status: approved direction (the owner, 2026-10-16). Items marked **[proposal]** are Claude (chat) suggestions the owner accepted in principle; mark anything you add beyond this spec as "my interpretation; please confirm".
 
 ## 0. Why (research summary)
 Candidates' top pains in 2026:

@@ -492,42 +492,42 @@ def _role(title, employer, start, end, eid, current=False):
 def test_linkedin_wording_of_same_jobs_is_merged():
     from extraction.records import Profile
     resume = Profile(roles=[
-        _role("AI Engineer", "Institute for Health Metrics and Evaluation (IHME)", date(2025, 10, 1), date(2026, 6, 1), "r"),
-        _role("Research Member", "People Analytics Research Lab, University of Washington",
+        _role("AI Engineer", "Institute for Coastal Health Research (ICHR)", date(2025, 10, 1), date(2026, 6, 1), "r"),
+        _role("Research Member", "People Analytics Research Lab, Lakeshore State University",
               date(2025, 9, 1), date(2025, 12, 1), "r"),
-        _role("Software Engineer, Machine Learning", "Oracle Financial Services Software",
+        _role("Software Engineer, Machine Learning", "Quarry Financial Services Software",
               date(2022, 7, 1), date(2023, 6, 1), "r"),
     ])
     linkedin = Profile(roles=[
-        _role("AI Engineer", "Institute for Health Metrics and Evaluation", date(2025, 9, 1), date(2026, 6, 1), "l"),
-        _role("Research Assistant at People Analytics Research Lab", "University of Washington Information School",
+        _role("AI Engineer", "Institute for Coastal Health Research", date(2025, 9, 1), date(2026, 6, 1), "l"),
+        _role("Research Assistant at People Analytics Research Lab", "Lakeshore State University Information School",
               date(2025, 9, 1), date(2025, 12, 1), "l"),
-        _role("Desk Service Representative", "University of Washington Housing & Food Services",
+        _role("Desk Service Representative", "Lakeshore State University Housing & Food Services",
               date(2025, 5, 1), date(2025, 8, 1), "l"),
-        _role("Software Engineer", "Oracle", date(2022, 7, 1), date(2023, 6, 1), "l"),
+        _role("Software Engineer", "Quarry", date(2022, 7, 1), date(2023, 6, 1), "l"),
     ])
     merged, report = merge_profiles([resume, linkedin])
     assert [(r.title, r.employer) for r in merged.roles] == [
-        ("AI Engineer", "Institute for Health Metrics and Evaluation (IHME)"),        # resume wording wins
-        ("Research Member", "People Analytics Research Lab, University of Washington"),
-        ("Software Engineer, Machine Learning", "Oracle Financial Services Software"),
-        ("Desk Service Representative", "University of Washington Housing & Food Services"),
+        ("AI Engineer", "Institute for Coastal Health Research (ICHR)"),        # resume wording wins
+        ("Research Member", "People Analytics Research Lab, Lakeshore State University"),
+        ("Software Engineer, Machine Learning", "Quarry Financial Services Software"),
+        ("Desk Service Representative", "Lakeshore State University Housing & Food Services"),
     ]
     assert merged.roles[0].start_date == date(2025, 10, 1) and report.merged == 3
 
 
 def test_similar_roles_from_one_document_are_kept_apart():
     from extraction.records import Profile
-    resume = Profile(roles=[_role("Teaching Assistant", "University of Washington", date(2024, 9, 1), None, "r", True),
-                            _role("Research Assistant", "University of Washington", date(2024, 9, 1), None, "r", True)])
+    resume = Profile(roles=[_role("Teaching Assistant", "Lakeshore State University", date(2024, 9, 1), None, "r", True),
+                            _role("Research Assistant", "Lakeshore State University", date(2024, 9, 1), None, "r", True)])
     merged, _ = merge_profiles([resume])
     assert len(merged.roles) == 2
 
 
 def test_concurrent_jobs_in_both_sources_pair_one_to_one():
     from extraction.records import Profile
-    ta = ("Teaching Assistant", "University of Washington")
-    ra = ("Research Assistant", "University of Washington")
+    ta = ("Teaching Assistant", "Lakeshore State University")
+    ra = ("Research Assistant", "Lakeshore State University")
     resume = Profile(roles=[_role(*ta, date(2024, 9, 1), None, "r", True), _role(*ra, date(2024, 9, 1), None, "r", True)])
     linkedin = Profile(roles=[_role(*ra, date(2024, 9, 1), None, "l", True), _role(*ta, date(2024, 9, 1), None, "l", True)])
     merged, report = merge_profiles([resume, linkedin])
@@ -536,9 +536,9 @@ def test_concurrent_jobs_in_both_sources_pair_one_to_one():
 
 def test_cross_source_roles_need_overlapping_dates_and_a_shared_title_word():
     from extraction.records import Profile
-    resume = Profile(roles=[_role("Software Engineer", "Oracle", date(2022, 7, 1), date(2023, 6, 1), "r")])
+    resume = Profile(roles=[_role("Software Engineer", "Quarry", date(2022, 7, 1), date(2023, 6, 1), "r")])
     later = Profile(roles=[_role("Software Engineer", "Oracle Corp", date(2024, 1, 1), date(2024, 12, 1), "l")])
-    other_job = Profile(roles=[_role("Product Manager", "Oracle", date(2022, 7, 1), date(2023, 6, 1), "l")])
+    other_job = Profile(roles=[_role("Product Manager", "Quarry", date(2022, 7, 1), date(2023, 6, 1), "l")])
     assert len(merge_profiles([resume, later])[0].roles) == 2       # a later stint is a separate role
     assert len(merge_profiles([resume, other_job])[0].roles) == 2   # different job at the same employer
 

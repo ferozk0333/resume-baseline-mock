@@ -17,12 +17,12 @@ from extraction.validate import QuoteIndex
 from ingest import documents
 from tests.helpers import FakeLLM, src
 
-ROLE_1 = "Institute for Health Metrics and Evaluation"
-BULLETS_1 = ["Shipped an end-to-end RAG solution for researchers using AWS Bedrock and OpenSearch.",
-             "Optimized embedding dimensions from 1024 to 512, halving vector storage cost."]
-ROLE_2 = "Oracle Financial Services Software"
-BULLETS_2 = ["Worked on an anomaly detection model on 10M+ payment records using Isolation Forest.",
-             "Consumed streaming data from Kafka into ETL pipelines."]
+ROLE_1 = "Institute for Coastal Health Research"
+BULLETS_1 = ["Built an end-to-end RAG assistant for analysts using AWS Bedrock and OpenSearch.",
+             "Reduced embedding dimensions from 1024 to 512, halving vector storage cost."]
+ROLE_2 = "Quarry Financial Services Software"
+BULLETS_2 = ["Trained an anomaly detection model on 5M+ card transactions using Isolation Forest.",
+             "Loaded streaming data from Kafka into ETL pipelines."]
 
 
 def _raw_pdf(lines: list[tuple[float, float, str]]) -> bytes:
@@ -55,13 +55,13 @@ def _raw_pdf(lines: list[tuple[float, float, str]]) -> bytes:
 
 def tab_layout_pdf() -> bytes:
     """A resume laid out with tabs and long space runs (right-aligned locations and dates), like a Word export."""
-    lines, y = [(50, 740, "Feroz Example"),
-                (50, 724, "Seattle, WA |\tLinkedIn:\tlinkedin.com/in/example\t|\tPortfolio:\texample.github.io\t")], 724
+    lines, y = [(50, 740, "Jane Example"),
+                (50, 724, "Columbus, OH |\tLinkedIn:\tlinkedin.com/in/example\t|\tPortfolio:\texample.github.io\t")], 724
     for employer, title, dates, bullets in [(ROLE_1, "AI Engineer", "Oct. 2025 – Jun. 2026", BULLETS_1),
                                             (ROLE_2, "Software Engineer, Machine Learning", "Jul. 2022 – Jun. 2023",
                                              BULLETS_2)]:
         y -= 24
-        lines.append((50, y, employer + " " * 60 + "Seattle, WA"))
+        lines.append((50, y, employer + " " * 60 + "Columbus, OH"))
         y -= 13
         lines.append((50, y, title + "\t\t\t\t\t\t" + " " * 40 + dates))
         for b in bullets:
@@ -96,7 +96,7 @@ def test_tab_layout_is_collapsed_and_keeps_line_structure():
     text = documents.normalize_document("r.pdf", tab_layout_pdf())
     assert "\t" not in text and "  " not in text
     lines = text.splitlines()
-    assert any(line.startswith(ROLE_1) and line.endswith("Seattle, WA") for line in lines)
+    assert any(line.startswith(ROLE_1) and line.endswith("Columbus, OH") for line in lines)
     assert any(line.startswith("AI Engineer") and line.endswith("Oct. 2025 – Jun. 2026") for line in lines)
     for b in BULLETS_1 + BULLETS_2:                    # each bullet on its own line
         assert any(b in line and len(line) < len(b) + 6 for line in lines), b
@@ -118,12 +118,12 @@ def test_two_column_pdf_keeps_bullets_with_their_role():
 
 
 def test_markdown_emphasis_links_and_entities_removed():
-    md = ("# **Jane**\n\n- Shipped an **end-to-end RAG** solution with _semantic_ chunking and <u>docs</u>\n"
+    md = ("# **Jane**\n\n- Built an **end-to-end RAG** assistant with _semantic_ chunking and <u>docs</u>\n"
           "continued on the next line &amp; more\n\nAWS cert [, Amazon (Link) 2026](https://www.credly.com/b/1)\n"
           "[me@x.com](mailto:me@x.com) payout_scheduling_service")
     out = documents.clean_markdown(md)
     assert "**" not in out and "<u>" not in out and "&amp;" not in out
-    assert "- Shipped an end-to-end RAG solution with semantic chunking and docs continued on the next line & more" \
+    assert "- Built an end-to-end RAG assistant with semantic chunking and docs continued on the next line & more" \
         in out
     assert "(https://www.credly.com/b/1)" in out              # verify links are kept as text
     assert "me@x.com" in out and "mailto" not in out
@@ -167,7 +167,7 @@ def test_quotes_from_the_normalized_text_pass_the_check():
     assert all(index.contains(b) for b in BULLETS_1 + BULLETS_2)
     assert index.contains("AI Engineer Oct. 2025 – Jun. 2026")       # header line, spaces collapsed
     assert index.contains("LinkedIn: linkedin.com/in/example")         # tabs became single spaces
-    assert not index.contains("Shipped an end-to-end RAG platform")    # paraphrase still fails
+    assert not index.contains("Built an end-to-end RAG platform")    # paraphrase still fails
 
 
 def test_tab_layout_resume_extracts_end_to_end(tmp_path):

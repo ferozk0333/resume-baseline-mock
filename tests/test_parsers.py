@@ -549,8 +549,8 @@ def test_no_gain_gate_for_keyword_stuffers_and_padded_profiles(tmp_path):
 
 
 LINKEDIN_HONORS_MD = LINKEDIN_MD.replace("Licenses & certifications", """Honors-Awards
-- Chancellor's Merit Scholarship Award for outstanding academic performance
-- Donald and Lynda Horowitz Endowed Fellowship
+- Dean's Merit Scholarship Award for outstanding academic performance
+- Marion and Theo Alder Endowed Fellowship
 
 Licenses & certifications""")
 
@@ -566,8 +566,8 @@ def test_linkedin_honors_awards_become_award_claims_never_skills(tmp_path):
     res = parse_linkedin(data, text, VOCAB, FakeLabeller(nobody))
     assert res.report.ok, res.report.reasons
     kinds = {c.name: c.kind for c in res.extract.claims}
-    assert kinds["Chancellor's Merit Scholarship Award for outstanding academic performance"] == "award"
-    assert kinds["Donald and Lynda Horowitz Endowed Fellowship"] == "award"
+    assert kinds["Dean's Merit Scholarship Award for outstanding academic performance"] == "award"
+    assert kinds["Marion and Theo Alder Endowed Fellowship"] == "award"
     assert [n for n, k in kinds.items() if k != "award"] == ["Excel", "SQL", "Power BI"]
     profile, _ = validate_extraction(SourceDoc("e", "linkedin_pdf", text, "LinkedIn"), res.extract,
                                      method_of=res.method_of)

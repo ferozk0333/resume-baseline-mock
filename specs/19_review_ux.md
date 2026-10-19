@@ -1,6 +1,6 @@
 # Spec 19 — Onboarding & Review UX: one card layout, dedupe, more proof types
 
-Status: approved by Feroz (2026-10-17). Goal: an easier, smoother Review with less friction and no confusing duplicates. The quality work (gold set, quote validation, backed vs claimed, verified references) moves to **spec 20**.
+Status: approved by the owner (2026-10-17). Goal: an easier, smoother Review with less friction and no confusing duplicates. The quality work (gold set, quote validation, backed vs claimed, verified references) moves to **spec 20**.
 
 ## 0. Product rules
 - Scoring formulas, weights and `logic_version` v0.1 unchanged. Phase C changes *inputs* to scoring (merged duplicates) as a bug fix under the existing rule "one claim per name". It must be reported before/after.
@@ -88,7 +88,7 @@ Status: approved by Feroz (2026-10-17). Goal: an easier, smoother Review with le
     - strip a bracketed acronym when it matches the initials of the name ("Model Context Protocol (MCP)");
     - singularize the last word ("API Gateways" → "API Gateway").
     - Merges use only: exact normalized match, or a **reviewed alias file** (`config/claim_aliases.json`, plus the existing `config/market_synonyms.json`). Seed the alias file with: Hugging Face = HuggingFace; Chroma = ChromaDB; AWS = AWS Services; Docker = Dockerfile; Jupyter Notebook = Jupyter/Google Colab Notebooks.
-    - **No fuzzy auto-merges.** Report near-misses as suggestions for Feroz to add to the alias file.
+    - **No fuzzy auto-merges.** Report near-misses as suggestions for the owner to add to the alias file.
 15. **Certifications:**
     - Merge on normalized name, plus the issuer when both have one.
     - Keep the richest fields (credential ID, verify URL, dates, issuer, exam code) and record the list of sources.
@@ -97,7 +97,7 @@ Status: approved by Feroz (2026-10-17). Goal: an easier, smoother Review with le
 17. **Claims:** one claim per normalized name or alias group. Keep the strongest evidence link (artifact > bullet > claimed_only) and all sources.
 18. Record the sources on each merged item for display only. **Don't** feed them into Consistency or any other score in this spec.
 19. **Report before/after:**
-    - for Feroz's latest profile ("Feroz Khan test 10") and the 16 test profiles: claims and certifications before → after, proof density, Tools, Validation strength and the final score per role;
+    - for the owner's latest profile (the owner's latest live profile) and the 16 test profiles: claims and certifications before → after, proof density, Tools, Validation strength and the final score per role;
     - archetype regression: identical, or list the changes and explain them as deliberate;
     - the stuffer/padded gate: any gain for an ID-2 or padded profile must come only from merged duplicates, listed by name.
     - Re-scoring reuses saved judgments. State any new model calls (expected: about 0).

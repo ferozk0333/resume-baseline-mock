@@ -341,6 +341,6 @@ def test_consistency_summary_lists_awards_apart_from_skills():
     from graph.nodes.trust import _summary
     lines = _summary({"roles": [], "projects": [], "claims": [
         {"kind": "tool", "name_raw": "Python"}, {"kind": "skill", "name_raw": "Forecasting"},
-        {"kind": "award", "name_raw": "Chancellor's Merit Scholarship Award"}]})
-    assert lines == ["Skills and tools: Python, Forecasting", "Awards: Chancellor's Merit Scholarship Award"]
+        {"kind": "award", "name_raw": "Dean's Merit Scholarship Award"}]})
+    assert lines == ["Skills and tools: Python, Forecasting", "Awards: Dean's Merit Scholarship Award"]
     assert _summary({"claims": [{"kind": "tool", "name_raw": "SQL"}]}) == ["Skills and tools: SQL"]   # unchanged

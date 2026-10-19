@@ -315,7 +315,8 @@ def test_details_never_change_scores_or_pools(env):
 
 def test_only_the_candidate_module_reads_application_details():
     """Scoring, judging, extraction, pools, the plan, the recruiter side and the market never touch the table."""
-    allowed = {ROOT / "backend" / "candidate.py", ROOT / "core" / "db.py"}
+    allowed = {ROOT / "backend" / "candidate.py", ROOT / "core" / "db.py",
+               ROOT / "scripts" / "purge_person.py"}                     # deletes a person's rows; reads nothing out
     hits = []
     for folder in ("backend", "core", "scoring", "judges", "extraction", "graph", "market", "ingest", "scripts"):
         for f in (ROOT / folder).rglob("*.py"):

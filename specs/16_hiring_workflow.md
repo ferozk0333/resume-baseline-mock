@@ -59,7 +59,7 @@ Two ways, both feeding `read_reply`:
    - Poll the demo Gmail inbox over IMAP (same app password) every few minutes.
    - Match replies to their workflow with a token in the subject (`[RS-1a2b]`) and the In-Reply-To header.
    - A matched reply creates a Tasks item; the agent reads it, but still waits for the recruiter.
-   - Because of the demo redirect, all mail goes to and comes from ferozk0333@gmail.com; matching uses the token, not the address.
+   - Because of the demo redirect, all mail goes to and comes from the demo inbox (DEMO_EMAIL_TO); matching uses the token, not the address.
 
 ## 5. Stage changes from the board
 - Dragging a card on the Pipeline board moves the stage **and** updates the workflow (e.g. dragging to Interview marks Scheduling as skipped with a note).
