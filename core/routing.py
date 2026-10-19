@@ -357,8 +357,10 @@ class Router:
     def _run(self, task: str, models: list[str], system: str, user: str, output_type, tried: set | None = None):
         from core.llm import LLMError, DailyLimitReached
         tokens = estimate_tokens(system, user, current_budget(self.max_tokens))
+        own_tried = tried is None                              # a hedged call shares `tried`: no extra round there
         tried = tried if tried is not None else set()
         attempts, waited, last_error, bad = 0, 0.0, None, 0
+        rounds, overload_only = 0, True                        # this round failed only on overloads (5xx, timeouts)
         while True:
             m, seen = self._pick(models, tokens, tried)
             if m is None:
@@ -389,6 +391,7 @@ class Router:
                 return out
             except Throttled as exc:
                 last_error = exc
+                overload_only = False
                 self.limiter.exhaust(m, (exc.reset_after or 0) if exc.daily else (exc.retry_after or 5.0),
                                      str(exc), daily=exc.daily)
                 why = "daily limit" if exc.daily else f"limit, retry after {exc.retry_after or 5:.0f} s"
@@ -399,12 +402,14 @@ class Router:
                 why = f"overloaded ({exc})"
             except Unusable as exc:                            # e.g. unknown model id, rejected request format
                 last_error = exc
+                overload_only = False
                 self.limiter.refund(m, tokens)
                 self.limiter.exhaust(m, config.UNUSABLE_REST_S, str(exc)[:200])
                 why = f"unusable ({str(exc)[:160]})"
             except DailyLimitReached:
                 raise
             except (LLMError, ValidationError) as exc:         # invalid or cut-off answer, refused
+                overload_only = False
                 last_error, bad = exc, bad + 1
                 why = f"no valid answer ({str(exc)[:160]})"
                 if bad >= 2:                                    # once on the next model, then missing with the reason
@@ -419,6 +424,12 @@ class Router:
             timing.count("failover")
             log.warning("failover: %s %s → %s (%s)", task, m, nxt or "none left", why)
             if attempts >= config.ROUTE_MAX_ATTEMPTS or nxt is None:
+                if overload_only and own_tried and rounds < config.ROUTE_OVERLOAD_RETRY_ROUNDS:
+                    rounds, attempts = rounds + 1, 0               # a 503 storm usually passes in seconds:
+                    tried.clear()                                  # once more, after the models have rested
+                    log.warning("retry: %s: every model was overloaded; one more round once they have rested", task)
+                    timing.count("route_overload_retry")
+                    continue
                 if isinstance(last_error, Throttled) and all(self.limiter.check(x, tokens)[0] == "exhausted" for x in models):
                     log.warning("fail fast: %s: every model is exhausted", task)
                     timing.count("route_fail_fast")

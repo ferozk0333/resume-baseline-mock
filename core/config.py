@@ -222,6 +222,9 @@ ROUTE_MAX_ATTEMPTS = int(_env("ROUTE_MAX_ATTEMPTS", "4"))      # model calls per
 ROUTE_MAX_WAIT_S = float(_env("ROUTE_MAX_WAIT_S", "5"))        # one wait when every model is busy
 ROUTE_BUSY_BUDGET_S = float(_env("ROUTE_BUSY_BUDGET_S", "60"))  # longer than this is "exhausted", not "busy"
 ROUTE_MAX_TOTAL_WAIT_S = float(_env("ROUTE_MAX_TOTAL_WAIT_S", "90"))   # all models busy this long: give up the call
+# When every model in a round failed only because it was overloaded (HTTP 5xx or a timeout; usually gone in seconds),
+# try the route this many more times once the models have rested, within ROUTE_MAX_TOTAL_WAIT_S. 0 = fail at once.
+ROUTE_OVERLOAD_RETRY_ROUNDS = int(_env("ROUTE_OVERLOAD_RETRY_ROUNDS", "1"))
 OVERLOAD_COOLDOWN_S = float(_env("OVERLOAD_COOLDOWN_S", "20"))  # a model that answered 5xx/timeout rests this long
 # Hedging (off by default): a single-item call with no answer after N s also goes to the next model; first answer
 # wins. Each hedge costs one more request of quota.
