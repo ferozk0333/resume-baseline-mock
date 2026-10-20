@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { AlertTriangle, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -72,6 +72,13 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
     { id: "sec-more", label: "More proof", count: proof },
     { id: "sec-application", label: "Application details", disabled: true, note: "After your scores" },
   ];
+  useEffect(() => {          // "Add proof" after Mark done opens Review at a section (#sec-…): scroll there, move focus
+    const hash = window.location.hash.slice(1);
+    if (!hash.startsWith("sec-")) return;
+    const section = document.getElementById(hash);
+    section?.scrollIntoView({ block: "start" });
+    section?.focus({ preventScroll: true });
+  }, []);
   const reason = data.blocker ? data.blocker
     : data.reading ? "You can confirm when everything is read."
     : editing ? "Save or cancel the card you're editing first." : null;

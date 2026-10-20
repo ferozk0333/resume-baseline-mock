@@ -1,25 +1,33 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Check, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { doneHint, markedDoneToast, openProof, PROOF_SECTION } from "@/components/app/score/add-proof";
 import { StatusBadge } from "@/components/app/score/subcategory-row";
 import { useTask } from "@/hooks/use-task";
-import { get, post, type Benchmarks, type Plan, type RunView } from "@/lib/api";
+import { get, post, type Benchmarks, type Plan, type PlanAction, type RunView, type ScoreCard } from "@/lib/api";
 
 
 /** Gaps and the improvement plan (specs/06). A plan left for later (specs/17 §3.1: only the primary role's plan is
- * written during onboarding) is prepared on first open. Inside My scores, `onBack` returns to the Score tab. */
-export function PlanView({ id, onBack }: { id: string; onBack?: () => void }) {
+ * written during onboarding) is prepared on first open. Inside My scores, `onBack` returns to the Score tab.
+ * `card` (My scores) turns on Mark done per action: it carries the target role and which actions are done. Marking
+ * done changes no score; `onCardChange` hands back the updated card. */
+export function PlanView({ id, onBack, card, onCardChange }: {
+  id: string; onBack?: () => void; card?: ScoreCard; onCardChange?: (card: ScoreCard) => void;
+}) {
+  const router = useRouter();
   const [run, setRun] = useState<RunView | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [regenTask, setRegenTask] = useState<string | null>(null);
   const [bench, setBench] = useState<Benchmarks | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);   // title of the action whose Mark done / Undo is in flight
 
   const load = useCallback(() => get<Plan>(`/runs/${id}/plan`).then(setPlan).catch((e) => toast.error(e.message)), [id]);
   useEffect(() => {
@@ -57,6 +65,19 @@ export function PlanView({ id, onBack }: { id: string; onBack?: () => void }) {
     : Object.values(bench.peer_signals.dimensions).every((x) => x.suppressed || x.signals.length === 0)
       ? `Not enough candidates for ${bench.baseline_title ?? "this role"} yet to compare groups.` : null;
   const label = (key: string) => run.subcategories.find((s) => s.key === key)?.label ?? key.replaceAll("_", " ");
+  const cid = run.run.candidate_id;
+  const doneTitles = new Set(card?.done_actions.map((a) => a.title) ?? []);
+  const addProof = (a: PlanAction) => void openProof(cid, a.type, router.push);
+  async function markDone(a: PlanAction, done: boolean) {
+    if (!card) return;
+    setBusy(a.title);
+    try {
+      const updated = await post<ScoreCard>(`/candidates/${cid}/plan-done`, { baseline_id: card.baseline_id, title: a.title, done });
+      onCardChange?.(updated);
+      if (done) markedDoneToast(a.type, () => addProof(a), () => { void markDone(a, false); });
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setBusy(null); }
+  }
 
   return (
     <div className="space-y-6">
@@ -130,11 +151,16 @@ export function PlanView({ id, onBack }: { id: string; onBack?: () => void }) {
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">What to do next</h2>
           <div className="grid gap-4 md:grid-cols-2">
-            {plan.actions.map((a, i) => (
-              <Card key={i}>
+            {plan.actions.map((a, i) => {
+              const done = doneTitles.has(a.title);
+              return (
+              <Card key={i} data-testid="plan-action">
                 <CardHeader>
                   <div className="flex items-center justify-between gap-2">
-                    <Badge variant="secondary">{a.type_label}</Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="secondary">{a.type_label}</Badge>
+                      {done && <Badge variant="outline" className="border-primary/30 text-primary"><Check aria-hidden /> Done</Badge>}
+                    </div>
                     <span className="text-sm font-medium text-primary">{a.points_text}</span>
                   </div>
                   <CardTitle className="text-base">{a.title}</CardTitle>
@@ -149,9 +175,27 @@ export function PlanView({ id, onBack }: { id: string; onBack?: () => void }) {
                     {a.addresses.map((g) => <Badge key={g} variant="outline">{label(g)}</Badge>)}
                     {a.covers_criteria.map((c) => <Badge key={c} variant="outline" className="border-primary/30 text-primary">{c}</Badge>)}
                   </div>
+                  {card && (
+                    <div className="space-y-2 border-t pt-3">
+                      {done && doneHint(a.type) && <p className="text-xs text-muted-foreground">{doneHint(a.type)}</p>}
+                      <div className="flex flex-wrap gap-2">
+                        {done ? (
+                          <>
+                            {PROOF_SECTION[a.type] && <Button size="sm" onClick={() => addProof(a)}>Add proof</Button>}
+                            <Button size="sm" variant="ghost" disabled={busy === a.title} onClick={() => markDone(a, false)}
+                              aria-label={`Undo Mark done: ${a.title}`}>Undo</Button>
+                          </>
+                        ) : (
+                          <Button size="sm" variant="outline" disabled={busy === a.title} onClick={() => markDone(a, true)}
+                            aria-label={`Mark done: ${a.title}`}>Mark done</Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {!!plan.quick_wins?.length && (

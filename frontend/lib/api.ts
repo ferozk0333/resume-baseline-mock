@@ -284,7 +284,7 @@ export type OnboardingState = { candidate: Candidate;
     confirmed_at: string | null; finished_at: string | null };
   targets: Target[]; read_task: Task | null; score_task: Task | null; awaiting_review: boolean;
   details: { saved_at: string | null; dismissed_at: string | null }; roles: { baseline_id: string; title: string }[] };
-export type CardAction = { key: string; title: string; type_label: string; points: number; points_text: string;
+export type CardAction = { key: string; title: string; type: string; type_label: string; points: number; points_text: string;
   covers_criteria: string[]; done: boolean };
 export type ScoreCard = Target & { run_id: string | null; status: "scored" | "running" | "not_scored";
   final: number | null; dimensions: Record<string, number | null>;

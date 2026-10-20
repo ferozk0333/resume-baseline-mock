@@ -63,7 +63,9 @@ test("full path, every status, closure, Mark done, plan empty state, Role family
   // 2. Mark done on the next best action (changes no score)
   await expect(page.getByText("Next best action")).toBeVisible();
   await page.getByRole("button", { name: "Mark done" }).click();
-  await expect(page.getByTestId("done-note")).toContainText("Add the proof to your profile and check again to update your score.");
+  await expect(page.getByTestId("done-note")).toContainText("Add the proof to your profile.");
+  await expect(page.getByTestId("done-note")).toContainText("Then confirm your profile to update your score.");
+  await expect(page.getByTestId("done-note").getByRole("button", { name: "Add proof" })).toBeVisible();
   await shot(page, "mark-done", false);
   await page.getByTestId("done-note").getByRole("button", { name: "Undo" }).click();
   await expect(page.getByTestId("done-note")).toHaveCount(0);
@@ -147,6 +149,17 @@ test("full path, every status, closure, Mark done, plan empty state, Role family
   await expect(page.getByTestId("peer-note")).toContainText("What higher scorers have:");
   await shot(page, "plan-empty-state", false);
 
+  // 8b. Mark done on a plan action: Done badge, Add proof, Undo (changes no score)
+  const action = page.getByTestId("plan-action").filter({ hasText: "Build an A/B test project" });
+  await action.getByRole("button", { name: "Mark done: Build an A/B test project" }).click();
+  await expect(action.getByText("Done", { exact: true })).toBeVisible();
+  await expect(action).toContainText("Then confirm your profile to update your score.");
+  await expect(action.getByRole("button", { name: "Add proof" })).toBeVisible();
+  await shot(page, "plan-mark-done", false);
+  await action.getByRole("button", { name: "Undo Mark done: Build an A/B test project" }).click();
+  await expect(action.getByText("Done", { exact: true })).toHaveCount(0);
+  await expect(action.getByRole("button", { name: "Mark done: Build an A/B test project" })).toBeVisible();
+
   // 9. Create job → step 2 Role family (suggested from the title, editable)
   const draft = await (await request.post(`${API}/jobs/drafts`)).json();
   await page.goto(`/recruiter/jobs/${draft.job_id}/edit`);
@@ -183,5 +196,15 @@ test("full path, every status, closure, Mark done, plan empty state, Role family
     await page.waitForLoadState("networkidle");
     await noSideScroll(page);
   }
+
+  // 12. Add proof opens Review at the matching section (last: it moves onboarding back to Review)
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/scores?role=${DS}&tab=plan`);
+  const proofAction = page.getByTestId("plan-action").filter({ hasText: "Build an A/B test project" });
+  await proofAction.getByRole("button", { name: "Mark done: Build an A/B test project" }).click();
+  await proofAction.getByRole("button", { name: "Add proof" }).click();
+  await expect(page).toHaveURL(/\/onboarding#sec-projects$/);
+  await expect(page.locator("#sec-projects")).toBeFocused();
+  await shot(page, "add-proof-review-projects", false);
   expect(problems).toEqual([]);
 });
