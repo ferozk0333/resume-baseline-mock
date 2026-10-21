@@ -532,8 +532,23 @@ EXTRA_MAIN = {"education": ("school", "degree"), "language": ("language",), "cou
 
 
 def extra_key(type: str, fields: dict) -> str:
+    """What makes two display-only items the same. Education matches degree forms ("B.S." = "Bachelor of Science")."""
     from core.text import normalize_name
-    return type + ":" + "|".join(normalize_name(fields.get(f)) for f in EXTRA_MAIN.get(type, ()))
+    from extraction.extra import degree_key
+    return type + ":" + "|".join(degree_key(fields.get(f)) if (type, f) == ("education", "degree")
+                                 else normalize_name(fields.get(f)) for f in EXTRA_MAIN.get(type, ()))
+
+
+def _deleted_extra_keys(conn: sqlite3.Connection, candidate_id: str) -> set[str]:
+    """Keys of the extra items the candidate deleted, recomputed from what was deleted: a key saved by an older
+    extra_key still matches, and deleting "B.S." also keeps LinkedIn's "Bachelor of Science" out."""
+    out = set()
+    for key, payload in conn.execute("SELECT key, payload FROM deleted_items WHERE candidate_id = ? AND "
+                                     "item_type = 'extra'", (candidate_id,)):
+        row = _json(payload, {})
+        fields = _json(row.get("fields_json"), {}) if isinstance(row, dict) else {}
+        out.add(extra_key(row["type"], fields) if isinstance(row, dict) and row.get("type") else key)
+    return out
 
 
 def merge_extracted_extra(conn: sqlite3.Connection, candidate_id: str, evidence_id: str,
@@ -543,8 +558,7 @@ def merge_extracted_extra(conn: sqlite3.Connection, candidate_id: str, evidence_
     with conn:
         conn.execute("DELETE FROM extra_items WHERE candidate_id = ? AND evidence_id = ? AND source = 'extracted'",
                      (candidate_id, evidence_id))
-    gone = {r[0] for r in conn.execute("SELECT key FROM deleted_items WHERE candidate_id = ? AND item_type = 'extra'",
-                                       (candidate_id,))}
+    gone = _deleted_extra_keys(conn, candidate_id)
     have = {extra_key(x.type, x.fields): x for x in list_extra(conn, candidate_id)}
     base = conn.execute("SELECT COALESCE(MAX(position), 0) FROM extra_items WHERE candidate_id = ?",
                         (candidate_id,)).fetchone()[0]
@@ -564,6 +578,37 @@ def merge_extracted_extra(conn: sqlite3.Connection, candidate_id: str, evidence_
                          "position, created_at) VALUES (?, ?, ?, ?, ?, ?, 'extracted', ?, ?)",
                          (x.id, candidate_id, evidence_id, x.type, json.dumps(x.fields), x.quote, base + i + 1,
                           now_iso()))
+
+
+def remerge_extra(conn: sqlite3.Connection, candidate_id: str) -> list[str]:
+    """Merge saved display-only items that match under today's extra_key (no extraction, no model calls), the way a
+    new read would: the first by document order keeps its text, gains the fields it lacked (unless the candidate
+    edited it) and lists the others' documents as sources; the others go. Returns what merged away."""
+    types = {e["id"]: e["type"] for e in list_evidence(conn, candidate_id)}
+
+    def rank(x: ExtraItem):
+        t = types.get(x.evidence_id or "")
+        return SOURCE_ORDER.index(t) if t in SOURCE_ORDER else len(SOURCE_ORDER)
+    items = list_extra(conn, candidate_id)                 # display order
+    pos = {x.id: i for i, x in enumerate(items)}
+    keep: dict[str, ExtraItem] = {}
+    merged: list[str] = []
+    # the candidate's own entry is kept first, then the resume's, then LinkedIn's, …
+    for x in sorted(items, key=lambda x: (x.source != "user_edit", rank(x), pos[x.id])):
+        k = extra_key(x.type, x.fields)
+        if k not in keep:
+            keep[k] = x
+            continue
+        old = keep[k]
+        also = [*old.fields.get("_also", []), *([x.evidence_id] if x.evidence_id else []), *x.fields.get("_also", [])]
+        mine = {f: v for f, v in x.fields.items() if f != "_also"}
+        old.fields = {**mine, **old.fields} if old.source == "extracted" else dict(old.fields)
+        old.fields["_also"] = [e for e in dict.fromkeys(also) if e != old.evidence_id]
+        with conn:
+            conn.execute("UPDATE extra_items SET fields_json = ? WHERE id = ?", (json.dumps(old.fields), old.id))
+            conn.execute("DELETE FROM extra_items WHERE id = ?", (x.id,))
+        merged.append(f"{x.type}: " + " — ".join(str(x.fields.get(f)) for f in EXTRA_MAIN.get(x.type, ()) if x.fields.get(f)))
+    return merged
 
 
 def delete_extra(conn: sqlite3.Connection, candidate_id: str, item_id: str) -> dict | None:

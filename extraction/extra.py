@@ -25,10 +25,34 @@ _ALL = {normalize_name(v) for vs in VARIANTS.values() for v in vs} | \
 _LOOKUP = {normalize_name(v): t for t, vs in HEADINGS.items() for v in vs}
 _SCHOOL = re.compile(r"\b(university|college|institute|school|academy|polytechnic|universit[éa]t|iit|mit)\b", re.I)
 _DEGREE = re.compile(r"^\s*(b\.?\s?s\.?c?|m\.?\s?s\.?c?|b\.?\s?a\.?|m\.?\s?a\.?|b\.?\s?tech|m\.?\s?tech|b\.?\s?e\.?|"
-                     r"m\.?\s?e\.?|ph\.?\s?d\.?|mba|m\.?\s?eng|b\.?\s?eng|bachelor(?:'s)?(?: of [a-z]+)?|"
+                     r"m\.?\s?e\.?|ph\.?\s?d\.?|mba|m\.?\s?eng|b\.?\s?eng|"
+                     r"(?:bachelor|master)(?:'s)? of business administration|bachelor(?:'s)?(?: of [a-z]+)?|"
                      r"master(?:'s)?(?: of [a-z]+)?|doctor(?:ate)?(?: of [a-z]+)?|associate(?:'s)?(?: of [a-z]+)?|"
                      r"diploma|certificate)\b\.?", re.I)
 _SEP = re.compile(r"\s+[·|•]\s+|\s+[–—-]\s+|,\s+")
+_PAGE_FOOTER = re.compile(r"page\s+\d+(?:\s+of\s+\d+)?", re.I)      # a PDF page footer ("Page 1", "Page 1 of 2")
+
+# The same degree written differently ("B.S." and LinkedIn's "Bachelor of Science"): one key, for matching only. The
+# text shown is never changed.
+_DEGREE_FORMS = {
+    "bs": ("bs", "bsc", "bachelor of science"),
+    "ba": ("ba", "bachelor of arts"),
+    "ms": ("ms", "msc", "master of science"),
+    "ma": ("ma", "master of arts"),
+    "mba": ("mba", "master of business administration", "master of business"),   # older reads stopped at "Business"
+    "phd": ("phd", "doctor of philosophy"),
+    "btech": ("btech", "be", "beng", "bachelor of technology", "bachelor of engineering"),
+    "mtech": ("mtech", "me", "meng", "master of technology", "master of engineering"),
+}
+_DEGREE_KEY = {form: key for key, forms in _DEGREE_FORMS.items() for form in forms}
+
+
+def degree_key(text: str | None) -> str:
+    """"B.S.", "BSc" and "Bachelor's of Science" → "bs". Unknown degrees: the normalized text, as before."""
+    t = normalize_name(re.sub(r"[’']s\b", "", text or ""))
+    return _DEGREE_KEY.get(t.replace(" ", ""), _DEGREE_KEY.get(t, t))
+
+
 _PROFICIENCY = re.compile(r"\b(native|bilingual|fluent|full professional|professional working|limited working|"
                           r"elementary|conversational|basic|intermediate|advanced|proficient|c1|c2|b1|b2|a1|a2)\b", re.I)
 
@@ -92,6 +116,7 @@ def _entries(lines: list[str], starts) -> list[list[str]]:
 
 
 def _education(lines: list[str]) -> list[ExtraItem]:
+    lines = [ln for ln in lines if not _PAGE_FOOTER.fullmatch(_plain(ln))]
     has_school = any(_SCHOOL.search(ln) for ln in lines)
 
     def starts(ln, group):
