@@ -4,7 +4,7 @@ import type { ProfileResponse, Role } from "@/lib/api";
 
 export type Edit = {
   op: "add" | "edit" | "delete" | "add_back" | "undo" | "confirm_dates";
-  item: "role" | "project" | "claim" | "certification" | "dropped" | "mention" | "extra" | "deleted";
+  item: "role" | "project" | "claim" | "certification" | "reference" | "dropped" | "mention" | "extra" | "deleted";
   id?: string; data?: Record<string, unknown>;
 };
 

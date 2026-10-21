@@ -329,11 +329,12 @@ class EmailEdit(BaseModel):
 
 class ProfileEdit(BaseModel):
     """One review edit. `item` is role | project | bullet? (bullets go with their role/project) | claim |
-    certification | extra (a display-only proof type); `op` add | edit | delete | add_back (add_back uses `id` of a
+    certification | reference (name, relationship, contact, statement; never verified) | extra (a display-only proof
+    type); `op` add | edit | delete | add_back (add_back uses `id` of a
     dropped item, or of a mention: an item the candidate deleted that a later source named again) | undo (item
     "deleted", `id` from a delete's response) | confirm_dates ("the months are right": clears the date flags)."""
     op: Literal["add", "edit", "delete", "add_back", "undo", "confirm_dates"]
-    item: Literal["role", "project", "claim", "certification", "dropped", "mention", "extra", "deleted"]
+    item: Literal["role", "project", "claim", "certification", "reference", "dropped", "mention", "extra", "deleted"]
     id: str | None = None
     data: dict = Field(default_factory=dict)
 
@@ -616,7 +617,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                     undo_id = deletions.remember_extra(c, candidate_id, row)
                 elif edit.op == "delete":
                     table = {"role": "roles", "project": "projects", "claim": "claims",
-                             "certification": "certifications"}.get(edit.item)
+                             "certification": "certifications", "reference": "references_"}.get(edit.item)
                     if table is None or not edit.id:
                         raise ValueError("delete needs an item type and id")
                     undo_id = deletions.remember(c, candidate_id, table, edit.id)   # a later source won't add it back
@@ -651,6 +652,10 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                                              name=d.get("name", ""), issuer=d.get("issuer"),
                                              issued_date=day(d.get("issued_date")),
                                              credential_id=d.get("credential_id"), verify_url=d.get("verify_url"))
+                elif edit.item == "reference":
+                    store.save_reference(c, candidate_id, ref_id=edit.id if edit.op == "edit" else None,
+                                         name=d.get("name", ""), relationship=d.get("relationship"),
+                                         contact=d.get("contact"), statement=d.get("statement"))
                 elif edit.item == "extra":
                     store.save_extra(c, candidate_id, d.get("type", ""), d.get("fields") or {},
                                      item_id=edit.id if edit.op == "edit" else None)

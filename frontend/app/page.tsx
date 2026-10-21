@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LoadError } from "@/components/app/candidate/load-error";
 import { PercentileLine } from "@/components/app/candidate/score-card";
 import { JobsBrowser } from "@/components/app/candidate/jobs-browser";
-import { ADD_PROOF_HINT, doneHint, markedDoneToast, openProof, PROOF_SECTION, THEN_CONFIRM } from "@/components/app/score/add-proof";
+import { ADD_PROOF_HINT, markedDoneToast, openProof, PROOF_SECTION, THEN_CONFIRM } from "@/components/app/score/add-proof";
 import { ApiError, get, post, STEP_LABELS, type CardAction, type OnboardingState, type ScoreCard } from "@/lib/api";
 import { useCurrentCandidate } from "@/lib/current-candidate";
 
@@ -118,11 +118,11 @@ function Home() {
                 <p className="border-t pt-2 text-xs text-muted-foreground" data-testid="done-note">
                   Done: {lastDone.title}.{" "}
                   <button type="button" className="font-medium text-primary hover:underline" onClick={() => markDone(lastDone, false)}>Undo</button>
-                  {PROOF_SECTION[lastDone.type] ? (
+                  {PROOF_SECTION[lastDone.type] && (
                     <><br />{ADD_PROOF_HINT}{" "}
                       <button type="button" className="font-medium text-primary hover:underline" onClick={() => addProof(lastDone)}>Add proof</button>
                       <br />{THEN_CONFIRM}</>
-                  ) : doneHint(lastDone.type) && <><br />{doneHint(lastDone.type)}</>}</p>
+                  )}</p>
               )}
             </div>
           </CardContent>

@@ -62,6 +62,9 @@ export type Claim = { id: string; kind: string; name_raw: string; bullet_id: str
 export type Certification = { id: string; name: string; issuer: string | null; credential_id: string | null;
   verify_url: string | null; source: string; issued_date?: string | null; sources?: string[];
   exam_code?: string | null; credential_status?: string | null };
+/** A reference the candidate typed (form or Review). Never verified (spec 20). */
+export type Reference = { id: string; name: string; relationship: string | null; contact: string | null;
+  statement: string | null };
 /** Display-only proof types (specs/19 Phase D): shown to recruiters, never scored. */
 export type ExtraItem = { id: string; type: "education" | "patent" | "volunteering" | "course" | "language";
   fields: Record<string, string>; source: string; quote: string | null; sources: string[] };
@@ -69,7 +72,8 @@ export type Dropped = { id: string; item_type: string; text: string; reason: str
 export type MediaLink = { id: string; url: string; kind: "youtube" | "loom"; title: string | null; embed_url: string };
 export type ProfileResponse = {
   candidate: Candidate;
-  profile: { roles: Role[]; projects: Project[]; claims: Claim[]; certifications: Certification[] };
+  profile: { roles: Role[]; projects: Project[]; claims: Claim[]; certifications: Certification[];
+    references?: Reference[] };
   dropped: Dropped[]; warnings: string[]; blocker: string | null; media_links: MediaLink[];
   sources: { id: string; type: string; status: string; text: string | null }[];
   /** Sources still being read while Review is open (specs/18 Phase 3); Confirm waits for them. */
