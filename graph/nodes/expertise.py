@@ -256,7 +256,7 @@ def _work_samples(ctx: Ctx) -> list[tuple[str, object]]:
     for p in ctx.profile.projects:
         if p.is_github:
             out.append(("repo", p))
-        elif ctx.evidence_type(p.evidence_id) == "portfolio":
+        elif ctx.from_portfolio(p):
             out.append(("portfolio", p))
         elif p.kind in ("presentation", "publication"):
             out.append((p.kind, p))

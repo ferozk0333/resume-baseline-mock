@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { get, post, postedAgo, salaryText, WORKPLACE, type JobActivity, type JobDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { LinkedText } from "@/components/app/ext-link";
 
 /** "Preview" badge on every JobMatch number (specs/17 §1, §6). */
 export function PreviewBadge() {
@@ -165,7 +166,7 @@ export function JobDetailView({ cid, jobId, onChanged }: { cid: string; jobId: s
       {/* 5. About the job */}
       <section className="space-y-2 text-sm">
         <h3 className="font-semibold">About the job</h3>
-        {j.short_description && <p>{j.short_description}</p>}
+        {j.short_description && <p><LinkedText text={j.short_description} /></p>}
         {j.responsibilities?.length > 0 && (
           <div><h4 className="font-medium">What you&apos;ll do</h4>
             <ul className="mt-1 list-disc space-y-0.5 pl-5">{j.responsibilities.map((r, i) => <li key={i}>{r}</li>)}</ul></div>

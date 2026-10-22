@@ -1,0 +1,9 @@
+{
+ "version": 1,
+ "_about": "Reviewed project matching (audit round, item 2b). descriptors: a trailing bracket with exactly one of these words is dropped when matching ('Campus dining app redesign (case study)'). groups: names that are one project worded differently in two documents; add only pairs a person has checked. Matching is on the normalized key; no similarity merges.",
+ "descriptors": ["case study", "the published analysis", "published analysis", "project", "demo", "capstone", "course project", "side project"],
+ "groups": [
+  ["Campus dining app redesign", "Campus dining redesign"],
+  ["Product teardown: how a language app keeps streaks going", "Language-app teardown"]
+ ]
+}

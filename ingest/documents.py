@@ -27,9 +27,10 @@ import pymupdf
 import pymupdf4llm
 
 from core import config
+from core.links import decode_pdf_escapes, markdown_links
 
 # Stored with the normalized text; bump when parsing or clean-up changes so old cache rows are not reused.
-_BASE_NORMALIZER = f"pymupdf4llm-{pymupdf4llm.__version__}-classic+docx-md+clean-1"
+_BASE_NORMALIZER = f"pymupdf4llm-{pymupdf4llm.__version__}-classic+docx-md+clean-1+links-2"
 
 
 def normalizer() -> str:
@@ -108,15 +109,21 @@ def _docx_markdown(data: bytes, hidden: list | None = None) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
-_LINK = re.compile(r"\[([^\]]*)\]\(([^)\s]+)\)")
-
-
-def _flatten_link(m: re.Match) -> str:
-    text, url = m.group(1).strip(), m.group(2)
+def _flatten_link(text: str, url: str) -> str:
+    text, url = text.strip(), decode_pdf_escapes(url)
     bare = re.sub(r"^(https?://)?(www\.)?", "", url).rstrip("/")
     if url.startswith("mailto:") or not text or bare.split("?")[0] in text or text in url:
         return text or bare
     return f"{text} ({url})"
+
+
+def flatten_links(line: str) -> str:
+    """Markdown links → "text (url)", the URL exactly as in the document (core/links.py)."""
+    out, pos = [], 0
+    for start, end, label, url in markdown_links(line):
+        out += [line[pos:start], _flatten_link(label, url)]
+        pos = end
+    return "".join(out) + line[pos:]
 
 
 _EMPHASIS = re.compile(r"\*\*|__|(?<![\w])_(?=\S)|(?<=\S)_(?![\w])|</?(?:u|b|i|em|strong|sup|sub)>")
@@ -130,7 +137,7 @@ def clean_markdown(md: str) -> str:
     for line in md.splitlines():
         if "intentionally omitted" in line:               # pymupdf4llm image placeholders
             continue
-        line = _LINK.sub(_flatten_link, line)
+        line = flatten_links(line)
         line = _EMPHASIS.sub("", line)
         # Tabs, odd spaces and U+FFFD (a tab or icon with no glyph in the PDF font) become one space.
         line = re.sub(r"[\t\u00a0\u2002-\u200a\u202f\ufffd]+", " ", line)

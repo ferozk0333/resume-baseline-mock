@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { AlertTriangle, CalendarCheck, ExternalLink, Pencil } from "lucide-react";
+import { AlertTriangle, CalendarCheck, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,7 @@ import { friendlyMonth, friendlyRange, monthValue } from "./dates";
 import { useReviewEdit } from "./edit-context";
 import { EntryCard, type FieldSpec } from "./entry-card";
 import { same, useReviewApi } from "./review-api";
+import { ExtLink, LinkedText } from "@/components/app/ext-link";
 
 /** A draft that starts from the saved values whenever the card enters edit mode, and marks the card dirty. */
 export function useDraft<T>(id: string, initial: () => T) {
@@ -28,13 +29,12 @@ const texts = (b: DraftBullet[]) => b.map((x) => x.text.trim()).filter(Boolean);
 
 export function BulletList({ items }: { items: { id: string; text: string }[] }) {
   if (!items.length) return null;
-  return <ul className="list-disc space-y-1 pl-4">{items.map((b) => <li key={b.id}>{b.text}</li>)}</ul>;
+  return <ul className="list-disc space-y-1 pl-4">{items.map((b) => <li key={b.id}><LinkedText text={b.text} /></li>)}</ul>;
 }
 
 export function Link({ url }: { url: string | null | undefined }) {
   if (!url) return null;
-  const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-  return <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 break-all text-primary underline-offset-2 hover:underline">{url}<ExternalLink className="size-3 shrink-0" aria-hidden /></a>;
+  return <ExtLink url={url} icon className="break-all">{url}</ExtLink>;
 }
 
 /** Year-only and source-conflict notes with "the months are right" (specs/19 items 9, 12). */

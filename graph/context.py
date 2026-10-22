@@ -145,6 +145,10 @@ class Ctx:
         row = self.evidence.get(evidence_id or "")
         return row["type"] if row else None
 
+    def from_portfolio(self, item) -> bool:
+        """Read from a portfolio, itself or merged into it (a resume project and its case study are one item)."""
+        return any(self.evidence_type(e) == "portfolio" for e in [item.evidence_id, *(item.sources or [])])
+
     def role_ins(self) -> list[f.RoleIn]:
         return [f.RoleIn(r.id, r.start_date, r.end_date, r.is_current, self.relevance.get(r.id))
                 for r in self.profile.roles]

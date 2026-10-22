@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, get, post, useUploadLimit, type MarketPosting, type MarketRole, type MarketVersion, type Suggestion } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { ExtLink } from "@/components/app/ext-link";
 
 type FetchResult = { boards: number; seen: number; new: number; excluded_titles: number; closed: number; errors: string[];
   skipped: number };
@@ -182,7 +183,7 @@ function Postings({ role }: { role: string }) {
           {rows.map((p) => (
             <tr key={p.id} className="border-t">
               <td className="py-1.5">{p.company}</td><td className="capitalize">{p.tier}</td>
-              <td>{p.source_url ? <a href={p.source_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{p.title}</a> : p.title}</td>
+              <td>{p.source_url ? <ExtLink url={p.source_url}>{p.title}</ExtLink> : p.title}</td>
               <td className="capitalize">{p.level ?? "—"}</td>
               <td className="text-muted-foreground">{new Date(p.last_seen).toLocaleDateString()}</td>
             </tr>

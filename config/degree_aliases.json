@@ -1,0 +1,12 @@
+{
+ "version": 1,
+ "_about": "Reviewed degree groups (audit round, item 2c). Two education entries merge only when the school is the same after normalization, the degrees fall in one group below, and the dates overlap or one side has none. Matching is on the normalized name (lowercase, punctuation to spaces). Add only spellings of the same degree; a group is never a family of different degrees.",
+ "groups": {
+  "masters": ["MS", "M.S.", "M.S", "MSc", "M.Sc.", "M.Sc", "Master of Science", "Master's", "Masters", "Master", "MA", "M.A.", "Master of Arts", "MEng", "M.Eng.", "Master of Engineering", "MTech", "M.Tech", "M.Tech.", "Master of Technology"],
+  "mba": ["MBA", "M.B.A.", "Master of Business Administration"],
+  "bachelors": ["BS", "B.S.", "B.S", "BSc", "B.Sc.", "B.Sc", "Bachelor of Science", "Bachelor's", "Bachelors", "Bachelor", "BA", "B.A.", "Bachelor of Arts"],
+  "btech": ["B.Tech", "B.Tech.", "BTech", "B.E.", "B.E", "BE", "Bachelor of Technology", "Bachelor of Engineering"],
+  "phd": ["PhD", "Ph.D.", "Ph.D", "Doctor of Philosophy", "Doctorate"],
+  "associate": ["AS", "A.S.", "AA", "A.A.", "Associate of Science", "Associate of Arts", "Associate's", "Associate Degree"]
+ }
+}

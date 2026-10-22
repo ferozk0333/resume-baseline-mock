@@ -170,6 +170,8 @@ class ValidationReport:
     project_remap: dict[str, str] = field(default_factory=dict)
     failed: list[str] = field(default_factory=list)               # evidence ids whose extraction failed
     sources: dict[str, tuple] = field(default_factory=dict)       # evidence id → (profile, its own report)
+    unused_bullets: list[BulletRec] = field(default_factory=list)  # another source's bullets on an item that has its own
+    placements: list[tuple[str, str]] = field(default_factory=list)  # (award name, hackathon it became the placement of)
 
     @property
     def dropped(self) -> int:
@@ -477,6 +479,44 @@ def _merge_bullets(into: list[BulletRec], extra: list[BulletRec]) -> dict[str, s
     return remap
 
 
+def _take_bullets(into, other, report: "ValidationReport") -> dict[str, str | None]:
+    """An item's bullets come from one source (audit round, item 2a): the earlier source's when it has any; the
+    later source's only when it has none. Never both. A bullet typed by the person is always kept. Returns
+    dropped-id → kept-id, or None for a bullet that is not used (a claim read from it becomes a listed one)."""
+    if not into.bullets:
+        kept: list[BulletRec] = []
+        remap = _merge_bullets(kept, other.bullets)
+        into.bullets = kept
+        return remap
+    seen = {_norm(b.text): b.id for b in into.bullets}
+    remap: dict[str, str | None] = {}
+    for b in other.bullets:
+        k = _norm(b.text)
+        if k in seen:
+            remap[b.id] = seen[k]
+        elif b.source == "user_edit":
+            seen[k] = b.id
+            into.bullets.append(b)
+        else:
+            remap[b.id] = None
+            report.unused_bullets.append(b)
+    return remap
+
+
+def _one_source(item, rank, report: "ValidationReport") -> dict[str, None]:
+    """A saved item whose bullets came from several documents (an earlier merge appended them): only its own
+    document's bullets stay, or the best-ranked other document's when it has none of its own."""
+    extracted = [b for b in item.bullets if b.source != "user_edit"]
+    sources = list(dict.fromkeys(b.evidence_id for b in extracted))
+    if len(sources) < 2:
+        return {}
+    keep = item.evidence_id if item.evidence_id in sources else min(sources, key=rank)
+    gone = [b for b in extracted if b.evidence_id != keep]
+    item.bullets = [b for b in item.bullets if b not in gone]
+    report.unused_bullets += gone
+    return {b.id: None for b in gone}
+
+
 def _fill(target, source, fields: tuple[str, ...]) -> None:
     for f in fields:
         if getattr(target, f) in (None, "") and getattr(source, f) not in (None, ""):
@@ -500,10 +540,41 @@ def claim_key(c: ClaimRec) -> tuple[str, str]:
 def _same_project(a: ProjectRec, b: ProjectRec) -> bool:
     if not config.DEDUPE_NAMES:
         return normalize_name(a.name) == normalize_name(b.name)
-    if dedupe.canonical(a.name, project=True) == dedupe.canonical(b.name, project=True):
+    if dedupe.same_project_name(a.name, b.name):
         return True
     ua, ub = dedupe.url_key(a.url), dedupe.url_key(b.url)
     return bool(ua) and ua == ub
+
+
+def same_claim(a: ClaimRec, b: ClaimRec) -> bool:
+    """One claim per name; awards (audit round, item 2d): the same award key, or, from different documents, one
+    award's key found whole in the other award's text ("… Fellowship" in "Recognized with the … Fellowship for …")."""
+    if a.kind == "award" and b.kind == "award" and config.DEDUPE_NAMES:
+        ka, kb = dedupe.award_key(a.name_raw), dedupe.award_key(b.name_raw)
+        if ka == kb:
+            return True
+        return a.evidence_id != b.evidence_id and (dedupe.contained(ka, b.name_raw) or dedupe.contained(kb, a.name_raw))
+    return claim_key(a) == claim_key(b)
+
+
+def _hackathon_placement(award: ClaimRec, projects: list[ProjectRec]) -> ProjectRec | None:
+    """A hackathon item the award names (audit round, item 2e): "Top 10 Finalist … in CSI National Hackathon"."""
+    for p in projects:
+        if p.kind != "hackathon" and "hackathon" not in normalize_name(p.name).split():
+            continue
+        if dedupe.contained(dedupe.award_text(p.name), award.name_raw) and \
+                dedupe.award_text(p.name) != dedupe.award_text(award.name_raw):
+            return p
+    return None
+
+
+def _placement_text(award: str, event: str) -> str:
+    """"Top 10 Finalist from 600+ teams in CSI National Hackathon" → "Top 10 Finalist from 600+ teams"."""
+    m = re.search(re.escape(event), award, re.I)
+    if not m:
+        return award
+    before = re.sub(r"[\s,;:–—-]*(?:\b(?:in|at|of|from|for)\b)?[\s,;:–—-]*$", "", award[:m.start()], flags=re.I)
+    return before.strip() or award
 
 
 def _same_certification(a: CertificationRec, b: CertificationRec) -> bool:
@@ -549,9 +620,15 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
     artifacts = {e for e, t in (evidence_types or {}).items() if t in ("github_repo", "portfolio")} | \
         {p.evidence_id for prof in profiles for p in prof.projects if p.is_github and p.evidence_id}
 
+    order = {t: i for i, t in enumerate(("resume", "linkedin_pdf", "portfolio", "github_repo"))}
+
+    def rank(eid):
+        return order.get((evidence_types or {}).get(eid), len(order)), str(eid)
+
     for prof in profiles:
         for role in prof.roles:
             role.bullets = _dedupe_own_bullets(role.bullets, bullet_remap)
+            bullet_remap.update(_one_source(role, rank, report))
             scored = [(s, r) for r in out.roles
                       if (s := _same_role_score(r, role, absorbed.get(r.id, set()))) is not None]
             match = max(scored, key=lambda x: x[0])[1] if scored else None
@@ -563,7 +640,7 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
             _flag_date_conflict(match, role)
             _fill(match, role, ("employer", "industry", "start_date", "end_date", "team_size", "location"))
             match.is_current = match.is_current or role.is_current
-            bullet_remap.update(_merge_bullets(match.bullets, role.bullets))
+            bullet_remap.update(_take_bullets(match, role, report))
             _add_sources(match, role)
             role_remap[role.id] = match.id
             report.role_remap[role.id] = match.id
@@ -571,6 +648,7 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
 
         for project in prof.projects:
             project.bullets = _dedupe_own_bullets(project.bullets, bullet_remap)
+            bullet_remap.update(_one_source(project, rank, report))
             if project.role_id in role_remap:
                 project.role_id = role_remap[project.role_id]
             match = next((p for p in out.projects if _same_project(p, project)), None)
@@ -585,7 +663,7 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
             if config.DEDUPE_NAMES and {match.kind, project.kind} == {"project", "repo"}:
                 match.kind = "project"             # a resume project and its repository: one project (item 16)
             match.details = {**project.details, **match.details}
-            bullet_remap.update(_merge_bullets(match.bullets, project.bullets))
+            bullet_remap.update(_take_bullets(match, project, report))
             _add_sources(match, project)
             report.project_remap[project.id] = match.id
             report.merged += 1
@@ -593,12 +671,19 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
         for claim in prof.claims:
             if claim.bullet_id in bullet_remap:
                 claim.bullet_id = bullet_remap[claim.bullet_id]
-            k = claim_key(claim)
-            match = next((c for c in out.claims if claim_key(c) == k), None)
+            match = next((c for c in out.claims if same_claim(c, claim)), None)
             if match is None:
                 out.claims.append(claim)
                 continue
             report.merged += 1
+            if claim.kind == "award" and config.DEDUPE_NAMES:
+                # the most complete name (with its amount) is kept, with every source
+                if dedupe.award_completeness(claim.name_raw) > dedupe.award_completeness(match.name_raw):
+                    _add_sources(claim, match)
+                    out.claims[out.claims.index(match)] = claim
+                else:
+                    _add_sources(match, claim)
+                continue
             if config.DEDUPE_NAMES:
                 stronger = _claim_strength(claim, artifacts) > _claim_strength(match, artifacts)
             else:
@@ -622,6 +707,16 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
                 report.merged += 1
 
         out.references += prof.references
+    if config.DEDUPE_NAMES:
+        for claim in [c for c in out.claims if c.kind == "award"]:
+            event = _hackathon_placement(claim, out.projects)
+            if event is None:
+                continue
+            if not (event.details or {}).get("placement"):
+                event.details = {**(event.details or {}), "placement": _placement_text(claim.name_raw, event.name)}
+            _add_sources(event, claim)
+            out.claims.remove(claim)
+            report.placements.append((claim.name_raw, event.name))
     return out, report
 
 

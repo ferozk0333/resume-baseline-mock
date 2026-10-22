@@ -466,7 +466,8 @@ def panel(conn, app: dict, job: dict) -> dict:
                       "own_commits": p.own_commits, "fork": bool(p.is_fork), "counted": not (p.is_fork and not p.own_commits),
                       "last_update": pushed[:7] or None, "readme_excerpt": readme[:280] or None})
     linkedin = next((e for e in evidence if e["type"] == "linkedin_pdf"), None)
-    portfolio = [p for p in profile.projects if any(e["id"] == p.evidence_id and e["type"] == "portfolio" for e in evidence)]
+    portfolio_ids = {e["id"] for e in evidence if e["type"] == "portfolio"}
+    portfolio = [p for p in profile.projects if portfolio_ids & {p.evidence_id, *p.sources}]
     resume = next((e for e in evidence if e["type"] == "resume"), None)
     row = applicant_row(conn, app, job)
     from scoring import benchmarks

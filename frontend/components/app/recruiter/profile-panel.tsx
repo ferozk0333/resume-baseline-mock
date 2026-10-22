@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ExtLink, LinkedText } from "@/components/app/ext-link";
 import { StatusBadge } from "@/components/app/score/subcategory-row";
 import { API, DIMENSIONS, get, titleCase, topShare, type Activity, type Panel, type Stage } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -150,7 +151,7 @@ function Overview({ p }: { p: Panel }) {
               <div className="flex items-baseline gap-2">
                 <span className="shrink-0 font-medium">{e.name}</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {e.link ? <a href={e.link} target="_blank" rel="noreferrer" className="text-primary hover:underline">{e.source}</a> : e.source}
+                  {e.link ? <ExtLink url={e.link}>{e.source}</ExtLink> : e.source}
                 </span>
               </div>
               <Line text={`“${e.quote}”`} className="text-xs text-muted-foreground" />
@@ -199,8 +200,7 @@ function Requirements({ p }: { p: Panel }) {
             <TableCell className="max-w-md align-top text-xs whitespace-normal">{r.quote ? `“${r.quote}”` : "—"}</TableCell>
             <TableCell className={cn("align-top text-xs", BACKING[r.backing])}>{r.backing}</TableCell>
             <TableCell className="align-top text-xs whitespace-normal">
-              {r.link ? <a href={r.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-                {r.source} <ExternalLink className="size-3" /></a> : r.source ?? "—"}
+              {r.link ? <ExtLink url={r.link} icon>{r.source}</ExtLink> : r.source ?? "—"}
             </TableCell>
           </TableRow>
         ))}
@@ -277,11 +277,11 @@ function Work({ p }: { p: Panel }) {
             {p.work.repos.map((r) => (
               <div key={r.id} className="rounded-lg border bg-white p-3 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  {r.url ? <a href={r.url} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">{r.name}</a>
+                  {r.url ? <ExtLink url={r.url} className="font-medium">{r.name}</ExtLink>
                     : <span className="font-medium">{r.name}</span>}
                   {r.fork && <Badge variant="outline" className="gap-1"><GitFork className="size-3" />fork{r.counted ? "" : " · not counted"}</Badge>}
                 </div>
-                {r.description && <p className="mt-1 text-muted-foreground">{r.description}</p>}
+                {r.description && <p className="mt-1 text-muted-foreground"><LinkedText text={r.description} /></p>}
                 <p className="mt-1 text-xs text-muted-foreground">
                   {[r.languages, r.own_commits !== null && `${r.own_commits} own commits`, r.last_update && `updated ${r.last_update}`]
                     .filter(Boolean).join(" · ")}
@@ -299,11 +299,11 @@ function Work({ p }: { p: Panel }) {
             {p.work.portfolio.map((x, i) => (
               <div key={i} className="rounded-lg border bg-white p-3 text-sm">
                 <div className="font-medium">{x.name}</div>
-                {x.description && <p className="mt-1 text-muted-foreground">{x.description}</p>}
+                {x.description && <p className="mt-1 text-muted-foreground"><LinkedText text={x.description} /></p>}
               </div>
             ))}
           </div>
-          {p.work.portfolio_url && <a href={p.work.portfolio_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-primary hover:underline">Open the portfolio</a>}
+          {p.work.portfolio_url && <ExtLink url={p.work.portfolio_url} className="mt-2 inline-block text-sm">Open the portfolio</ExtLink>}
         </div>
       )}
       {(p.work.certifications?.length ?? 0) > 0 && (
@@ -344,10 +344,10 @@ function LinkedIn({ p }: { p: Panel }) {
     <div className="space-y-3 text-sm">
       {link && (
         <p className="flex flex-wrap items-center gap-2">
-          <a href={link.url} target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-primary hover:bg-muted">
+          <ExtLink url={link.url}
+            className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium hover:bg-muted hover:no-underline">
             <ExternalLink className="size-3.5" /> {link.url.replace("https://www.", "")}
-          </a>
+          </ExtLink>
           <span className="text-xs text-muted-foreground">Profile link {link.source}</span>
         </p>
       )}
@@ -380,7 +380,7 @@ function ActivityTab({ id, refresh }: { id: string; refresh: number }) {
                 <div className="text-muted-foreground">To {a.email.actual_to}{a.email.intended_to && a.email.intended_to !== a.email.actual_to
                   ? ` (intended: ${a.email.intended_to})` : ""}</div>
                 <div className="font-medium">{a.email.subject}</div>
-                <pre className="mt-2 font-[inherit] whitespace-pre-wrap">{a.email.body}</pre>
+                <pre className="mt-2 font-[inherit] whitespace-pre-wrap"><LinkedText text={a.email.body} /></pre>
               </div>
             </details>
           )}

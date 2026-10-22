@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 import uuid
@@ -536,6 +537,50 @@ def extra_key(type: str, fields: dict) -> str:
     return type + ":" + "|".join(normalize_name(fields.get(f)) for f in EXTRA_MAIN.get(type, ()))
 
 
+def _months(fields: dict) -> tuple[str | None, str | None]:
+    def ym(v):
+        m = re.match(r"(\d{4})(?:-(\d{2}))?", str(v or ""))
+        return f"{m.group(1)}-{m.group(2) or '01'}" if m else None
+    return ym(fields.get("start")), ym(fields.get("end"))
+
+
+def same_education(a: dict, b: dict) -> bool:
+    """One education entry (audit round, item 2c): the same school after normalization, degrees in one reviewed
+    group (config/degree_aliases.json: MS = M.S. = Master of Science …), and dates that overlap or are missing on
+    a side. Nothing is merged on similarity."""
+    from extraction.dedupe import degree_group, school_key
+    if not school_key(a.get("school")) or school_key(a.get("school")) != school_key(b.get("school")):
+        return False
+    ga, gb = degree_group(a.get("degree")), degree_group(b.get("degree"))
+    if ga is None or ga != gb:
+        return False
+    (sa, ea), (sb, eb) = _months(a), _months(b)
+    if not (sa or ea) or not (sb or eb):
+        return True
+    sa, sb = sa or ea, sb or eb
+    ea, eb = ea or "9999-12", eb or "9999-12"
+    return sa <= eb and sb <= ea
+
+
+def merge_fields(old: dict, new: dict) -> dict:
+    """The richest fields of two entries for one thing: every field either has; where both do, the longer."""
+    out = dict(old)
+    for k, v in new.items():
+        if k == "_also":
+            continue
+        if not str(out.get(k) or "").strip() or len(str(v)) > len(str(out[k])):
+            out[k] = v
+    return out
+
+
+def _same_extra(a: ExtraItem, b: ExtraItem) -> bool:
+    if a.type != b.type:
+        return False
+    if a.type == "education" and same_education(a.fields, b.fields):
+        return True
+    return extra_key(a.type, a.fields) == extra_key(b.type, b.fields)
+
+
 def merge_extracted_extra(conn: sqlite3.Connection, candidate_id: str, evidence_id: str,
                           items: list[ExtraItem]) -> None:
     """A document's display-only items: earlier ones read from the same document go; one another document already
@@ -545,7 +590,7 @@ def merge_extracted_extra(conn: sqlite3.Connection, candidate_id: str, evidence_
                      (candidate_id, evidence_id))
     gone = {r[0] for r in conn.execute("SELECT key FROM deleted_items WHERE candidate_id = ? AND item_type = 'extra'",
                                        (candidate_id,))}
-    have = {extra_key(x.type, x.fields): x for x in list_extra(conn, candidate_id)}
+    have = list_extra(conn, candidate_id)
     base = conn.execute("SELECT COALESCE(MAX(position), 0) FROM extra_items WHERE candidate_id = ?",
                         (candidate_id,)).fetchone()[0]
     with conn:
@@ -553,13 +598,14 @@ def merge_extracted_extra(conn: sqlite3.Connection, candidate_id: str, evidence_
             k = extra_key(x.type, x.fields)
             if k in gone:
                 continue
-            if k in have:
-                old = have[k]
-                fields = {**x.fields, **old.fields} if old.source == "extracted" else dict(old.fields)
+            old = next((o for o in have if _same_extra(o, x)), None)
+            if old is not None:
+                fields = merge_fields(old.fields, x.fields) if old.source == "extracted" else dict(old.fields)
                 fields["_also"] = list(dict.fromkeys([*old.fields.get("_also", []), evidence_id]))
+                old.fields = fields
                 conn.execute("UPDATE extra_items SET fields_json = ? WHERE id = ?", (json.dumps(fields), old.id))
                 continue
-            have[k] = x
+            have.append(x)
             conn.execute("INSERT INTO extra_items (id, candidate_id, evidence_id, type, fields_json, quote, source, "
                          "position, created_at) VALUES (?, ?, ?, ?, ?, ?, 'extracted', ?, ?)",
                          (x.id, candidate_id, evidence_id, x.type, json.dumps(x.fields), x.quote, base + i + 1,
@@ -642,16 +688,42 @@ def remerge(conn: sqlite3.Connection, candidate_id: str) -> dict:
         for old, new in {**report.role_remap, **report.project_remap}.items():
             conn.execute("UPDATE dropped_items SET parent_id = ? WHERE candidate_id = ? AND parent_id = ?",
                          (new, candidate_id, old))
-    return {"merged_away": {t: v for t, v in gone.items() if v}, "before": before}
+    education = remerge_extra(conn, candidate_id, rank)
+    return {"merged_away": {t: v for t, v in gone.items() if v}, "before": before,
+            "unused_bullets": [b.text for b in report.unused_bullets], "placements": report.placements,
+            "education": education}
+
+
+def remerge_extra(conn: sqlite3.Connection, candidate_id: str, rank=lambda eid: 0) -> list[str]:
+    """Merge saved display-only entries that are one thing (education: item 2c), the earlier document's entry
+    kept with the richest fields and every source. Returns the merged-away entries."""
+    items = sorted(list_extra(conn, candidate_id), key=lambda x: (x.source != "user_edit", rank(x.evidence_id)))
+    kept: list[ExtraItem] = []
+    gone = []
+    with conn:
+        for x in items:
+            into = next((k for k in kept if _same_extra(k, x)), None)
+            if into is None:
+                kept.append(x)
+                continue
+            fields = merge_fields(into.fields, x.fields) if into.source == "extracted" else dict(into.fields)
+            fields["_also"] = list(dict.fromkeys([*into.fields.get("_also", []), *([x.evidence_id] if x.evidence_id
+                                                                                      else []),
+                                                  *x.fields.get("_also", [])]))
+            into.fields = fields
+            conn.execute("UPDATE extra_items SET fields_json = ? WHERE id = ?", (json.dumps(fields), into.id))
+            conn.execute("DELETE FROM extra_items WHERE id = ?", (x.id,))
+            gone.append(f"{x.type}: " + " · ".join(str(v) for k, v in x.fields.items() if k != "_also"))
+    return gone
 
 
 def _keep_order(before: Profile, merged: Profile, report) -> None:
     """Items stay in their saved order (a merged item takes its group's first place): judge inputs that list items
     (the skills list, artifacts) change only where something merged."""
-    from extraction.validate import _same_certification, _same_project, claim_key
+    from extraction.validate import _same_certification, _same_project, same_claim
     remap = {**report.role_remap, **report.project_remap}
     same = {"projects": _same_project, "certifications": _same_certification,
-            "claims": lambda a, b: claim_key(a) == claim_key(b)}
+            "claims": same_claim}
     for table in ("roles", "projects", "claims", "certifications"):
         old = getattr(before, table)
         pos = {x.id: i for i, x in enumerate(old)}

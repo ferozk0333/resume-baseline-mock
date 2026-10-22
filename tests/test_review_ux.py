@@ -166,9 +166,12 @@ def test_dedupe_off_reproduces_the_old_merge(monkeypatch):
 
 def test_sources_are_never_read_by_scoring():
     import re
+    # One exception (audit round, item 2b): Ctx.from_portfolio, so a resume project merged with its portfolio case
+    # study is still a portfolio work sample (as a project merged with its repository keeps its GitHub backing).
+    allowed = re.compile(r"    def from_portfolio\(.*?\n\n", re.S)
     for folder in ("graph", "scoring", "judges"):
         for path in (ROOT / folder).rglob("*.py"):
-            assert not re.search(r"\.sources\b|\bsources_of\b", path.read_text()), path
+            assert not re.search(r"\.sources\b|\bsources_of\b", allowed.sub("", path.read_text())), path
 
 
 def test_date_conflict_between_resume_and_linkedin_is_flagged():

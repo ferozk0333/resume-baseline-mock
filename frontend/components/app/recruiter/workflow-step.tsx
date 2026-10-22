@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmailEditor, SendNotice } from "@/components/app/recruiter/email-editor";
 import { cn } from "@/lib/utils";
 import type { FeedbackSummary, Message, Reading, Scorecard, WorkflowStep, WorkflowView } from "@/lib/api";
+import { LinkedText } from "@/components/app/ext-link";
 
 export type Act = (body: Record<string, unknown>, label?: string) => Promise<void>;
 
@@ -164,7 +165,7 @@ export function ReplyBox({ m }: { m: Message }) {
         <span>Reply · {fmt(m.created_at)}</span>
         {r && <Badge variant="secondary">{LABEL[r.label]}</Badge>}
       </div>
-      <p className="whitespace-pre-wrap">{m.body}</p>
+      <p className="whitespace-pre-wrap"><LinkedText text={m.body} /></p>
       {r && <p className="text-xs text-muted-foreground">Because: “{r.quote}”{r.question ? ` · Question: ${r.question}` : ""}</p>}
       {r?.notes?.map((n) => <p key={n} className="text-xs text-amber-700">{n}</p>)}
     </div>

@@ -12,6 +12,7 @@ import { ReviewApiCtx, type Edit, type ReviewApi } from "@/components/app/review
 import { SectionMenu, type MenuEntry } from "@/components/app/review/section-menu";
 import { Skills } from "@/components/app/review/skills";
 import { patch, type ProfileResponse } from "@/lib/api";
+import { LinkedText } from "@/components/app/ext-link";
 
 const PROJECT_KINDS = new Set(["project", "repo", "work_sample"]);
 
@@ -145,7 +146,7 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
                   {{ resume: "Resume", linkedin_pdf: "LinkedIn PDF", portfolio: "Portfolio" }[s.type] ?? s.type}
                   {s.status === "failed" && <span className="ml-2 text-destructive">could not be extracted</span>}
                 </summary>
-                <pre className="max-h-80 overflow-auto border-t px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{s.text}</pre>
+                <pre className="max-h-80 overflow-auto border-t px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground"><LinkedText text={s.text} /></pre>
               </details>
             ))}
           </Section>

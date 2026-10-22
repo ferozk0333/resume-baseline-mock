@@ -1,4 +1,5 @@
 "use client";
+import { LinkedText } from "@/components/app/ext-link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -162,7 +163,7 @@ export function JobFormPage({ jobId }: { jobId: string }) {
         {step === 2 && <StepRole d={d} update={update} aside={showJd ? (
           <aside aria-label="Job description" className="rounded-xl border bg-white p-4">
             <h2 className="mb-2 text-sm font-semibold">Job description</h2>
-            <pre className="max-h-[38rem] overflow-y-auto font-[inherit] text-xs leading-relaxed whitespace-pre-wrap">{form.jd_text}</pre>
+            <pre className="max-h-[38rem] overflow-y-auto font-[inherit] text-xs leading-relaxed whitespace-pre-wrap"><LinkedText text={form.jd_text} /></pre>
           </aside>) : null} />}
         {step === 3 && <StepSetup d={d} update={update} />}
         {step === 4 && <StepReview form={form} goto={goto} />}

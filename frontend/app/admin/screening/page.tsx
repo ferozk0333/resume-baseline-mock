@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { get } from "@/lib/api";
+import { ExtLink } from "@/components/app/ext-link";
 
 type Flag = { id: string; evidence_id: string | null; source: string; chunk_index: number; chunk: string; score: number;
   hidden: number; model: string; created_at: string };
@@ -36,7 +37,7 @@ export default function Screening() {
         <div className="mt-2 flex flex-wrap gap-2 text-xs">
           <Badge variant={data.enabled.remove_hidden_text ? "default" : "outline"}>Hidden-text removal {data.enabled.remove_hidden_text ? "on" : "off"}</Badge>
           <Badge variant={data.enabled.prompt_guard ? "default" : "outline"}>Injection screen {data.enabled.prompt_guard ? "on" : "off"}</Badge>
-          <a className="text-primary hover:underline" href={data.model_doc} target="_blank" rel="noreferrer">Screen model (512-token window)</a>
+          <ExtLink url={data.model_doc}>Screen model (512-token window)</ExtLink>
         </div>
       </div>
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">

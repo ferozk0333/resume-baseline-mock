@@ -150,11 +150,11 @@ def test_dedupe_roles_by_title_employer_and_overlap():
     current = next(r for r in analysts if r.is_current)
     assert current.start_date == date(2023, 1, 1)                 # resume wins on conflicts
     assert current.industry == "Retail" and current.team_size == 4  # gaps filled from LinkedIn
-    assert [b.text for b in current.bullets] == [
+    assert [b.text for b in current.bullets] == [                  # the resume's bullets only, never both
         "Built a churn model in Python and scikit-learn that cut churn 12%.",
         "Automated weekly sales reports with SQL, saving 5 hours per week.",
-        "Presented churn findings to the leadership team.",
     ]
+    assert [b.text for b in report.unused_bullets] == ["Presented churn findings to the leadership team."]
     assert report.merged >= 1
 
 

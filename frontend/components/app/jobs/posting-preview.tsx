@@ -1,6 +1,7 @@
 import { Briefcase, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { WORKPLACE, type Posting } from "@/lib/api";
+import { LinkedText } from "@/components/app/ext-link";
 
 /** The posting as candidates see it (create-job preview, the job page's Job description tab, candidate Home). */
 export function PostingPreview({ p, compact }: { p: Pick<Posting, "title" | "company" | "department" | "location" |
@@ -18,10 +19,10 @@ export function PostingPreview({ p, compact }: { p: Pick<Posting, "title" | "com
           {facts.length > 0 && <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" />{facts.join(" · ")}</span>}
         </p>
       </header>
-      {p.short_description && <p>{p.short_description}</p>}
+      {p.short_description && <p><LinkedText text={p.short_description} /></p>}
       {!compact && p.responsibilities?.length > 0 && (
         <section><h4 className="font-medium">What you&apos;ll do</h4>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5">{p.responsibilities.map((r, i) => <li key={i}>{r}</li>)}</ul></section>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">{p.responsibilities.map((r, i) => <li key={i}><LinkedText text={r} /></li>)}</ul></section>
       )}
       <section><h4 className="font-medium">Required</h4>
         <div className="mt-1 flex flex-wrap gap-1">{p.required.length ? p.required.map((r) => <Badge key={r} variant="secondary">{r}</Badge>)

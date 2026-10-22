@@ -22,7 +22,7 @@ ARTIFACT_KINDS = {"case_study", "work_sample", "presentation", "publication"}
 def _artifacts(ctx: Ctx) -> list[str]:
     out = repo_lines(ctx)
     for p in ctx.counted_projects():
-        if not p.is_github and (p.kind in ARTIFACT_KINDS or ctx.evidence_type(p.evidence_id) == "portfolio"):
+        if not p.is_github and (p.kind in ARTIFACT_KINDS or ctx.from_portfolio(p)):
             out.append(project_text(p))
     out += [f"Certificate: {c.name}" + (f" ({c.issuer})" if c.issuer else "") for c in ctx.profile.certifications]
     return out
