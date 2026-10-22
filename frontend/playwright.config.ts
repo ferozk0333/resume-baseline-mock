@@ -15,7 +15,7 @@ export default defineConfig({
   use: { baseURL: EXTERNAL ?? `http://localhost:${WEB_PORT}`, channel: "chrome", screenshot: "only-on-failure" },
   webServer: EXTERNAL ? [] : [
     {
-      command: `rm -rf /tmp/rightstaff-e2e.db* /tmp/rightstaff-e2e-uploads && cd .. && PRINT_TIMINGS=0 .venv/bin/python scripts/seed_recruiter_demo.py --db /tmp/rightstaff-e2e.db && EMAIL_PROVIDER=outbox DEMO_EMAIL_TO=demo@example.org JOB_EXTRACT_FAKE=1 API_PORT=${API_PORT} make fake-api`,
+      command: `rm -rf /tmp/rightstaff-e2e.db* /tmp/rightstaff-e2e-uploads && cd .. && PRINT_TIMINGS=0 .venv/bin/python scripts/seed_recruiter_demo.py --db /tmp/rightstaff-e2e.db && EMAIL_PROVIDER=outbox DEMO_EMAIL_TO=demo@example.org JOB_EXTRACT_FAKE=1 UPLOAD_RATE_PER_HOUR=0 API_PORT=${API_PORT} make fake-api`,
       url: `http://localhost:${API_PORT}/baselines`,
       reuseExistingServer: false,
       timeout: 60_000,

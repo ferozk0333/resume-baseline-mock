@@ -96,7 +96,21 @@ export type Weights = { dimensions: Record<string, number>; subcategories: Recor
 export type RunView = { run: { id: string; candidate_id: string; baseline_id: string; plan_status: string | null;
     status?: string }; progress?: { done: number; total: number };
   weights: Weights; final: number | null; dimensions: Record<string, number | null>; subcategories: Subcategory[];
-  gaps: Gap[] };
+  gaps: Gap[]; audit?: boolean };
+
+// --- Computation (audit round, item 1; SCORE_AUDIT): read-only, from the saved data the score used ------------------
+export type Decided = { question?: string; label: string | null; decided_by: string; confidence?: number | null;
+  fallback?: { from: string; label: string | null; confidence: number | null } | null; route?: string; reason?: string };
+export type CompInput = { kind: string; text: string; label: string | null; value: number | null; relevance: number | null;
+  factors: Record<string, unknown>; decided_by: Decided[]; source: string | null; reason?: string };
+export type SubComputation = { dimension: string; status: string; score: number | null;
+  recomputed: { status: string; score: number | null }; matches_saved: boolean; status_reason: string;
+  inputs: CompInput[]; excluded: CompInput[]; arithmetic: string[] };
+export type DimComputation = { terms: { subcategory: string; label: string; weight: number; score: number; missing: boolean }[];
+  excluded: { subcategory: string; label: string; weight: number; reason: string }[]; arithmetic: string; value: number | null };
+export type Computation = { run_id: string; logic_version: string; today: string;
+  subcategories: Record<string, SubComputation>; dimensions: Record<string, DimComputation>;
+  final: { value: number | null; arithmetic: string; weights: Record<string, number>; excluded: string[] } };
 export type PlanAction = { type: string; type_label: string; title: string; what_to_do: string; must_show: string[]; addresses: string[];
   covers_criteria: string[]; builds_on: string | null; points: number; points_text: string };
 export type Plan = { status: "ready" | "generating" | "failed" | "none" | "deferred"; error?: string | null; actions: PlanAction[];
@@ -126,6 +140,7 @@ export type Panel = ApplicantRow & {
   must_haves: MustHave[]; why_points: { text: string; evidence_ids: string[] }[];
   questions: { question: string; topic: string; reason: string }[]; generated_label: string | null;
   requirements: Requirement[]; dimensions: Record<string, number | null> | null;
+  audit: { run_id: string; weights: Weights } | null;
   subcategories: { key: string; label: string; dimension: string; status: string; score: number | null;
     effective_weight: number; guidance: string | null;
     evidence: { question: string; label: string; text: string | null; supported: boolean }[] }[];

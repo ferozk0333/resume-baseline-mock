@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProgressPanel } from "@/components/app/progress-panel";
 import { SubcategoryRow } from "@/components/app/score/subcategory-row";
+import { DimensionComputation, FinalComputation, useComputation } from "@/components/app/score/computation";
 import { WeightsDrawer } from "@/components/app/score/weights-drawer";
 import { useTask } from "@/hooks/use-task";
 import { DIMENSIONS, get, post, titleCase, type Baseline, type Benchmarks, type Pct, type RunView, type Weights } from "@/lib/api";
@@ -29,6 +30,7 @@ export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { i
   const [confirm, setConfirm] = useState(false);
   const [rejudgeTask, setRejudgeTask] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const computation = useComputation(id, weights, !!view?.audit && view?.run.status !== "running");
 
   useEffect(() => {
     get<RunView>(`/runs/${id}`).then((v) => {
@@ -145,6 +147,7 @@ export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { i
           </Card>
         ))}
       </div>
+      <FinalComputation c={computation} />
 
       {DIMENSIONS.map((d) => (
         <Card key={d} className="gap-0 py-0">
@@ -152,8 +155,10 @@ export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { i
             <CardTitle className="text-base">{titleCase(d)}</CardTitle>
           </CardHeader>
           <div>
-            {view.subcategories.filter((s) => s.dimension === d).map((s) => <SubcategoryRow key={s.key} sub={s} technical={technical} />)}
+            {view.subcategories.filter((s) => s.dimension === d).map((s) => <SubcategoryRow key={s.key} sub={s}
+              technical={technical} computation={computation?.subcategories[s.key]} />)}
           </div>
+          <DimensionComputation d={computation?.dimensions[d]} label={titleCase(d)} />
         </Card>
       ))}
 

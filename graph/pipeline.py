@@ -236,7 +236,8 @@ def _prepare(deps: Deps):
                 return {"blocked": blocker, "weights": weights}
             run_id = db.create_run(ctx.conn, ctx.candidate_id, ctx.baseline.id, weights,
                                    baseline_hash=ctx.baseline.content_hash(),
-                                   models={**judge_models(), "judge_kind": judge_kind(deps.judge)})
+                                   models={**judge_models(), "judge_kind": judge_kind(deps.judge)},
+                                   scored_on=ctx.today.isoformat())
             ctx.svc.run_id = run_id
             resolve(ctx, relevance_asks(ctx), call=True)
             errors = [f"prepare_match: {e}" for e in ctx.svc.errors]

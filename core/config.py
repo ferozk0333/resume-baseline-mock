@@ -285,6 +285,9 @@ PUNCT_SPACING = _env("PUNCT_SPACING", "1") == "1"
 # Duplicate claims, certifications and projects merge on the matching key or the reviewed alias file (specs/19
 # Phase C, a bug fix under "one claim per name"). Off only to reproduce the old merge for the before/after report.
 DEDUPE_NAMES = _env("DEDUPE_NAMES", "1") == "1"
+# The "Computation" block under each score (audit round, item 1): inputs, labels, values and the arithmetic, read-only.
+# On for now; to be removed later.
+SCORE_AUDIT = _env("SCORE_AUDIT", "1") == "1"
 MAX_PORTFOLIO_CHARS = 50_000
 GITHUB_MAX_REPOS = 30           # most recently pushed, non-archived
 GITHUB_README_CHARS = 4_000

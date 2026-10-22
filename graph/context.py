@@ -111,7 +111,10 @@ def subject_excerpt(a: "Ask", limit: int = 200) -> str:
             v = a.context[k]
             text = v if isinstance(v, str) else " | ".join(map(str, v)) if isinstance(v, list) else str(v)
             text = text.split("\n")[0] if k in ("role", "project", "item", "criterion") else text
-            return text[:limit]
+            if len(text) <= limit:
+                return text
+            cut = text[:limit].rsplit(" ", 1)[0]          # never mid-word (audit round, item 1)
+            return cut.rstrip(" ,;:–—-") + "…"
     return ""
 
 

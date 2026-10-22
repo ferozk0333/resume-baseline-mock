@@ -1097,7 +1097,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                                             "finished_at", "logic_version", "plan_status")} | {"baseline_source": source},
                 "progress": {"done": sum(1 for x in subs if x["status"] != "pending"), "total": len(subs)},
                 "weights": weights, "final": agg.final, "dimensions": agg.dimensions, "subcategories": subs,
-                "gaps": [g.as_dict() for g in run_gaps(c, run["id"], weights)]}
+                "gaps": [g.as_dict() for g in run_gaps(c, run["id"], weights)], "audit": config.SCORE_AUDIT}
 
     @app.get("/runs/{run_id}", tags=["scoring"])
     def get_run(run_id: str):
@@ -1122,6 +1122,27 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 return run_view(c, run, body.weights)
             except (KeyError, TypeError) as exc:
                 raise HTTPException(422, f"weights are incomplete: missing {exc}") from exc
+
+    def computation_view(run_id: str, weights: dict | None):
+        """How each score was computed (SCORE_AUDIT): read-only, from saved data, no model call."""
+        if not config.SCORE_AUDIT:
+            raise HTTPException(404, "The computation view is turned off (SCORE_AUDIT=0).")
+        from graph.audit import computation
+        with conn() as c:
+            run_row(c, run_id)
+        try:
+            return computation(state.db_path, run_id, weights)
+        except (KeyError, TypeError) as exc:
+            raise HTTPException(422, f"weights are incomplete: missing {exc}") from exc
+
+    @app.get("/runs/{run_id}/computation", tags=["scoring"])
+    def get_computation(run_id: str):
+        return computation_view(run_id, None)
+
+    @app.post("/runs/{run_id}/computation", tags=["scoring"])
+    def post_computation(run_id: str, body: WeightsIn):
+        """The same with the weights on the sliders (dimension and final arithmetic follow them)."""
+        return computation_view(run_id, body.weights)
 
     @app.put("/runs/{run_id}/weights", tags=["scoring"])
     def save_weights(run_id: str, body: WeightsIn):

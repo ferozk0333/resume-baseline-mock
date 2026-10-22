@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -167,7 +167,8 @@ CREATE TABLE IF NOT EXISTS runs (
   baseline_hash TEXT,
   models_json TEXT,
   timings_json TEXT,
-  plan_status TEXT                -- generating | ready | failed (improvement plan, written after the score)
+  plan_status TEXT,               -- generating | ready | failed (improvement plan, written after the score)
+  scored_on TEXT                  -- the scoring date (months, recency); the score's Computation view uses it
 );
 
 CREATE TABLE IF NOT EXISTS document_texts (
@@ -660,6 +661,7 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
           "ALTER TABLE claims ADD COLUMN skill_group TEXT",
           "CREATE TABLE IF NOT EXISTS extra_items (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, type TEXT, "
           "fields_json TEXT, quote TEXT, source TEXT DEFAULT 'extracted', position INTEGER, created_at TEXT)"]),
+    (28, ["ALTER TABLE runs ADD COLUMN scored_on TEXT"]),
 ]
 
 
@@ -784,15 +786,16 @@ DELETED_BASELINE_LABEL = "(deleted)"
 
 
 def create_run(conn: sqlite3.Connection, candidate_id: str, baseline_id: str, weights: dict, *,
-               baseline_hash: str | None = None, models: dict | None = None) -> str:
-    """A scoring run, with everything needed to explain or reproduce it later."""
+               baseline_hash: str | None = None, models: dict | None = None, scored_on: str | None = None) -> str:
+    """A scoring run, with everything needed to explain or reproduce it later (scored_on: the scoring date)."""
     run_id = new_id()
     with conn:
         conn.execute(
             "INSERT INTO runs (id, candidate_id, baseline_id, weights_json, status, started_at, logic_version, "
-            "baseline_hash, models_json) VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?)",
+            "baseline_hash, models_json, scored_on) VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?)",
             (run_id, candidate_id, baseline_id, json.dumps(weights, sort_keys=True), now_iso(),
-             config.LOGIC_VERSION, baseline_hash, json.dumps(models or {}, sort_keys=True)),
+             config.LOGIC_VERSION, baseline_hash, json.dumps(models or {}, sort_keys=True),
+             scored_on or config.today().isoformat()),
         )
     return run_id
 

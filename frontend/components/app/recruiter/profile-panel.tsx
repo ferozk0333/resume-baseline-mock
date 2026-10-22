@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExtLink, LinkedText } from "@/components/app/ext-link";
+import { DimensionComputation, FinalComputation, SubcategoryComputation, useComputation } from "@/components/app/score/computation";
 import { StatusBadge } from "@/components/app/score/subcategory-row";
 import { API, DIMENSIONS, get, titleCase, topShare, type Activity, type Panel, type Stage } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -210,7 +211,10 @@ function Requirements({ p }: { p: Panel }) {
 }
 
 function Eeat({ p }: { p: Panel }) {
+  const computation = useComputation(p.audit?.run_id, p.audit?.weights, !!p.audit);
   return (
+    <div className="space-y-4">
+    <FinalComputation c={computation} />
     <div className="grid gap-4 lg:grid-cols-2">
       {DIMENSIONS.map((d) => (
         <div key={d} className="rounded-lg border bg-white">
@@ -236,13 +240,17 @@ function Eeat({ p }: { p: Panel }) {
                       <p key={i}><span className={cn("font-medium", e.supported ? "text-emerald-700" : "text-muted-foreground")}>
                         {e.label}</span>{e.text ? ` — ${e.text}` : ""}</p>
                     ))}
+                    {computation && <div className="pt-2 text-foreground">
+                      <SubcategoryComputation c={computation.subcategories[s.key]} compact /></div>}
                   </div>
                 </details>
               </li>
             ))}
           </ul>
+          <DimensionComputation d={computation?.dimensions[d]} label={titleCase(d)} />
         </div>
       ))}
+    </div>
     </div>
   );
 }

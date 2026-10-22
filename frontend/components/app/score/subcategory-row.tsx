@@ -3,7 +3,8 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { Judgment, Subcategory } from "@/lib/api";
+import type { Judgment, SubComputation, Subcategory } from "@/lib/api";
+import { SubcategoryComputation } from "@/components/app/score/computation";
 
 const STATUS: Record<string, { label: string; className: string }> = {
   scored: { label: "shown", className: "bg-emerald-50 text-emerald-800 border-emerald-200" },
@@ -33,7 +34,8 @@ function show(v: unknown): string {
 
 /** One area of the score. Candidates see the rule, the guidance and their evidence; `technical` (Admin → Demo
  * tools) adds the raw breakdown and how each piece of evidence was labelled. */
-export function SubcategoryRow({ sub, technical = false }: { sub: Subcategory; technical?: boolean }) {
+export function SubcategoryRow({ sub, technical = false, computation }: { sub: Subcategory; technical?: boolean;
+  computation?: SubComputation }) {
   const [open, setOpen] = useState(false);
   const judgments = (sub.details.judgments ?? []) as Judgment[];
   const breakdown = Object.entries(sub.details).filter(([k]) => k !== "judgments" && !/(^|_)ids?$/.test(k));
@@ -91,6 +93,7 @@ export function SubcategoryRow({ sub, technical = false }: { sub: Subcategory; t
               </ul>
             </div>
           )}
+          <SubcategoryComputation c={computation} />
         </div>
       )}
     </div>

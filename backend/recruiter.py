@@ -483,6 +483,8 @@ def panel(conn, app: dict, job: dict) -> dict:
         "generated_label": "Demo text" if scores else None,
         "requirements": reqs,
         "dimensions": agg.dimensions if agg else None,
+        # The Computation block (SCORE_AUDIT): the run and the job's weights it is aggregated with.
+        "audit": {"run_id": app["run_id"], "weights": job["weights"]} if config.SCORE_AUDIT and scores else None,
         "subcategories": [{"key": s, "label": config.SUBCATEGORY_LABELS[s], "dimension": config.SUBCATEGORY_DIMENSION[s],
                            **{k: v for k, v in scores[s].items() if k != "details"},
                            "effective_weight": agg.effective_weights.get(s, 0.0),
