@@ -232,6 +232,10 @@ def apply() -> None:
         res, judge = score(str(DEMO), t["cid"], t["baseline"], dt.date.fromisoformat(t["today"]), (t["cid"],))
         conn = db.connect(str(DEMO))
         if judge.missed_inputs or not res.get("run_id"):
+            if res.get("run_id"):                       # a partial run is never left behind
+                with conn:
+                    for table, col in (("scores", "run_id"), ("judgments", "run_id"), ("runs", "id")):
+                        conn.execute(f"DELETE FROM {table} WHERE {col} = ?", (res["run_id"],))
             results[t["key"]] = {"before": t["before"], "kept_run": t["run"],
                                  "unrecorded": sorted({q for q, _, _ in judge.missed_inputs})}
             print(f"{t['key']}: {len(judge.missed_inputs)} unrecorded question(s); kept run {t['run']}", flush=True)
