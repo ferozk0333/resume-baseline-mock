@@ -74,7 +74,8 @@ def test_project_names_match_on_subtitle_descriptor_slug_url_and_reviewed_groups
     assert dedupe.same_project_name("lora-ticket-router", "LoRA Ticket Router")
     assert not dedupe.same_project_name("Churn: a study", "Churn: v2")              # two subtitles never match
     assert not dedupe.same_project_name("Churn model (internship)", "Churn model")   # not a reviewed descriptor
-    assert not dedupe.same_project_name("City Data Hackathon 2025", "transit-delay-hackathon")
+    assert not dedupe.same_project_name("City Data Hackathon 2025", "Bay Area AI Hackathon 2025")
+    assert dedupe.same_project_name("City Data Hackathon 2025", "transit-delay-hackathon")    # reviewed alias
 
 
 def test_a_resume_project_and_its_portfolio_case_study_become_one():

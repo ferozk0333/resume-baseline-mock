@@ -10,7 +10,7 @@ from pathlib import Path
 from core import config
 from core.models import Baseline, BaselineCriterion
 
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS baselines (
@@ -464,6 +464,15 @@ CREATE TABLE IF NOT EXISTS candidate_application_details (  -- "fill once": neve
   work_auth_json TEXT, questions_json TEXT, eeo_json TEXT, saved_at TEXT, dismissed_at TEXT, updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS weight_suggestions (   -- recruiter weight assistant (specs/21 §6): every suggestion
+  id TEXT PRIMARY KEY, job_id TEXT, recruiter TEXT, text TEXT, model TEXT, cache_key TEXT, cached INTEGER DEFAULT 0,
+  weights_json TEXT,              -- validated, bounded, normalized and rounded
+  reasons_json TEXT, summary TEXT, ignored_json TEXT,
+  current_weights_json TEXT,      -- the job's weights when it was suggested
+  applied INTEGER DEFAULT 0, applied_at TEXT, previous_weights_json TEXT, undone_at TEXT, created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_weight_suggestions ON weight_suggestions(job_id, created_at);
+
 CREATE TABLE IF NOT EXISTS gap_reports (
   id TEXT PRIMARY KEY,
   run_id TEXT,
@@ -662,6 +671,14 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
           "CREATE TABLE IF NOT EXISTS extra_items (id TEXT PRIMARY KEY, candidate_id TEXT, evidence_id TEXT, type TEXT, "
           "fields_json TEXT, quote TEXT, source TEXT DEFAULT 'extracted', position INTEGER, created_at TEXT)"]),
     (28, ["ALTER TABLE runs ADD COLUMN scored_on TEXT"]),
+    (29, ["""CREATE TABLE IF NOT EXISTS weight_suggestions (   -- recruiter weight assistant (specs/21 §6): every suggestion
+  id TEXT PRIMARY KEY, job_id TEXT, recruiter TEXT, text TEXT, model TEXT, cache_key TEXT, cached INTEGER DEFAULT 0,
+  weights_json TEXT,              -- validated, bounded, normalized and rounded
+  reasons_json TEXT, summary TEXT, ignored_json TEXT,
+  current_weights_json TEXT,      -- the job's weights when it was suggested
+  applied INTEGER DEFAULT 0, applied_at TEXT, previous_weights_json TEXT, undone_at TEXT, created_at TEXT
+)""",
+          "CREATE INDEX IF NOT EXISTS idx_weight_suggestions ON weight_suggestions(job_id, created_at)"]),
 ]
 
 

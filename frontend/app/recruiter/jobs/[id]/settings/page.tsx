@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { InterviewPlan } from "@/components/app/recruiter/interview-plan";
+import { WeightAssistant } from "@/components/app/recruiter/weight-assistant";
 import { DIMENSIONS, get, put, titleCase, type Job, type Weights } from "@/lib/api";
 
 export default function SettingsPage() {
@@ -57,6 +58,8 @@ function Settings() {
               <Button key={p} size="sm" variant={job.preset === p ? "default" : "outline"} onClick={() => save({ preset: p })}>{p}</Button>
             ))}
           </div>
+          <WeightAssistant job={job} onJob={(j) => setJob({ ...job, ...j })} />
+          <h3 className="text-sm font-medium">Fine-tune</h3>
           <div className="grid gap-5 md:grid-cols-2">
             {DIMENSIONS.map((d) => (
               <div key={d} className="space-y-2">

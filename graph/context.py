@@ -37,6 +37,7 @@ class Deps:
     planner: object | None = None             # StructuredLLM for the improvement plan; None = ranked gaps only
     writer: object | None = None              # StructuredLLM for recruiter email drafts; None = code templates
     job_llm: object | None = None             # StructuredLLM for reading job descriptions; None = manual form
+    weights_llm: object | None = None         # StructuredLLM for the weight assistant (specs/21); None = presets only
     plan_in_background: bool = True           # return the score first, write the plan after (specs/09 §2.6)
     extraction_cache: bool = False            # reuse saved extraction outputs for identical documents (app: on)
     labeller: object | None = None            # Jev for code-first extraction (specs/18 §4); None = default

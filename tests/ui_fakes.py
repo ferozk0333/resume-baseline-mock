@@ -70,4 +70,38 @@ def make_deps() -> Deps:
         from core.llm import RoutedLLM
         job_llm = RoutedLLM(max_tokens=config.EXTRACT_MAX_TOKENS)
     return Deps(str(config.DB_PATH), FakeJudge(script=best), llm=SlowLinkedIn({"resume": sample_resume_extract()}),
-                planner=AlwaysPlanner(), writer=writer, job_llm=job_llm)
+                planner=AlwaysPlanner(), writer=writer, job_llm=job_llm, weights_llm=StubWeightsLLM())
+
+
+class StubWeightsLLM:
+    """The weight assistant on fakes: the hand-written stand-in answer of tests/fixtures/weight_texts.yaml for a
+    sample text, else the "vague" one. No network. `calls` records every prompt it was given (tests assert on it)."""
+
+    def __init__(self, answers: list | None = None):
+        self.answers = list(answers or [])          # explicit answers in order (tests: invalid → retry)
+        self.calls: list[dict] = []
+
+    @staticmethod
+    def stub(text: str):
+        import yaml
+        from pathlib import Path
+        from backend.weight_assistant import DimWeight, Reason, SubWeight, WeightsOut
+        texts = yaml.safe_load((Path(__file__).parent / "fixtures" / "weight_texts.yaml").read_text())["texts"]
+        t = next((x for x in texts if x["text"].strip().lower() == text.strip().lower()),
+                 next(x for x in texts if x["id"] == "vague"))["stub"]
+        return WeightsOut(dimensions=[DimWeight(key=k, weight=v) for k, v in t["dimensions"].items()],
+                          subcategories=[SubWeight(dimension=d, key=k, weight=v)
+                                         for d, g in t.get("subcategories", {}).items() for k, v in g.items()],
+                          reasons=[Reason(key=k, reason=v) for k, v in t.get("reasons", {}).items()],
+                          summary=t.get("summary", ""), ignored=t.get("ignored", []))
+
+    def parse(self, *, model: str, system: str, user: str, output_type):
+        import re
+        self.calls.append({"model": model, "system": system, "user": user})
+        if self.answers:
+            a = self.answers.pop(0)
+            if isinstance(a, Exception):
+                raise a
+            return a
+        m = re.search(r"<recruiter_text>\n(.*)\n</recruiter_text>", user, re.S)
+        return self.stub(m.group(1) if m else "")

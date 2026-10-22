@@ -235,7 +235,8 @@ HEDGE_TASKS = tuple(t.strip() for t in _env("HEDGE_TASKS", "judge_single").split
 # The route each role uses with LLM_PROVIDER=gemini (specs/18 §2 item 1).
 ROLE_ROUTES = {"extract": "extract_document", "extract_web": "extract_web", "judge": "judge_single",
                "judge_batch": "judge_grouped", "complexity": "judge_single", "plan": "plan", "email": "judge_single",
-               "reply": "judge_single", "feedback": "judge_single", "job_extract": "extract_document"}
+               "reply": "judge_single", "feedback": "judge_single", "job_extract": "extract_document",
+               "weights": "plan"}
 
 
 def _role_model(env: str, claude_default: str, role: str) -> str:
@@ -264,6 +265,8 @@ JOB_EXTRACT_MODEL = _env("JOB_EXTRACT_MODEL", "route:extract_document")
 # summary when the model is unavailable; the recruiter always decides.
 REPLY_MODEL = _role_model("REPLY_MODEL", "claude-haiku-4-5-20251001", "reply")
 FEEDBACK_MODEL = _role_model("FEEDBACK_MODEL", "claude-haiku-4-5-20251001", "feedback")
+# Recruiter weight assistant (specs/21): one call per suggestion on the plan route; presets when unavailable.
+WEIGHTS_MODEL = _role_model("WEIGHTS_MODEL", "claude-haiku-4-5-20251001", "weights")
 JEV_MODEL = _env("JEV_MODEL", "jev-1.13.0")   # pinned; saved judgments are matched on this version
 JEV_URL = "https://api.typesafe.ai/v1/systemone"
 # Effort per purpose (low | medium | high; empty = the model's default: high on Sonnet 5.5, medium on
@@ -457,6 +460,13 @@ SUBCATEGORY_LABELS: dict[str, str] = {
     "consistency": "Consistency",
     "evidence_quality": "Evidence quality",
 }
+
+
+# Weight assistant bounds (specs/21 §3): every suggested group sums to 100 in steps of WEIGHT_STEP.
+WEIGHT_DIM_MIN = float(_env("WEIGHT_DIM_MIN", "5"))
+WEIGHT_DIM_MAX = float(_env("WEIGHT_DIM_MAX", "60"))
+WEIGHT_STEP = float(_env("WEIGHT_STEP", "5"))
+WEIGHT_TEXT_MAX = 800
 
 
 def default_weights() -> dict:

@@ -48,7 +48,7 @@ def default_deps() -> Deps:
         raise RuntimeError("ANTHROPIC_API_KEY is not set in .env (or set LLM_PROVIDER=gemini).")
     return Deps(str(config.DB_PATH), get_judge(), llm=RoutedLLM(effort=config.EXTRACT_EFFORT), extraction_cache=True,
                 planner=RoutedLLM(max_tokens=config.PLAN_MAX_TOKENS, effort=config.PLAN_EFFORT),
-                writer=RoutedLLM(), job_llm=RoutedLLM(max_tokens=config.EXTRACT_MAX_TOKENS))
+                writer=RoutedLLM(), job_llm=RoutedLLM(max_tokens=config.EXTRACT_MAX_TOKENS), weights_llm=RoutedLLM())
 
 
 def build_deps() -> Deps:
@@ -163,6 +163,11 @@ class ScoreIn(BaseModel):
 
 class WeightsIn(BaseModel):
     weights: dict
+
+
+class WeightSuggestIn(BaseModel):
+    text: str
+    fresh: bool = False             # "Suggest again": bypass the cache
 
 
 class JobUpdate(BaseModel):
@@ -1631,6 +1636,59 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 return rc.update_job(c, job_id, weights=body.weights, must_haves=body.must_haves, preset=body.preset)
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
+
+    # --- Weight assistant (specs/21): suggest → preview → Apply / Discard → Undo. Nothing changes until Apply. ---
+
+    def suggestion_or_404(c, job_id: str, sid: str) -> dict:
+        from backend import weight_assistant as wa
+        return wa.get(c, job_id, sid) or not_found("Suggestion")
+
+    @app.post("/jobs/{job_id}/weight-suggestions", tags=["recruiter"])
+    def suggest_weights(job_id: str, body: WeightSuggestIn):
+        """One model call (or the cache): weights only, from the recruiter's text and the job's title, level and
+        weights. No applicant data is sent. The preview re-aggregates saved scores; nothing is applied."""
+        from backend import weight_assistant as wa
+        with conn() as c:
+            j = job_or_404(c, job_id)
+            try:
+                out = wa.suggest(c, state.deps.weights_llm, j, body.text, fresh=body.fresh)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            if out["status"] != "ok":
+                return out
+            return {"status": "ok", "suggestion": wa.view(c, j, wa.get(c, job_id, out["id"]))}
+
+    @app.get("/jobs/{job_id}/weight-suggestions", tags=["recruiter"])
+    def weight_suggestion_history(job_id: str):
+        from backend import weight_assistant as wa
+        with conn() as c:
+            job_or_404(c, job_id)
+            return wa.history(c, job_id)
+
+    @app.get("/jobs/{job_id}/weight-suggestions/{sid}", tags=["recruiter"])
+    def weight_suggestion(job_id: str, sid: str):
+        """Re-open a suggestion: changes and preview against the job's weights now."""
+        from backend import weight_assistant as wa
+        with conn() as c:
+            j = job_or_404(c, job_id)
+            return wa.view(c, j, suggestion_or_404(c, job_id, sid))
+
+    @app.post("/jobs/{job_id}/weight-suggestions/{sid}/apply", tags=["recruiter"])
+    def apply_weight_suggestion(job_id: str, sid: str):
+        from backend import weight_assistant as wa
+        with conn() as c:
+            j = job_or_404(c, job_id)
+            return {"job": wa.apply(c, j, suggestion_or_404(c, job_id, sid))}
+
+    @app.post("/jobs/{job_id}/weight-suggestions/{sid}/undo", tags=["recruiter"])
+    def undo_weight_suggestion(job_id: str, sid: str):
+        from backend import weight_assistant as wa
+        with conn() as c:
+            j = job_or_404(c, job_id)
+            try:
+                return {"job": wa.undo(c, j, suggestion_or_404(c, job_id, sid))}
+            except ValueError as exc:
+                raise HTTPException(409, str(exc)) from exc
 
     @app.get("/jobs/{job_id}/applicants", tags=["recruiter"])
     def applicants(job_id: str, sort: str = "match", status: str | None = None, all_must_haves: bool = False,

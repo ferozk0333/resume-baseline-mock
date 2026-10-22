@@ -376,3 +376,16 @@ export function useUploadLimit(): number {
   useEffect(() => { get<{ max_bytes: number }>("/settings/uploads").then((s) => setMax(s.max_bytes)).catch(() => {}); }, []);
   return max;
 }
+
+// --- Weight assistant (specs/21) ------------------------------------------------------------------------------------
+export type WeightChange = { key: string; label: string; dimension: string | null; current: number; suggested: number;
+  reason?: string };
+export type PreviewRow = { application_id: string; name: string; match: number; match_before: number; rank: number;
+  was: number; move: number };
+export type WeightPreview = { available: true; top: PreviewRow[]; up: number; down: number; same: number; total: number }
+  | { available: false; message: string };
+export type WeightSuggestion = { id: string; text: string; created_at: string; summary: string; label: string;
+  weights: Weights; changes: WeightChange[]; unchanged: WeightChange[]; ignored: string[]; ignored_notice: string | null;
+  applied: boolean; applied_at: string | null; undone_at: string | null; preview: WeightPreview };
+export type SuggestResult = { status: "ok"; suggestion: WeightSuggestion } | { status: "unavailable" | "invalid"; message: string };
+export type SuggestionSummary = { id: string; created_at: string; text: string; applied: boolean; undone: boolean };
