@@ -226,6 +226,50 @@ def test_delete_and_undo_restores_the_same_ids_and_links(api):  # noqa: F811
     assert api.patch(f"/candidates/{cid}/profile", json={"op": "undo", "item": "deleted", "id": out["undo"]}).status_code == 422
 
 
+def test_reference_add_edit_delete_and_undo_in_review(api):  # noqa: F811
+    cid, _ = onboard(api)
+    assert _profile(api, cid)["profile"]["references"] == []
+    out = _patch(api, cid, op="add", item="reference", data={
+        "name": " Priya Shah ", "relationship": "manager", "contact": "priya@example.com",
+        "statement": "Jane built our churn model."})
+    [ref] = out["profile"]["references"]
+    assert {k: ref[k] for k in ("name", "relationship", "contact", "statement")} == {
+        "name": "Priya Shah", "relationship": "manager", "contact": "priya@example.com",
+        "statement": "Jane built our churn model."}
+    assert _profile(api, cid)["profile"]["references"] == [ref]          # GET returns it too
+
+    out = _patch(api, cid, op="edit", item="reference", id=ref["id"], data={
+        "name": "Priya Shah", "relationship": "supervisor", "contact": "", "statement": "Jane led the churn model."})
+    [edited] = out["profile"]["references"]
+    assert edited["id"] == ref["id"] and edited["relationship"] == "supervisor"
+    assert edited["contact"] is None and edited["statement"] == "Jane led the churn model."
+
+    out = _patch(api, cid, op="delete", item="reference", id=ref["id"])
+    assert out["undo"] and out["profile"]["references"] == []
+    back = _patch(api, cid, op="undo", item="deleted", id=out["undo"])
+    assert back["profile"]["references"] == [edited]                      # same id and fields
+
+    for data in ({"name": " "}, {"name": "X", "relationship": "friend"}):
+        assert api.patch(f"/candidates/{cid}/profile", json={"op": "add", "item": "reference", "data": data}).status_code == 422
+
+
+def test_edited_reference_is_judged_again_only_when_the_judge_input_changes():
+    """reference_confirms is cached by input_hash: relationship and statement are in the input, name and contact
+    are not (they can't change the answer)."""
+    from types import SimpleNamespace
+    from extraction.records import ReferenceRec
+    from graph.nodes.trust import validation_plan
+    from judges.service import input_hash
+
+    def h(ref):
+        [ask] = validation_plan(SimpleNamespace(profile=Profile(references=[ref]), baseline_summary="Data Scientist"))
+        return input_hash(ask.key, ask.context)
+    base = ReferenceRec("Priya", "manager", "p@x.com", "Built the churn model.", id="r1")
+    assert h(base) != h(ReferenceRec("Priya", "manager", "p@x.com", "Led the churn model.", id="r1"))
+    assert h(base) != h(ReferenceRec("Priya", "peer", "p@x.com", "Built the churn model.", id="r1"))
+    assert h(base) == h(ReferenceRec("Priya S.", "manager", "new@x.com", "Built the churn model.", id="r1"))
+
+
 def test_year_only_flag_confirm_and_review_fields(api):  # noqa: F811
     cid, _ = onboard(api)
     data = _profile(api, cid)

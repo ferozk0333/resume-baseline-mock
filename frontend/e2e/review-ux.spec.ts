@@ -174,6 +174,30 @@ async function review(page: Page, p: string, mobile: boolean) {
   await expect(certs).not.toContainText(/verified/i);
   await part(certs, `${p}c1-certifications-after-dedupe`);
 
+  // References: add, edit, delete + Undo. Never "verified" (that is spec 20)
+  const refs = page.locator("#sec-references");
+  await expect(refs).toContainText("None yet.");
+  await refs.getByRole("button", { name: "Add reference" }).click();
+  await refs.getByLabel("Name").fill("Priya Shah");
+  await refs.getByLabel("Relationship").selectOption("manager");
+  await expect(refs.getByText("Only Manager or Supervisor references count toward Trust.")).toBeVisible();
+  await refs.getByLabel("What they can confirm").fill("Jane built our store demand forecast.");
+  await refs.getByRole("button", { name: "Save" }).click();
+  const ref = page.getByRole("article", { name: "Reference: Priya Shah" });
+  await expect(ref).toContainText("Manager");
+  await ref.getByRole("button", { name: "Edit Priya Shah" }).click();
+  await ref.getByLabel("Relationship").selectOption("supervisor");
+  await ref.getByRole("button", { name: "Save" }).click();
+  await expect(ref).toContainText("Supervisor");
+  await expect(refs).not.toContainText(/verified/i);
+  await part(refs, `${p}c2-references`);
+  await ref.getByRole("button", { name: "Delete Priya Shah" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+  await expect(ref).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("article", { name: "Reference: Priya Shah" })).toContainText("Supervisor");
+  if (!mobile) await expect(menu.getByRole("link", { name: /References/ })).toBeVisible();
+
   // More proof: collapsed chips, then sections
   const more = page.locator("#sec-more");
   await expect(more.getByTestId("proof-add-chips")).toBeVisible();

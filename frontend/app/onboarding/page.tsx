@@ -62,12 +62,14 @@ function Onboarding() {
           <Link href="/" className={buttonVariants({ variant: "outline", size: "sm" })}>Save and exit</Link>
         )}
       </div>
-      {step !== "done" && <Stepper current={step} />}
+      {/* Going back only moves the saved step: documents, roles, review edits and scores are all kept. Confirming the
+          profile again on Review re-runs scoring (POST /baseline-scores). */}
+      {step !== "done" && <Stepper current={step} onGo={mine ? go : undefined} />}
 
       {step === "proof" && <ProofStep cid={cid} name={mine?.candidate.name ?? ""}
         onStarted={async (_, id) => { if (id !== cid) setCid(id); else await load(); }} />}
       {step === "roles" && mine && <RolesStep state={mine} reload={load} onContinue={() => go("review")} onRetry={() => go("proof")} />}
-      {step === "review" && mine && <ReviewStep cid={mine.candidate.id} onScored={load} />}
+      {step === "review" && mine && <ReviewStep cid={mine.candidate.id} onScored={load} onBack={() => go("roles")} />}
       {step === "scores" && mine && <ScoresStep state={mine} onContinue={() => go("details")} onBack={() => go("review")} />}
       {step === "details" && mine && <DetailsStep cid={mine.candidate.id} onDone={() => go("done")} />}
       {step === "done" && (
@@ -89,25 +91,42 @@ function Onboarding() {
   );
 }
 
-function Stepper({ current }: { current: OnboardingStep }) {
+function Stepper({ current, onGo }: { current: OnboardingStep; onGo?: (step: OnboardingStep) => void }) {
   const at = STEP_LABELS.findIndex((s) => s.key === current);
   return (
     <nav aria-label="Setup progress">
       <p className="mb-2 text-sm font-medium sm:hidden">Step {at + 1} of {STEP_LABELS.length}: {STEP_LABELS[at].label}</p>
       <ol className="flex items-center gap-1 sm:gap-2">
-        {STEP_LABELS.map((s, i) => (
-          <li key={s.key} className="flex min-w-0 flex-1 items-center gap-2" aria-current={i === at ? "step" : undefined}>
-            <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
-              i < at && "border-primary bg-primary text-primary-foreground", i === at && "border-primary text-primary ring-2 ring-primary/20",
-              i > at && "text-muted-foreground")}>
-              {i < at ? <Check className="size-4" aria-label="done" /> : i + 1}
-            </span>
-            <span className={cn("hidden truncate text-sm sm:inline", i === at ? "font-medium" : "text-muted-foreground")}>
-              {s.label}
-            </span>
-            {i < STEP_LABELS.length - 1 && <span className="h-px min-w-3 flex-1 bg-border" aria-hidden />}
-          </li>
-        ))}
+        {STEP_LABELS.map((s, i) => {
+          const marker = (
+            <>
+              <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
+                i < at && "border-primary bg-primary text-primary-foreground", i === at && "border-primary text-primary ring-2 ring-primary/20",
+                i > at && "text-muted-foreground")}>
+                {i < at ? <Check className="size-4" aria-label="done" /> : i + 1}
+              </span>
+              <span className={cn("hidden truncate text-sm sm:inline", i === at ? "font-medium" : "text-muted-foreground")}>
+                {s.label}
+              </span>
+            </>
+          );
+          // Completed steps are links back, except "proof": going back there would restart the upload. Future steps stay
+          // plain text.
+          const canGo = !!onGo && i < at && s.key !== "proof";
+          return (
+            <li key={s.key} className="flex min-w-0 flex-1 items-center gap-2" aria-current={i === at ? "step" : undefined}>
+              {canGo ? (
+                <button type="button" onClick={() => onGo?.(s.key)} aria-label={`${s.label}, done. Go back to this step`}
+                  className="flex min-w-0 items-center gap-2 rounded-md outline-none transition-opacity hover:opacity-80 focus-visible:ring-3 focus-visible:ring-ring/50">
+                  {marker}
+                </button>
+              ) : (
+                <span className="flex min-w-0 items-center gap-2">{marker}</span>
+              )}
+              {i < STEP_LABELS.length - 1 && <span className="h-px min-w-3 flex-1 bg-border" aria-hidden />}
+            </li>
+          );
+        })}
       </ol>
     </nav>
   );
@@ -220,7 +239,7 @@ function RolesStep({ state, reload, onContinue, onRetry }: { state: OnboardingSt
 
 // --- 3. Review ----------------------------------------------------------------------------------------------------
 
-function ReviewStep({ cid, onScored }: { cid: string; onScored: () => void }) {
+function ReviewStep({ cid, onScored, onBack }: { cid: string; onScored: () => void; onBack: () => void }) {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const reading = !!profile?.reading;
@@ -234,11 +253,15 @@ function ReviewStep({ cid, onScored }: { cid: string; onScored: () => void }) {
   }, [cid, reading]);
   if (!profile) return <Skeleton className="h-96" />;
   return (
-    <Review data={profile} onChange={setProfile} confirming={busy} confirmLabel="Confirm profile" onConfirm={async () => {
-      setBusy(true);
-      try { await post(`/candidates/${cid}/baseline-scores`); onScored(); }
-      catch (e) { toast.error((e as Error).message); setBusy(false); }
-    }} />
+    <div className="space-y-3">
+      {/* Back keeps every edit made here; confirming the profile again later re-runs scoring. */}
+      <Button variant="ghost" size="sm" onClick={onBack} disabled={busy}>Back to target roles</Button>
+      <Review data={profile} onChange={setProfile} confirming={busy} confirmLabel="Confirm profile" onConfirm={async () => {
+        setBusy(true);
+        try { await post(`/candidates/${cid}/baseline-scores`); onScored(); }
+        catch (e) { toast.error((e as Error).message); setBusy(false); }
+      }} />
+    </div>
   );
 }
 
@@ -284,9 +307,13 @@ function ScoresStep({ state, onContinue, onBack }: { state: OnboardingState; onC
       <div className="grid gap-4 lg:grid-cols-2">
         {cards.map((c) => <RoleScoreCard key={c.baseline_id} card={c} />)}
       </div>
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <span className="text-sm text-muted-foreground">Your recommendations are saved under My scores.</span>
-        <Button onClick={onContinue}>Continue</Button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Back keeps these scores; they change only if the profile is confirmed again on Review. */}
+        <Button variant="ghost" size="sm" onClick={onBack}>Back to review</Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground">Your recommendations are saved under My scores.</span>
+          <Button onClick={onContinue}>Continue</Button>
+        </div>
       </div>
     </div>
   );

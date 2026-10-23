@@ -62,6 +62,9 @@ export type Claim = { id: string; kind: string; name_raw: string; bullet_id: str
 export type Certification = { id: string; name: string; issuer: string | null; credential_id: string | null;
   verify_url: string | null; source: string; issued_date?: string | null; sources?: string[];
   exam_code?: string | null; credential_status?: string | null };
+/** A reference the candidate typed (form or Review). Never verified (spec 20). */
+export type Reference = { id: string; name: string; relationship: string | null; contact: string | null;
+  statement: string | null };
 /** Display-only proof types (specs/19 Phase D): shown to recruiters, never scored. */
 export type ExtraItem = { id: string; type: "education" | "patent" | "volunteering" | "course" | "language";
   fields: Record<string, string>; source: string; quote: string | null; sources: string[] };
@@ -69,7 +72,8 @@ export type Dropped = { id: string; item_type: string; text: string; reason: str
 export type MediaLink = { id: string; url: string; kind: "youtube" | "loom"; title: string | null; embed_url: string };
 export type ProfileResponse = {
   candidate: Candidate;
-  profile: { roles: Role[]; projects: Project[]; claims: Claim[]; certifications: Certification[] };
+  profile: { roles: Role[]; projects: Project[]; claims: Claim[]; certifications: Certification[];
+    references?: Reference[] };
   dropped: Dropped[]; warnings: string[]; blocker: string | null; media_links: MediaLink[];
   sources: { id: string; type: string; status: string; text: string | null }[];
   /** Sources still being read while Review is open (specs/18 Phase 3); Confirm waits for them. */
@@ -284,7 +288,7 @@ export type OnboardingState = { candidate: Candidate;
     confirmed_at: string | null; finished_at: string | null };
   targets: Target[]; read_task: Task | null; score_task: Task | null; awaiting_review: boolean;
   details: { saved_at: string | null; dismissed_at: string | null }; roles: { baseline_id: string; title: string }[] };
-export type CardAction = { key: string; title: string; type_label: string; points: number; points_text: string;
+export type CardAction = { key: string; title: string; type: string; type_label: string; points: number; points_text: string;
   covers_criteria: string[]; done: boolean };
 export type ScoreCard = Target & { run_id: string | null; status: "scored" | "running" | "not_scored";
   final: number | null; dimensions: Record<string, number | null>;

@@ -163,7 +163,7 @@ def score_card(conn, candidate_id: str, target: dict) -> dict:
     final = pct.get("final") if pct.get("shown") else None
     plan = current_plan(conn, run["id"], weights)
     done = done_actions(conn, candidate_id, target["baseline_id"])
-    actions = [{"key": action_key(p.action.title), "title": p.action.title,
+    actions = [{"key": action_key(p.action.title), "title": p.action.title, "type": p.action.type,
                 "type_label": TYPE_LABELS.get(p.action.type, p.action.type), "points": round(p.points, 1),
                 "points_text": p.points_text, "covers_criteria": p.action.covers_criteria,
                 "done": action_key(p.action.title) in done}

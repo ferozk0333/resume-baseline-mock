@@ -136,6 +136,11 @@ def _insert_certification(conn, candidate_id: str, c: CertificationRec) -> None:
     )
 
 
+def _insert_reference(conn, candidate_id: str, r: ReferenceRec) -> None:
+    conn.execute("INSERT INTO references_ (id, candidate_id, name, relationship, contact, statement) "
+                 "VALUES (?, ?, ?, ?, ?, ?)", (r.id, candidate_id, r.name, r.relationship, r.contact, r.statement))
+
+
 def save_profile(conn: sqlite3.Connection, candidate_id: str, profile: Profile) -> None:
     """Replace the candidate's whole profile in one transaction."""
     with conn:
@@ -149,11 +154,8 @@ def save_profile(conn: sqlite3.Connection, candidate_id: str, profile: Profile) 
             _insert_claim(conn, candidate_id, c)
         for c in profile.certifications:
             _insert_certification(conn, candidate_id, c)
-        conn.executemany(
-            "INSERT INTO references_ (id, candidate_id, name, relationship, contact, statement) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [(r.id, candidate_id, r.name, r.relationship, r.contact, r.statement) for r in profile.references],
-        )
+        for r in profile.references:
+            _insert_reference(conn, candidate_id, r)
 
 
 # --- Dropped items ("Add back" in the review step) ---------------------------------------
@@ -425,7 +427,7 @@ def save_project(conn: sqlite3.Connection, candidate_id: str, *, project_id: str
 
 
 def delete_item(conn: sqlite3.Connection, table: str, item_id: str) -> None:
-    """Delete a role, project, claim or certification (with its bullets)."""
+    """Delete a role, project, claim, certification (with its bullets) or reference."""
     if table not in ("roles", "projects", "claims", "certifications", "references_"):
         raise ValueError(table)
     with conn:
@@ -476,6 +478,26 @@ def save_certification(conn: sqlite3.Connection, candidate_id: str, *, cert_id: 
     with conn:
         conn.execute("DELETE FROM certifications WHERE id = ?", (rec.id,))
         _insert_certification(conn, candidate_id, rec)
+    return rec.id
+
+
+REFERENCE_RELATIONSHIPS = ("manager", "supervisor", "peer", "other")
+
+
+def save_reference(conn: sqlite3.Connection, candidate_id: str, *, ref_id: str | None = None, name: str,
+                   relationship: str | None, contact: str | None, statement: str | None) -> str:
+    """Add (or, with ref_id, edit) a reference typed in Review. An edit keeps the id; a changed relationship or
+    statement changes the judge's input, so it is judged again when the profile is confirmed. Never verified."""
+    if not name.strip():
+        raise ValueError("A reference needs a name.")
+    relationship = (relationship or "").strip().lower() or None
+    if relationship is not None and relationship not in REFERENCE_RELATIONSHIPS:
+        raise ValueError(f"Unknown relationship {relationship!r}.")
+    rec = ReferenceRec(name.strip(), relationship, (contact or "").strip() or None, (statement or "").strip() or None,
+                       id=ref_id or str(uuid.uuid4()))
+    with conn:
+        conn.execute("DELETE FROM references_ WHERE id = ? AND candidate_id = ?", (rec.id, candidate_id))
+        _insert_reference(conn, candidate_id, rec)
     return rec.id
 
 
