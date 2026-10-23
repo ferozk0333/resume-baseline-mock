@@ -54,8 +54,12 @@ def env(tmp_path, monkeypatch):
         yield type("Env", (), {"api": client, "judge": judge, "llm": llm, "planner": planner, "path": path})
 
 
+ORIGINAL_ROLES = ("baseline-ai-engineer-entry", "baseline-data-scientist-entry", "baseline-product-manager-entry")
+
+
 def roles(api) -> list[str]:
-    return [b["id"] for b in api.get("/baselines").json()]
+    """The three original roles, in the order the API lists them (a candidate targets at most 3)."""
+    return [b["id"] for b in api.get("/baselines").json() if b["id"] in ORIGINAL_ROLES]
 
 
 def new_profile(api, name="Ada"):

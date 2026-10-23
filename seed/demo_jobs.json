@@ -351,6 +351,214 @@
         "Technical fluency"
       ],
       "required_years": 1
+    },
+    {
+      "key": "quillmark-backend-swe",
+      "role": "baseline-software-engineer-entry",
+      "title": "Software Engineer, Backend",
+      "company": "Quillmark",
+      "department": "Platform",
+      "location": "Austin, TX",
+      "workplace": "hybrid",
+      "salary": [
+        115000,
+        135000,
+        "USD"
+      ],
+      "posted_days_ago": 4,
+      "activity_days_ago": 0,
+      "stage_moved_days_ago": 1,
+      "short_description": "Build the APIs and services behind our document workflow product, from design to production.",
+      "responsibilities": [
+        "Design and ship REST services used by the web app",
+        "Write tests and keep CI green",
+        "Take part in code review and on-call"
+      ],
+      "must_haves": [
+        "Backend or API development",
+        "Automated testing",
+        "Programming language",
+        "Git"
+      ],
+      "add": [],
+      "drop": [],
+      "promote": [],
+      "required_years": 1
+    },
+    {
+      "key": "ferrowell-new-grad-swe",
+      "role": "baseline-software-engineer-entry",
+      "title": "Software Engineer I (New Grad)",
+      "company": "Ferrowell",
+      "department": "Product Engineering",
+      "location": "Remote (US)",
+      "workplace": "remote",
+      "salary": [
+        105000,
+        125000,
+        "USD"
+      ],
+      "posted_days_ago": 15,
+      "activity_days_ago": 0,
+      "stage_moved_days_ago": 1,
+      "short_description": "Join a product team shipping full-stack features for small-business accounting.",
+      "responsibilities": [
+        "Ship full-stack features with a senior engineer",
+        "Model data and write SQL migrations",
+        "Fix production issues and learn the system"
+      ],
+      "must_haves": [
+        "Programming fundamentals",
+        "Databases and data modeling",
+        "Programming language",
+        "SQL databases"
+      ],
+      "add": [
+        {
+          "name": "React",
+          "kind": "tool",
+          "priority": "preferred",
+          "aliases": [
+            "React.js",
+            "Next.js"
+          ]
+        }
+      ],
+      "drop": [],
+      "promote": [],
+      "required_years": 0
+    },
+    {
+      "key": "alderbank-junior-ba",
+      "role": "baseline-business-analyst-entry",
+      "title": "Junior Business Analyst",
+      "company": "Alderbank",
+      "department": "Operations Change",
+      "location": "Charlotte, NC",
+      "workplace": "hybrid",
+      "salary": [
+        70000,
+        85000,
+        "USD"
+      ],
+      "posted_days_ago": 6,
+      "activity_days_ago": 0,
+      "stage_moved_days_ago": 1,
+      "short_description": "Turn operations requests into clear requirements and help the delivery team ship process changes.",
+      "responsibilities": [
+        "Run requirements workshops with operations teams",
+        "Map current and future processes",
+        "Support user acceptance testing"
+      ],
+      "must_haves": [
+        "Requirements gathering",
+        "Process mapping and improvement",
+        "Stakeholder management",
+        "Excel"
+      ],
+      "add": [],
+      "drop": [],
+      "promote": [],
+      "required_years": 1
+    },
+    {
+      "key": "northgate-it-ba",
+      "role": "baseline-business-analyst-entry",
+      "title": "IT Business Analyst",
+      "company": "Northgate Logistics",
+      "department": "IT",
+      "location": "Columbus, OH",
+      "workplace": "onsite",
+      "salary": [
+        72000,
+        88000,
+        "USD"
+      ],
+      "posted_days_ago": 19,
+      "activity_days_ago": 0,
+      "stage_moved_days_ago": 1,
+      "short_description": "Analyze warehouse system needs, write user stories and work with developers through delivery.",
+      "responsibilities": [
+        "Write user stories and acceptance criteria",
+        "Analyze order and inventory data with SQL",
+        "Keep the backlog ready for each sprint"
+      ],
+      "must_haves": [
+        "Requirements gathering",
+        "Data analysis",
+        "SQL",
+        "Jira or Confluence"
+      ],
+      "add": [],
+      "drop": [],
+      "promote": [],
+      "required_years": 1
+    },
+    {
+      "key": "pinecrest-data-analyst",
+      "role": "baseline-data-analyst-entry",
+      "title": "Data Analyst",
+      "company": "Pinecrest Retail",
+      "department": "Analytics",
+      "location": "Denver, CO",
+      "workplace": "hybrid",
+      "salary": [
+        75000,
+        90000,
+        "USD"
+      ],
+      "posted_days_ago": 2,
+      "activity_days_ago": 0,
+      "stage_moved_days_ago": 1,
+      "short_description": "Own weekly sales and inventory reporting and answer the questions the merchandising team asks.",
+      "responsibilities": [
+        "Build and maintain dashboards in Tableau",
+        "Write SQL against the warehouse",
+        "Explain what changed and why each week"
+      ],
+      "must_haves": [
+        "SQL analysis",
+        "Dashboards and reporting",
+        "SQL",
+        "BI tool"
+      ],
+      "add": [],
+      "drop": [],
+      "promote": [],
+      "required_years": 1
+    },
+    {
+      "key": "lumora-product-analyst",
+      "role": "baseline-data-analyst-entry",
+      "title": "Associate Data Analyst, Product",
+      "company": "Lumora Health",
+      "department": "Product Analytics",
+      "location": "Remote (US)",
+      "workplace": "remote",
+      "salary": [
+        80000,
+        95000,
+        "USD"
+      ],
+      "posted_days_ago": 11,
+      "activity_days_ago": 0,
+      "stage_moved_days_ago": 1,
+      "short_description": "Measure how patients use our app: define metrics, read experiments and share what you find.",
+      "responsibilities": [
+        "Define product KPIs with the product team",
+        "Analyze A/B tests",
+        "Automate recurring reports"
+      ],
+      "must_haves": [
+        "SQL analysis",
+        "Descriptive statistics",
+        "Communicating insights",
+        "SQL"
+      ],
+      "add": [],
+      "drop": [],
+      "promote": [],
+      "required_years": 1
     }
   ],
   "legacy": {

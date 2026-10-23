@@ -52,8 +52,9 @@ class Session:
 
 # --- Sources and fetchers ------------------------------------------------------------------------------------------
 
-def test_config_has_three_roles_with_fifteen_placeholder_companies(roles):
-    assert set(roles) == {"ai_engineer", "data_scientist", "product_manager"}
+def test_config_has_six_roles_with_fifteen_placeholder_companies(roles):
+    assert set(roles) == {"ai_engineer", "data_scientist", "product_manager", "software_engineer", "business_analyst",
+                          "data_analyst"}
     for r in roles.values():
         assert len(r.companies) == 15 and all(c.placeholder for c in r.companies)
         assert [sum(c.tier == t for c in r.companies) for t in sources.TIERS] == [5, 5, 5]
@@ -61,6 +62,12 @@ def test_config_has_three_roles_with_fifteen_placeholder_companies(roles):
     ai = roles["ai_engineer"]
     assert ai.title_matches("AI Engineer") and ai.title_matches("ML Engineer, Applied AI") and ai.title_matches("LLM Engineer")
     assert not ai.title_matches("Sales Engineer") and not ai.title_matches("Engineering Manager, ML")
+    swe, ba, da = roles["software_engineer"], roles["business_analyst"], roles["data_analyst"]
+    assert swe.title_matches("Software Engineer II") and swe.title_matches("Backend Engineer")
+    assert not swe.title_matches("Machine Learning Engineer") and not swe.title_matches("Data Engineer")
+    assert ba.title_matches("Business Systems Analyst") and not ba.title_matches("Data Analyst")
+    assert da.title_matches("Senior Data Analyst") and da.title_matches("BI Analyst") and not da.title_matches("Business Analyst")
+    assert {r.manual_baseline for r in roles.values()} == {b.id for b in db.load_seed_file()}
 
 
 @pytest.mark.parametrize("source,n,first", [("greenhouse", 2, "Machine Learning Engineer I"), ("lever", 1, "AI Engineer"),

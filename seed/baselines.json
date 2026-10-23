@@ -81,6 +81,81 @@
         {"kind": "tool", "name": "SQL", "description": "Querying product data.", "aliases": ["BigQuery SQL"], "priority": "preferred"},
         {"kind": "certification", "name": "Product management certification", "description": "E.g. a recognized product management or agile certificate.", "aliases": ["CSPO", "Pragmatic Institute", "PMI-ACP"], "priority": "preferred"}
       ]
+    },
+    {
+      "id": "baseline-software-engineer-entry",
+      "title": "Software Engineer",
+      "level": "entry",
+      "required_years": 1,
+      "expected_reach": 2,
+      "scope_expectation": "Owns well-defined features or services end to end: designs the change, writes and tests the code, gets it reviewed, ships it and fixes what breaks.",
+      "complexity_criteria": "Built something with real constraints: e.g. a service or feature handling concurrency, scale, latency or data consistency, a non-trivial refactor or migration, or debugging a production issue to its root cause.",
+      "description": "Early-career Software Engineer who builds, tests and ships production code in a team, using version control, code review and CI.",
+      "criteria": [
+        {"kind": "skill", "name": "Programming fundamentals", "description": "Data structures, algorithms and writing clear, correct code.", "aliases": ["data structures", "algorithms", "object-oriented programming", "OOP"], "priority": "required"},
+        {"kind": "skill", "name": "Backend or API development", "description": "Building services and APIs that other code depends on.", "aliases": ["REST APIs", "REST API", "backend development", "microservices", "web services"], "priority": "required"},
+        {"kind": "skill", "name": "Automated testing", "description": "Unit and integration tests that keep changes safe.", "aliases": ["unit testing", "unit tests", "integration tests", "test-driven development", "TDD"], "priority": "required"},
+        {"kind": "skill", "name": "Databases and data modeling", "description": "Designing schemas and querying relational or document stores.", "aliases": ["data modeling", "database design", "schema design"], "priority": "required"},
+        {"kind": "skill", "name": "System design", "description": "Designing components for reliability, scale and maintainability.", "aliases": ["software architecture", "distributed systems", "scalability"], "priority": "preferred"},
+        {"kind": "skill", "name": "Frontend development", "description": "Building user interfaces for the web.", "aliases": ["front-end", "frontend", "web UI"], "priority": "preferred"},
+        {"kind": "skill", "name": "Debugging and production support", "description": "Finding root causes and fixing issues in running systems.", "aliases": ["debugging", "troubleshooting", "on-call", "incident response"], "priority": "preferred"},
+        {"kind": "tool", "name": "Programming language", "description": "Production experience in a mainstream language.", "aliases": ["Python", "Java", "Go", "Golang", "C++", "C#", "TypeScript", "JavaScript", "Rust", "Kotlin"], "priority": "required"},
+        {"kind": "tool", "name": "Git", "description": "Version control and pull-request workflow.", "aliases": ["GitHub", "GitLab", "version control"], "priority": "required"},
+        {"kind": "tool", "name": "SQL databases", "description": "Relational databases in practice.", "aliases": ["PostgreSQL", "Postgres", "MySQL", "SQL Server", "SQLite"], "priority": "required"},
+        {"kind": "tool", "name": "CI/CD", "description": "Automated build, test and deploy pipelines.", "aliases": ["GitHub Actions", "Jenkins", "CircleCI", "GitLab CI", "continuous integration"], "priority": "preferred"},
+        {"kind": "tool", "name": "Docker", "description": "Containerizing services.", "aliases": ["containers", "Dockerfile"], "priority": "preferred"},
+        {"kind": "tool", "name": "Cloud platform", "description": "Deploying and running services in the cloud.", "aliases": ["AWS", "GCP", "Azure", "Google Cloud"], "priority": "preferred"},
+        {"kind": "certification", "name": "Cloud or software certification", "description": "E.g. a cloud developer or associate-level certificate.", "aliases": ["AWS Certified Developer", "AWS Certified Solutions Architect", "Azure Developer Associate", "Google Associate Cloud Engineer"], "priority": "preferred"}
+      ]
+    },
+    {
+      "id": "baseline-business-analyst-entry",
+      "title": "Business Analyst",
+      "level": "entry",
+      "required_years": 1,
+      "expected_reach": 3,
+      "scope_expectation": "Owns the analysis for a process or project: gathers requirements from stakeholders, documents current and future state, analyzes data to support decisions, and works with delivery teams until the change is in use.",
+      "complexity_criteria": "Worked through ambiguity across several stakeholders: e.g. reconciled conflicting requirements, mapped a process end to end to find the real problem, quantified a business case with data, or managed scope and trade-offs during delivery.",
+      "description": "Early-career Business Analyst who turns business needs into clear requirements, analyzes processes and data, and helps teams deliver changes that solve the problem.",
+      "criteria": [
+        {"kind": "skill", "name": "Requirements gathering", "description": "Eliciting and documenting needs from stakeholders.", "aliases": ["requirements elicitation", "business requirements", "BRD", "user stories", "acceptance criteria", "functional requirements"], "priority": "required"},
+        {"kind": "skill", "name": "Process mapping and improvement", "description": "Documenting current and future processes and finding improvements.", "aliases": ["process mapping", "process improvement", "BPMN", "workflow analysis", "as-is to-be"], "priority": "required"},
+        {"kind": "skill", "name": "Data analysis", "description": "Analyzing data to answer business questions.", "aliases": ["data analysis", "reporting", "analytics"], "priority": "required"},
+        {"kind": "skill", "name": "Stakeholder management", "description": "Working with business and technical stakeholders to agree on scope.", "aliases": ["stakeholder communication", "cross-functional", "workshops"], "priority": "required"},
+        {"kind": "skill", "name": "Business case and cost-benefit analysis", "description": "Quantifying options to support a decision.", "aliases": ["business case", "cost-benefit analysis", "ROI analysis"], "priority": "preferred"},
+        {"kind": "skill", "name": "Agile delivery", "description": "Working in agile teams: backlog, sprints and user acceptance testing.", "aliases": ["Agile", "Scrum", "UAT", "user acceptance testing", "backlog grooming"], "priority": "preferred"},
+        {"kind": "tool", "name": "Excel", "description": "Spreadsheets for analysis and modeling.", "aliases": ["Microsoft Excel", "spreadsheets", "pivot tables", "Google Sheets"], "priority": "required"},
+        {"kind": "tool", "name": "SQL", "description": "Querying business data.", "aliases": ["MySQL", "PostgreSQL", "SQL Server"], "priority": "required"},
+        {"kind": "tool", "name": "BI tool", "description": "Dashboards and reports.", "aliases": ["Power BI", "Tableau", "Looker"], "priority": "preferred"},
+        {"kind": "tool", "name": "Jira or Confluence", "description": "Tracking work and documenting requirements.", "aliases": ["Jira", "Confluence", "Azure DevOps"], "priority": "preferred"},
+        {"kind": "tool", "name": "Process modeling tool", "description": "Diagramming processes.", "aliases": ["Visio", "Lucidchart", "Miro"], "priority": "preferred"},
+        {"kind": "certification", "name": "Business analysis certification", "description": "E.g. an entry business analysis or agile certificate.", "aliases": ["ECBA", "CCBA", "CBAP", "IIBA", "PMI-PBA"], "priority": "preferred"}
+      ]
+    },
+    {
+      "id": "baseline-data-analyst-entry",
+      "title": "Data Analyst",
+      "level": "entry",
+      "required_years": 1,
+      "expected_reach": 2,
+      "scope_expectation": "Owns analyses and recurring reports for a team: pulls and cleans the data, answers the question, builds dashboards people use, and explains the result.",
+      "complexity_criteria": "Handled messy or large data to a clear answer: e.g. joined several sources and fixed quality issues, built a metric definition others adopted, automated a manual report, or found the driver behind a change in a KPI.",
+      "description": "Early-career Data Analyst who turns data into answers and dashboards: SQL, spreadsheets and a BI tool, with clear communication of what the numbers mean.",
+      "criteria": [
+        {"kind": "skill", "name": "SQL analysis", "description": "Writing queries to extract, join and aggregate data.", "aliases": ["SQL queries", "joins", "window functions"], "priority": "required"},
+        {"kind": "skill", "name": "Data cleaning and preparation", "description": "Fixing quality issues and shaping data for analysis.", "aliases": ["data cleaning", "data wrangling", "data preparation", "data quality"], "priority": "required"},
+        {"kind": "skill", "name": "Dashboards and reporting", "description": "Building reports and dashboards people use.", "aliases": ["dashboards", "reporting", "data visualization"], "priority": "required"},
+        {"kind": "skill", "name": "Descriptive statistics", "description": "Summarizing data and spotting meaningful changes.", "aliases": ["statistics", "statistical analysis", "trend analysis"], "priority": "required"},
+        {"kind": "skill", "name": "Communicating insights", "description": "Explaining results and recommendations to non-technical audiences.", "aliases": ["data storytelling", "presenting insights", "stakeholder communication"], "priority": "required"},
+        {"kind": "skill", "name": "A/B test analysis", "description": "Reading experiment results correctly.", "aliases": ["A/B testing", "experimentation", "hypothesis testing"], "priority": "preferred"},
+        {"kind": "skill", "name": "KPI and metric definition", "description": "Defining metrics a team agrees on.", "aliases": ["KPIs", "metrics definition", "metric design"], "priority": "preferred"},
+        {"kind": "tool", "name": "SQL", "description": "Querying databases and warehouses.", "aliases": ["PostgreSQL", "MySQL", "BigQuery", "Snowflake", "Redshift"], "priority": "required"},
+        {"kind": "tool", "name": "Excel", "description": "Spreadsheets for analysis.", "aliases": ["Microsoft Excel", "pivot tables", "Google Sheets", "spreadsheets"], "priority": "required"},
+        {"kind": "tool", "name": "BI tool", "description": "Dashboards and self-serve reporting.", "aliases": ["Tableau", "Power BI", "Looker", "Looker Studio", "Metabase"], "priority": "required"},
+        {"kind": "tool", "name": "Python or R for analysis", "description": "Scripting analyses beyond SQL.", "aliases": ["Python", "pandas", "R", "Jupyter"], "priority": "preferred"},
+        {"kind": "tool", "name": "dbt", "description": "Transforming data in the warehouse.", "aliases": ["data build tool"], "priority": "preferred"},
+        {"kind": "certification", "name": "Data analytics certification", "description": "E.g. a recognized analytics or BI certificate.", "aliases": ["Google Data Analytics", "Microsoft Power BI Data Analyst", "PL-300", "Tableau Desktop Specialist"], "priority": "preferred"}
+      ]
     }
   ]
 }

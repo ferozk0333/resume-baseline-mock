@@ -438,12 +438,12 @@ class ClaimsLLM:
         from extraction.parse.resume import SkillNames
         self.calls.append(user)
         assert output_type is SkillNames and "<bullets>" in user
-        return SkillNames.model_validate({"names": [{"name": "Metabase", "bullet": 1},
-                                                    {"name": "Metabase BI", "bullet": 1}]})
+        return SkillNames.model_validate({"names": [{"name": "Sisense", "bullet": 1},
+                                                    {"name": "Sisense BI", "bullet": 1}]})
 
 
 SHADOW_RESUME = ["Ada Lovelace", "ada@example.com", "EXPERIENCE", "Data Analyst | Acme Retail    Jan 2023 - Present",
-                 "- Set up Metabase views that the sales team reads every Monday morning.",
+                 "- Set up Sisense views that the sales team reads every Monday morning.",
                  "- Built a churn model in Python and scikit-learn that cut churn 12%.", "SKILLS",
                  "Languages: SQL, Tableau"]
 
@@ -467,8 +467,8 @@ def test_shadow_calls_are_off_by_default_and_on_ask_jev_and_the_claims_call(monk
     res = parse_resume("cv.pdf", pdf.read_bytes(), text, VOCAB, lab, llm=llm)
     claims = {c.name: res.method_of(c) for c in res.extract.claims}
     assert claims["Python"] == "jev" and claims["scikit-learn"] == "jev"          # vocabulary names, Jev-confirmed
-    assert claims["Metabase"] == "llm" and "Metabase BI" not in claims       # verbatim only
-    assert len(llm.calls) == 1 and "Metabase views" in llm.calls[0] and "churn model" not in llm.calls[0]
+    assert claims["Sisense"] == "llm" and "Sisense BI" not in claims       # verbatim only
+    assert len(llm.calls) == 1 and "Sisense views" in llm.calls[0] and "churn model" not in llm.calls[0]
     assert res.report.llm_calls == 1
 
     monkeypatch.setattr(config, "PARSE_SHADOW_CALLS", True)

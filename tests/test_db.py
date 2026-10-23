@@ -16,6 +16,9 @@ SEED_COUNTS = {
     "baseline-ai-engineer-entry": (6, 2, 3, 4, 1),
     "baseline-data-scientist-entry": (6, 2, 4, 3, 1),
     "baseline-product-manager-entry": (5, 3, 2, 2, 1),
+    "baseline-software-engineer-entry": (4, 3, 3, 3, 1),
+    "baseline-business-analyst-entry": (4, 2, 2, 3, 1),
+    "baseline-data-analyst-entry": (5, 2, 3, 2, 1),
 }
 
 
@@ -76,7 +79,7 @@ def test_init_db_is_idempotent(tmp_path):
 
 # --- Seed -----------------------------------------------------------------
 
-def test_seed_loads_three_baselines_with_criteria(seeded):
+def test_seed_loads_six_baselines_with_criteria(seeded):
     baselines = {b.id: b for b in db.list_baselines(seeded)}
     assert set(baselines) == set(SEED_COUNTS)
     for bid, (sr, sp, tr, tp, certs) in SEED_COUNTS.items():
@@ -103,11 +106,11 @@ def test_seed_preserves_fields_and_aliases(seeded):
 def test_seed_is_idempotent_and_ids_are_stable(seeded):
     before = {c.id for b in db.list_baselines(seeded) for c in b.criteria}
     assert db.seed_baselines(seeded) == []  # nothing new written
-    assert len(db.list_baselines(seeded)) == 3
+    assert len(db.list_baselines(seeded)) == 6
     db.seed_baselines(seeded, reset=True)
     after = {c.id for b in db.list_baselines(seeded) for c in b.criteria}
     assert before == after
-    assert seeded.execute("SELECT COUNT(*) FROM baseline_criteria").fetchone()[0] == 16 + 16 + 13
+    assert seeded.execute("SELECT COUNT(*) FROM baseline_criteria").fetchone()[0] == 16 + 16 + 13 + 14 + 12 + 13
 
 
 def test_reset_restores_seed_and_keeps_user_baselines(seeded):
@@ -129,7 +132,7 @@ def test_deleted_seed_baseline_stays_deleted_on_reopen(tmp_path):
     c.close()
     c = db.init_app_db(path)
     assert db.get_baseline(c, "baseline-ai-engineer-entry") is None
-    assert len(db.list_baselines(c)) == 2
+    assert len(db.list_baselines(c)) == 5
     c.close()
 
 

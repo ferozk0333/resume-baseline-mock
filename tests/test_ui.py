@@ -70,7 +70,8 @@ def test_home_lists_runs_including_deleted_baseline(env):
 def test_baselines_page_lists_seeds_and_warns_on_level_years(env):
     at = page("1_Baselines.py")
     no_errors(at)
-    assert set(at.dataframe[0].value["title"]) == {"AI Engineer", "Data Scientist", "Product Manager"}
+    assert set(at.dataframe[0].value["title"]) == {"AI Engineer", "Data Scientist", "Product Manager", "Software Engineer",
+                                                     "Business Analyst", "Data Analyst"}
     form_inputs = {t.label: t for t in at.text_input}
     form_inputs["Title"].set_value("QA Analyst")
     form_inputs["Level"].set_value("senior")       # senior with 1 required year (the default)
