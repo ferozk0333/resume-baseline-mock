@@ -266,7 +266,7 @@ export type MarketCriterion = { name: string; kind: string; share: number; requi
   quotes: string[] };
 export type MarketVersion = { id: string; role: string; level: string; version: number; window_start: string;
   window_end: string; postings: number; companies: number; status: "draft" | "published" | "discarded" | "retired";
-  basis: string; baseline_id: string | null; summary_method: string; created_at: string;
+  basis: string; left_out_note?: string | null; baseline_id: string | null; summary_method: string; created_at: string;
   published_at: string | null;
   content: { criteria: MarketCriterion[]; required_years: number | null; expected_reach: number | null;
     scope_expectation: string | null; complexity_criteria: string | null; description: string | null;

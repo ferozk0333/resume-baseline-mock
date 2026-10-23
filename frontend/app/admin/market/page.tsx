@@ -105,7 +105,11 @@ export default function MarketPage() {
             <CardTitle className="text-base">Recompute</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <Button size="sm" disabled={busy !== null} onClick={() => run("rc", () => post(`/market/${r.key}/recompute`, {}), "Draft version ready")}>
+            <Button size="sm" disabled={busy !== null} onClick={() => run("rc", async () => {
+              const v = await post<MarketVersion & { left_out_note?: string | null }>(`/market/${r.key}/recompute`, {});
+              if (v.left_out_note) toast.warning(`Draft ready, ${v.basis.charAt(0).toLowerCase()}${v.basis.slice(1)}. ${v.left_out_note}`, { duration: 15000 });
+              else toast.success("Draft version ready");
+            })}>
               {busy === "rc" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Recompute</Button>
           </CardContent>
         </Card>
@@ -138,6 +142,7 @@ function VersionRow({ v }: { v: Omit<MarketVersion, "content"> }) {
       <Badge variant={v.status === "published" ? "default" : "secondary"} className="capitalize">{v.status === "published" ? "active" : v.status}</Badge>
       <span className="text-muted-foreground">{v.basis} · {v.window_start} → {v.window_end}</span>
       <span className="ml-auto text-xs text-muted-foreground">{new Date(v.created_at).toLocaleString()}</span>
+      {v.left_out_note && <p className="basis-full text-xs text-amber-800">{v.left_out_note}</p>}
     </li>
   );
 }

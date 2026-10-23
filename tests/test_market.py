@@ -221,6 +221,25 @@ def test_recompute_asks_the_model_only_when_a_posting_needs_reading(conn, roles)
     assert mb.needs_reading(conn, "ai_engineer", NOW) == 1
 
 
+def test_a_posting_the_model_could_not_read_is_listed_with_the_draft(conn, roles):
+    """A reading model at its daily limit: the draft is built from what was read and says what it left out."""
+    from market import store as ms_store
+    pipeline.load_fixtures(conn, roles["ai_engineer"])
+    ms.add_posting(conn, role="ai_engineer", company="Brightwater Systems", tier="mid", source="manual",
+                   title="AI Engineer", text=JD, seen_at=NOW.isoformat())
+
+    class Unavailable:
+        def parse(self, **kw):
+            from core.llm import LLMError
+            raise LLMError("gemini-3.8-flash: daily limit reached")
+    v = mb.recompute(conn, roles["ai_engineer"], llm=Unavailable(), at=NOW)
+    assert v["basis"] == "Based on 3 postings from 3 companies"
+    assert v["content"]["left_out"]["not_read"] == ["Brightwater Systems · AI Engineer"]
+    assert v["left_out_note"].startswith("1 posting couldn't be read yet") and "Brightwater" in v["left_out_note"]
+    assert ms_store.cached(conn, ms_store.text_hash(JD)) is None              # read again on the next Recompute
+    assert config.MARKET_EXTRACT_MODEL == "route:extract_document"           # fails over, not one model only
+
+
 def test_fixtures_to_a_published_test_version_without_a_model(conn, roles):
     v = published_test_version(conn, roles)
     assert v["status"] == "published" and v["baseline_id"] == "market-ai_engineer-entry-v1"

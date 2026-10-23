@@ -218,7 +218,23 @@ def version_row(r) -> dict:
     v["content"] = json.loads(v.pop("content_json") or "{}")
     v.pop("insufficient", None), v.pop("test_version", None)      # no minimum-data rule any more (cleanup round)
     v["basis"] = basis(v)
+    v["left_out_note"] = left_out_note(v["content"].get("left_out"))
     return v
+
+
+def left_out_note(left: dict | None) -> str | None:
+    """Admin only: postings in the window this version does not use, and why."""
+    if not left:
+        return None
+    parts = []
+    if left.get("not_read"):
+        n = len(left["not_read"])
+        parts.append(f"{n} posting{'' if n == 1 else 's'} couldn't be read yet (the reading model was busy or at its "
+                     f"daily limit; Recompute again later): {', '.join(left['not_read'])}")
+    if left.get("other_level"):
+        n = len(left["other_level"])
+        parts.append(f"{n} not entry level: {', '.join(left['other_level'])}")
+    return ". ".join(parts) + "." if parts else None
 
 
 def basis(v: dict) -> str:
@@ -278,6 +294,7 @@ def recompute(conn, role: sources.Role, *, llm=None, level: str = "entry", at: d
         test = needs_reading(conn, role.key, at) == 0
     m = normalize.load_map()
     items, responsibilities, calls = [], [], 0
+    left_out = {"not_read": [], "other_level": []}       # shown with the draft: never left out silently
     manual = db.get_baseline(conn, role.manual_baseline)
     prefer = {c.name for c in manual.criteria}
     for p in ms.postings(conn, role.key, at=at):
@@ -285,8 +302,11 @@ def recompute(conn, role: sources.Role, *, llm=None, level: str = "entry", at: d
         ex = ms.extract(conn, p, None if test else llm)
         calls += int(ex is not None and not had)
         if ex is None:
+            left_out["not_read"].append(f"{p['company']} · {p['title']}")
             continue
-        if ms.set_level(conn, p, ex) != level:
+        got = ms.set_level(conn, p, ex)
+        if got != level:
+            left_out["other_level"].append(f"{p['company']} · {p['title']} ({got or 'level not stated'})")
             continue
         crit = _posting_items(ex, m, prefer)
         items.append({"company": p["company"], "tier": p["tier"], "years": ex["details"].get("min_years"),
@@ -301,7 +321,7 @@ def recompute(conn, role: sources.Role, *, llm=None, level: str = "entry", at: d
     summary = summarize(None if test else llm, role, responsibilities, prev["content"] if prev else None, manual)
     calls += int(summary["summary_method"] == config.MARKET_SUMMARY_MODEL)
     content = {**agg, **{k: summary[k] for k in ("scope_expectation", "complexity_criteria", "description")},
-               "summary_quotes": summary["summary_quotes"],
+               "summary_quotes": summary["summary_quotes"], "left_out": left_out,
                "thresholds": {"REQ_SHARE": config.REQ_SHARE, "PREF_SHARE": config.PREF_SHARE, "MARGIN": config.MARGIN,
                               "TIER_WEIGHTS": config.TIER_WEIGHTS}}
     content["material"] = material_change(content, prev["content"] if prev else None)

@@ -513,7 +513,8 @@ MESSAGE_MAX_WORDS = 120                                  # nudge, answer and off
 MARKET_SOURCES = ROOT / "config" / "market_sources.yaml"
 MARKET_SYNONYMS = ROOT / "config" / "market_synonyms.json"     # reviewed synonym map (versioned, not in data/)
 MARKET_FIXTURES = ROOT / "tests" / "fixtures" / "market"        # test mode: hand-labelled postings, no model
-MARKET_EXTRACT_MODEL = _env("MARKET_EXTRACT_MODEL", "gemini/gemini-3.8-flash")   # once per new posting, cached
+# Once per new posting, cached. The document route, so a model at its daily limit fails over to the next one.
+MARKET_EXTRACT_MODEL = _env("MARKET_EXTRACT_MODEL", "route:extract_document")
 MARKET_SUMMARY_MODEL = _env("MARKET_SUMMARY_MODEL", "gemini/gemini-3.8-flash")   # scope/complexity/description per version
 MARKET_MERGE_MODEL = _env("MARKET_MERGE_MODEL", "gemini/gemini-3.5-flash-lite")  # proposes merges for leftover names
 MARKET_MERGE_BATCH = 40
