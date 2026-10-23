@@ -99,7 +99,7 @@ free -h
 ```bash
 git clone https://github.com/<owner>/<repo>.git ~/rightstaff
 cd ~/rightstaff
-git checkout feature/deploy             # or main once it is merged
+git checkout main
 mkdir -p data                           # the data volume (owned by ubuntu, uid 1000 = the containers' user)
 
 cp .env.prod.example .env

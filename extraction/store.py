@@ -137,6 +137,11 @@ def _insert_certification(conn, candidate_id: str, c: CertificationRec) -> None:
     )
 
 
+def _insert_reference(conn, candidate_id: str, r: ReferenceRec) -> None:
+    conn.execute("INSERT INTO references_ (id, candidate_id, name, relationship, contact, statement) "
+                 "VALUES (?, ?, ?, ?, ?, ?)", (r.id, candidate_id, r.name, r.relationship, r.contact, r.statement))
+
+
 def save_profile(conn: sqlite3.Connection, candidate_id: str, profile: Profile) -> None:
     """Replace the candidate's whole profile in one transaction."""
     with conn:
@@ -150,11 +155,8 @@ def save_profile(conn: sqlite3.Connection, candidate_id: str, profile: Profile) 
             _insert_claim(conn, candidate_id, c)
         for c in profile.certifications:
             _insert_certification(conn, candidate_id, c)
-        conn.executemany(
-            "INSERT INTO references_ (id, candidate_id, name, relationship, contact, statement) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [(r.id, candidate_id, r.name, r.relationship, r.contact, r.statement) for r in profile.references],
-        )
+        for r in profile.references:
+            _insert_reference(conn, candidate_id, r)
 
 
 # --- Dropped items ("Add back" in the review step) ---------------------------------------
@@ -426,7 +428,7 @@ def save_project(conn: sqlite3.Connection, candidate_id: str, *, project_id: str
 
 
 def delete_item(conn: sqlite3.Connection, table: str, item_id: str) -> None:
-    """Delete a role, project, claim or certification (with its bullets)."""
+    """Delete a role, project, claim, certification (with its bullets) or reference."""
     if table not in ("roles", "projects", "claims", "certifications", "references_"):
         raise ValueError(table)
     with conn:
@@ -477,6 +479,26 @@ def save_certification(conn: sqlite3.Connection, candidate_id: str, *, cert_id: 
     with conn:
         conn.execute("DELETE FROM certifications WHERE id = ?", (rec.id,))
         _insert_certification(conn, candidate_id, rec)
+    return rec.id
+
+
+REFERENCE_RELATIONSHIPS = ("manager", "supervisor", "peer", "other")
+
+
+def save_reference(conn: sqlite3.Connection, candidate_id: str, *, ref_id: str | None = None, name: str,
+                   relationship: str | None, contact: str | None, statement: str | None) -> str:
+    """Add (or, with ref_id, edit) a reference typed in Review. An edit keeps the id; a changed relationship or
+    statement changes the judge's input, so it is judged again when the profile is confirmed. Never verified."""
+    if not name.strip():
+        raise ValueError("A reference needs a name.")
+    relationship = (relationship or "").strip().lower() or None
+    if relationship is not None and relationship not in REFERENCE_RELATIONSHIPS:
+        raise ValueError(f"Unknown relationship {relationship!r}.")
+    rec = ReferenceRec(name.strip(), relationship, (contact or "").strip() or None, (statement or "").strip() or None,
+                       id=ref_id or str(uuid.uuid4()))
+    with conn:
+        conn.execute("DELETE FROM references_ WHERE id = ? AND candidate_id = ?", (rec.id, candidate_id))
+        _insert_reference(conn, candidate_id, rec)
     return rec.id
 
 
@@ -533,8 +555,23 @@ EXTRA_MAIN = {"education": ("school", "degree"), "language": ("language",), "cou
 
 
 def extra_key(type: str, fields: dict) -> str:
+    """What makes two display-only items the same. Education matches degree forms ("B.S." = "Bachelor of Science")."""
     from core.text import normalize_name
-    return type + ":" + "|".join(normalize_name(fields.get(f)) for f in EXTRA_MAIN.get(type, ()))
+    from extraction.extra import degree_key
+    return type + ":" + "|".join(degree_key(fields.get(f)) if (type, f) == ("education", "degree")
+                                 else normalize_name(fields.get(f)) for f in EXTRA_MAIN.get(type, ()))
+
+
+def _deleted_extra_keys(conn: sqlite3.Connection, candidate_id: str) -> set[str]:
+    """Keys of the extra items the candidate deleted, recomputed from what was deleted: a key saved by an older
+    extra_key still matches, and deleting "B.S." also keeps LinkedIn's "Bachelor of Science" out."""
+    out = set()
+    for key, payload in conn.execute("SELECT key, payload FROM deleted_items WHERE candidate_id = ? AND "
+                                     "item_type = 'extra'", (candidate_id,)):
+        row = _json(payload, {})
+        fields = _json(row.get("fields_json"), {}) if isinstance(row, dict) else {}
+        out.add(extra_key(row["type"], fields) if isinstance(row, dict) and row.get("type") else key)
+    return out
 
 
 def _months(fields: dict) -> tuple[str | None, str | None]:
@@ -563,12 +600,10 @@ def same_education(a: dict, b: dict) -> bool:
 
 
 def merge_fields(old: dict, new: dict) -> dict:
-    """The richest fields of two entries for one thing: every field either has; where both do, the longer."""
+    """Two entries for one thing: the earlier document's text is kept as it is; a field it lacks comes from the other."""
     out = dict(old)
     for k, v in new.items():
-        if k == "_also":
-            continue
-        if not str(out.get(k) or "").strip() or len(str(v)) > len(str(out[k])):
+        if k != "_also" and not str(out.get(k) or "").strip():
             out[k] = v
     return out
 
@@ -588,8 +623,7 @@ def merge_extracted_extra(conn: sqlite3.Connection, candidate_id: str, evidence_
     with conn:
         conn.execute("DELETE FROM extra_items WHERE candidate_id = ? AND evidence_id = ? AND source = 'extracted'",
                      (candidate_id, evidence_id))
-    gone = {r[0] for r in conn.execute("SELECT key FROM deleted_items WHERE candidate_id = ? AND item_type = 'extra'",
-                                       (candidate_id,))}
+    gone = _deleted_extra_keys(conn, candidate_id)
     have = list_extra(conn, candidate_id)
     base = conn.execute("SELECT COALESCE(MAX(position), 0) FROM extra_items WHERE candidate_id = ?",
                         (candidate_id,)).fetchone()[0]
@@ -610,6 +644,36 @@ def merge_extracted_extra(conn: sqlite3.Connection, candidate_id: str, evidence_
                          "position, created_at) VALUES (?, ?, ?, ?, ?, ?, 'extracted', ?, ?)",
                          (x.id, candidate_id, evidence_id, x.type, json.dumps(x.fields), x.quote, base + i + 1,
                           now_iso()))
+
+
+def remerge_extra(conn: sqlite3.Connection, candidate_id: str) -> list[str]:
+    """Merge saved display-only items that are one thing (_same_extra: today's extra_key, or for education the same
+    school, degree group and overlapping dates; no extraction, no model calls), the way a new read would: the first by document order keeps its text, gains the fields it lacked (unless the candidate
+    edited it) and lists the others' documents as sources; the others go. Returns what merged away."""
+    types = {e["id"]: e["type"] for e in list_evidence(conn, candidate_id)}
+
+    def rank(x: ExtraItem):
+        t = types.get(x.evidence_id or "")
+        return SOURCE_ORDER.index(t) if t in SOURCE_ORDER else len(SOURCE_ORDER)
+    items = list_extra(conn, candidate_id)                 # display order
+    pos = {x.id: i for i, x in enumerate(items)}
+    keep: list[ExtraItem] = []
+    merged: list[str] = []
+    # the candidate's own entry is kept first, then the resume's, then LinkedIn's, …
+    for x in sorted(items, key=lambda x: (x.source != "user_edit", rank(x), pos[x.id])):
+        old = next((k for k in keep if _same_extra(k, x)), None)
+        if old is None:
+            keep.append(x)
+            continue
+        also = [*old.fields.get("_also", []), *([x.evidence_id] if x.evidence_id else []), *x.fields.get("_also", [])]
+        mine = {f: v for f, v in x.fields.items() if f != "_also"}
+        old.fields = {**mine, **old.fields} if old.source == "extracted" else dict(old.fields)
+        old.fields["_also"] = [e for e in dict.fromkeys(also) if e != old.evidence_id]
+        with conn:
+            conn.execute("UPDATE extra_items SET fields_json = ? WHERE id = ?", (json.dumps(old.fields), old.id))
+            conn.execute("DELETE FROM extra_items WHERE id = ?", (x.id,))
+        merged.append(f"{x.type}: " + " — ".join(str(x.fields.get(f)) for f in EXTRA_MAIN.get(x.type, ()) if x.fields.get(f)))
+    return merged
 
 
 def delete_extra(conn: sqlite3.Connection, candidate_id: str, item_id: str) -> dict | None:
@@ -688,33 +752,11 @@ def remerge(conn: sqlite3.Connection, candidate_id: str) -> dict:
         for old, new in {**report.role_remap, **report.project_remap}.items():
             conn.execute("UPDATE dropped_items SET parent_id = ? WHERE candidate_id = ? AND parent_id = ?",
                          (new, candidate_id, old))
-    education = remerge_extra(conn, candidate_id, rank)
+    education = remerge_extra(conn, candidate_id)
     return {"merged_away": {t: v for t, v in gone.items() if v}, "before": before,
             "unused_bullets": [b.text for b in report.unused_bullets], "placements": report.placements,
             "education": education}
 
-
-def remerge_extra(conn: sqlite3.Connection, candidate_id: str, rank=lambda eid: 0) -> list[str]:
-    """Merge saved display-only entries that are one thing (education: item 2c), the earlier document's entry
-    kept with the richest fields and every source. Returns the merged-away entries."""
-    items = sorted(list_extra(conn, candidate_id), key=lambda x: (x.source != "user_edit", rank(x.evidence_id)))
-    kept: list[ExtraItem] = []
-    gone = []
-    with conn:
-        for x in items:
-            into = next((k for k in kept if _same_extra(k, x)), None)
-            if into is None:
-                kept.append(x)
-                continue
-            fields = merge_fields(into.fields, x.fields) if into.source == "extracted" else dict(into.fields)
-            fields["_also"] = list(dict.fromkeys([*into.fields.get("_also", []), *([x.evidence_id] if x.evidence_id
-                                                                                      else []),
-                                                  *x.fields.get("_also", [])]))
-            into.fields = fields
-            conn.execute("UPDATE extra_items SET fields_json = ? WHERE id = ?", (json.dumps(fields), into.id))
-            conn.execute("DELETE FROM extra_items WHERE id = ?", (x.id,))
-            gone.append(f"{x.type}: " + " · ".join(str(v) for k, v in x.fields.items() if k != "_also"))
-    return gone
 
 
 def _keep_order(before: Profile, merged: Profile, report) -> None:

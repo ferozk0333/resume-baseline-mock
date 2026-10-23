@@ -10,7 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LoadError } from "@/components/app/candidate/load-error";
 import { PercentileLine } from "@/components/app/candidate/score-card";
 import { JobsBrowser } from "@/components/app/candidate/jobs-browser";
-import { ApiError, get, post, STEP_LABELS, type OnboardingState, type ScoreCard } from "@/lib/api";
+import { ADD_PROOF_HINT, markedDoneToast, openProof, PROOF_SECTION, THEN_CONFIRM } from "@/components/app/score/add-proof";
+import { ApiError, get, post, STEP_LABELS, type CardAction, type OnboardingState, type ScoreCard } from "@/lib/api";
 import { useCurrentCandidate } from "@/lib/current-candidate";
 
 export default function HomePage() {
@@ -57,13 +58,13 @@ function Home() {
   const card = cards?.find((c) => c.baseline_id === role) ?? cards?.[0];
   const next = card?.next_action ?? null;
   const lastDone = card?.done_actions.at(-1) ?? null;
-  async function markDone(title: string, done: boolean) {
+  const addProof = (a: CardAction) => { if (cid) void openProof(cid, a.type, router.push); };
+  async function markDone(a: CardAction, done: boolean) {
     if (!card) return;
     try {
-      const updated = await post<ScoreCard>(`/candidates/${cid}/plan-done`, { baseline_id: card.baseline_id, title, done });
+      const updated = await post<ScoreCard>(`/candidates/${cid}/plan-done`, { baseline_id: card.baseline_id, title: a.title, done });
       setCards((cs) => (cs ?? []).map((c) => (c.baseline_id === updated.baseline_id ? updated : c)));
-      if (done) toast.success("Marked done", { description: "Add the proof to your profile and check again to update your score.",
-        action: { label: "Undo", onClick: () => { void markDone(title, false); } } });
+      if (done) markedDoneToast(a.type, () => addProof(a), () => { void markDone(a, false); });
     } catch (e) { toast.error((e as Error).message); }
   }
   const finish = !state.details.saved_at && !state.details.dismissed_at && !dismissed;
@@ -102,7 +103,7 @@ function Home() {
                   <p className="text-sm text-primary">up to {next.points.toFixed(1)} points</p>
                   <div className="flex flex-wrap gap-2">
                     <Link href={`/scores?role=${card.baseline_id}&tab=plan`} className={buttonVariants({ size: "sm" })}>Start</Link>
-                    <Button size="sm" variant="outline" onClick={() => markDone(next.title, true)}>Mark done</Button>
+                    <Button size="sm" variant="outline" onClick={() => markDone(next, true)}>Mark done</Button>
                   </div>
                 </>
               ) : card.done_actions.length > 0 ? (
@@ -115,8 +116,12 @@ function Home() {
               {lastDone && (
                 <p className="border-t pt-2 text-xs text-muted-foreground" data-testid="done-note">
                   Done: {lastDone.title}.{" "}
-                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => markDone(lastDone.title, false)}>Undo</button>
-                  <br />Add the proof to your profile and check again to update your score.</p>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => markDone(lastDone, false)}>Undo</button>
+                  {PROOF_SECTION[lastDone.type] && (
+                    <><br />{ADD_PROOF_HINT}{" "}
+                      <button type="button" className="font-medium text-primary hover:underline" onClick={() => addProof(lastDone)}>Add proof</button>
+                      <br />{THEN_CONFIRM}</>
+                  )}</p>
               )}
             </div>
           </CardContent>

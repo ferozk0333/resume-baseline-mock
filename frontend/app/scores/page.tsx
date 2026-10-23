@@ -131,7 +131,8 @@ function Scores() {
               </div>
               {tab === "score"
                 ? <ScoreView key={card.run_id} id={card.run_id} onOpenPlan={() => nav(card.baseline_id, "plan")} onRescored={() => load()} />
-                : <PlanView key={card.run_id} id={card.run_id} onBack={() => nav(card.baseline_id, "score")} />}
+                : <PlanView key={card.run_id} id={card.run_id} onBack={() => nav(card.baseline_id, "score")} card={card}
+                    onCardChange={(u) => setCards((cs) => (cs ?? []).map((c) => (c.baseline_id === u.baseline_id ? u : c)))} />}
             </div>
           )}
         </>

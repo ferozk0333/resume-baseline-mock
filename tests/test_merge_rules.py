@@ -90,10 +90,12 @@ def test_a_resume_project_and_its_portfolio_case_study_become_one():
 def test_degree_groups_from_the_reviewed_file():
     for a, b in [("MS", "Master of Science"), ("M.S. in Data Science", "Masters"), ("MSc", "Master's"),
                  ("BS", "Bachelor of Science"), ("B.Tech", "Bachelor of Engineering"), ("B.E.", "Bachelor of Technology"),
+                 ("MA", "Master of Arts"), ("BA", "Bachelor of Arts"), ("MEng", "Master of Engineering"),
                  ("PhD", "Doctor of Philosophy"), ("Ph.D.", "PhD"), ("MBA", "Master of Business Administration")]:
         assert dedupe.degree_group(a) == dedupe.degree_group(b) is not None, (a, b)
     assert dedupe.degree_group("MS") != dedupe.degree_group("BS")
     assert dedupe.degree_group("MBA") != dedupe.degree_group("MS")
+    assert dedupe.degree_group("MA") != dedupe.degree_group("MS") and dedupe.degree_group("BA") != dedupe.degree_group("BS")
     assert dedupe.degree_group("Diploma in Design") is None
 
 
@@ -109,7 +111,7 @@ def test_education_merges_same_school_same_degree_group_overlapping_or_missing_d
     assert not store.same_education(a, {"school": "Washington State University", "degree": "MS"})
 
 
-def test_remerge_merges_education_entries_with_the_richest_fields_and_both_sources(tmp_path):
+def test_education_entries_merge_keeping_the_first_documents_text_and_both_sources(tmp_path):
     conn = db.connect(tmp_path / "t.db")
     cid = store.create_candidate(conn, "Jane")
     r = store.add_evidence(conn, cid, "resume", "upload", raw_text="x")
@@ -120,7 +122,8 @@ def test_remerge_merges_education_entries_with_the_richest_fields_and_both_sourc
         "school": "Lakeshore State University", "degree": "Master of Science", "field": "Data Science",
         "start": "2024-09", "end": "2026-06"})])
     [edu] = store.list_extra(conn, cid)
-    assert edu.fields["degree"] == "Master of Science" and edu.fields["field"] == "Data Science"
+    assert edu.fields["degree"] == "MS" and edu.fields["field"] == "Data Science"          # resume's text kept
+    assert edu.fields["end"] == "2026-06"                                                  # a missing field filled
     assert edu.fields["_also"] == [li] and edu.evidence_id == r
 
 

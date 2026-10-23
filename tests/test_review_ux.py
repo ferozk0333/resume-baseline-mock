@@ -203,6 +203,111 @@ def test_display_only_items_read_from_text():
     assert not [x for x in extra_items(text, "e", {"code for good"}) if x.type == "volunteering"]
 
 
+def _edu_store(tmp_path):
+    conn = db.connect(tmp_path / "edu.db")
+    cid = store.create_candidate(conn, "Jorden")
+    resume = store.add_evidence(conn, cid, "resume", "upload", raw_text="cv")
+    linkedin = store.add_evidence(conn, cid, "linkedin_pdf", "upload", raw_text="li")
+    return conn, cid, resume, linkedin
+
+
+def _edu(**fields):
+    from extraction.records import ExtraItem
+    return ExtraItem("education", fields)
+
+
+def _education_rows(conn, cid):
+    return [x for x in store.list_extra(conn, cid) if x.type == "education"]
+
+
+def test_degree_forms_match_for_education_only():
+    from extraction.extra import degree_key
+    same = [("B.S.", "BS", "BSc", "B.Sc.", "Bachelor of Science", "Bachelor's of Science"),
+            ("B.A.", "BA", "Bachelor of Arts"), ("M.S.", "MS", "MSc", "Master of Science"), ("M.A.", "MA", "Master of Arts"),
+            ("MBA", "Master of Business Administration", "Master of Business"),
+            ("Ph.D.", "PhD", "Doctor of Philosophy"), ("B.Tech", "B.E.", "Bachelor of Engineering"),
+            ("M.Tech", "M.E.", "Master of Engineering")]
+    for forms in same:
+        assert len({degree_key(f) for f in forms}) == 1, forms
+    assert len({degree_key(forms[0]) for forms in same}) == len(same)          # B.S. ≠ M.S. ≠ B.A. …
+    assert degree_key("Associate of Applied Science") == "associate of applied science"   # unknown: as before
+    assert store.extra_key("education", {"school": "Lakeshore State University", "degree": "B.S."}) == \
+        store.extra_key("education", {"school": "lakeshore state university", "degree": "Bachelor of Science"})
+
+
+def test_bs_and_bachelor_of_science_merge_with_fields_and_dates(tmp_path):
+    conn, cid, resume, linkedin = _edu_store(tmp_path)
+    school = "Lakeshore State University"
+    store.merge_extracted_extra(conn, cid, resume, [_edu(school=school, degree="B.S.", field="Computer Science", end="2026-05")])
+    store.merge_extracted_extra(conn, cid, linkedin, [_edu(school=school, degree="Bachelor of Science",
+                                                            field="Computer Science", start="2022-09", end="2026-05")])
+    [edu] = _education_rows(conn, cid)
+    assert edu.fields == {"school": school, "degree": "B.S.", "field": "Computer Science", "start": "2022-09",
+                          "end": "2026-05", "_also": [linkedin]}                      # shown text unchanged
+
+
+def test_different_degree_or_school_stays_separate(tmp_path):
+    conn, cid, resume, linkedin = _edu_store(tmp_path)
+    store.merge_extracted_extra(conn, cid, resume, [_edu(school="Lakeshore State University", degree="B.S."),
+                                                    _edu(school="Bayview State University", degree="M.S.")])
+    store.merge_extracted_extra(conn, cid, linkedin, [_edu(school="Lakeshore State University", degree="Master of Science"),
+                                                      _edu(school="Lakeshore Community College", degree="Bachelor of Science")])
+    assert sorted((x.fields["school"], x.fields["degree"]) for x in _education_rows(conn, cid)) == [
+        ("Bayview State University", "M.S."), ("Lakeshore Community College", "Bachelor of Science"),
+        ("Lakeshore State University", "B.S."), ("Lakeshore State University", "Master of Science")]
+
+
+def test_deleted_education_stays_deleted_in_any_degree_form(tmp_path):
+    from extraction import deletions
+    conn, cid, resume, linkedin = _edu_store(tmp_path)
+    school = "Lakeshore State University"
+    store.merge_extracted_extra(conn, cid, resume, [_edu(school=school, degree="B.S.")])
+    [edu] = _education_rows(conn, cid)
+    deletions.remember_extra(conn, cid, store.delete_extra(conn, cid, edu.id))
+    with conn:                                      # a deletion saved by the old extra_key ("…|b s")
+        conn.execute("UPDATE deleted_items SET key = 'education:lakeshore state university|b s'")
+    store.merge_extracted_extra(conn, cid, linkedin, [_edu(school=school, degree="Bachelor of Science")])
+    store.merge_extracted_extra(conn, cid, resume, [_edu(school=school, degree="B.S.")])
+    assert _education_rows(conn, cid) == []
+
+
+def test_education_ignores_pdf_page_footers():
+    text = ("## Education\n\nLakeshore State University\nBachelor of Science - BS, Computer Science · "
+            "(September 2022 - May 2026)\n\nPage 1\n\nBayview State University\nMaster of Business Administration - MBA"
+            "\nPage 2 of 3\n")
+    [first, second] = [x for x in extra_items(text, "e") if x.type == "education"]
+    assert first.fields == {"school": "Lakeshore State University", "degree": "Bachelor of Science",
+                            "field": "Computer Science", "start": "2022-09", "end": "2026-05"}
+    assert "Page" not in first.quote
+    assert second.fields == {"school": "Bayview State University", "degree": "Master of Business Administration"}
+
+
+def test_remerge_extra_merges_saved_duplicates(tmp_path):
+    conn, cid, resume, linkedin = _edu_store(tmp_path)
+    school = "Lakeshore State University"
+    store.merge_extracted_extra(conn, cid, resume, [_edu(school=school, degree="B.S.", end="2026-05")])
+    with conn:                                      # a duplicate saved before degree forms matched
+        conn.execute("INSERT INTO extra_items (id, candidate_id, evidence_id, type, fields_json, source, position) "
+                     "VALUES ('li-edu', ?, ?, 'education', ?, 'extracted', 9)",
+                     (cid, linkedin, '{"school": "Lakeshore State University", "degree": "Bachelor of Science", '
+                                     '"start": "2022-09", "field": "Computer Science"}'))
+    assert len(_education_rows(conn, cid)) == 2
+    assert store.remerge_extra(conn, cid) == ["education: Lakeshore State University — Bachelor of Science"]
+    [edu] = _education_rows(conn, cid)
+    assert edu.fields == {"school": school, "degree": "B.S.", "end": "2026-05", "start": "2022-09",
+                          "field": "Computer Science", "_also": [linkedin]}
+    assert store.remerge_extra(conn, cid) == []                                    # nothing left to merge
+    # a card the candidate edited keeps its own fields; the document becomes a source
+    store.save_extra(conn, cid, "education", {"school": school, "degree": "BSc"}, item_id=edu.id)
+    with conn:
+        conn.execute("INSERT INTO extra_items (id, candidate_id, evidence_id, type, fields_json, source, position) "
+                     "VALUES ('li-2', ?, ?, 'education', '{\"school\": \"Lakeshore State University\", "
+                     "\"degree\": \"Bachelor of Science\", \"start\": \"2022-09\"}', 'extracted', 10)", (cid, linkedin))
+    store.remerge_extra(conn, cid)
+    [mine] = _education_rows(conn, cid)
+    assert mine.source == "user_edit" and mine.fields["degree"] == "BSc" and "start" not in mine.fields
+
+
 # --- Review API (Phases B and D) -------------------------------------------------------------------------------------
 
 def _profile(api, cid):  # noqa: F811
@@ -227,6 +332,50 @@ def test_delete_and_undo_restores_the_same_ids_and_links(api):  # noqa: F811
     assert [b["id"] for b in again["bullets"]] == [b["id"] for b in role["bullets"]]
     assert {c["id"]: c["bullet_id"] for c in back["profile"]["claims"] if c["id"] in linked} == linked
     assert api.patch(f"/candidates/{cid}/profile", json={"op": "undo", "item": "deleted", "id": out["undo"]}).status_code == 422
+
+
+def test_reference_add_edit_delete_and_undo_in_review(api):  # noqa: F811
+    cid, _ = onboard(api)
+    assert _profile(api, cid)["profile"]["references"] == []
+    out = _patch(api, cid, op="add", item="reference", data={
+        "name": " Priya Shah ", "relationship": "manager", "contact": "priya@example.com",
+        "statement": "Jane built our churn model."})
+    [ref] = out["profile"]["references"]
+    assert {k: ref[k] for k in ("name", "relationship", "contact", "statement")} == {
+        "name": "Priya Shah", "relationship": "manager", "contact": "priya@example.com",
+        "statement": "Jane built our churn model."}
+    assert _profile(api, cid)["profile"]["references"] == [ref]          # GET returns it too
+
+    out = _patch(api, cid, op="edit", item="reference", id=ref["id"], data={
+        "name": "Priya Shah", "relationship": "supervisor", "contact": "", "statement": "Jane led the churn model."})
+    [edited] = out["profile"]["references"]
+    assert edited["id"] == ref["id"] and edited["relationship"] == "supervisor"
+    assert edited["contact"] is None and edited["statement"] == "Jane led the churn model."
+
+    out = _patch(api, cid, op="delete", item="reference", id=ref["id"])
+    assert out["undo"] and out["profile"]["references"] == []
+    back = _patch(api, cid, op="undo", item="deleted", id=out["undo"])
+    assert back["profile"]["references"] == [edited]                      # same id and fields
+
+    for data in ({"name": " "}, {"name": "X", "relationship": "friend"}):
+        assert api.patch(f"/candidates/{cid}/profile", json={"op": "add", "item": "reference", "data": data}).status_code == 422
+
+
+def test_edited_reference_is_judged_again_only_when_the_judge_input_changes():
+    """reference_confirms is cached by input_hash: relationship and statement are in the input, name and contact
+    are not (they can't change the answer)."""
+    from types import SimpleNamespace
+    from extraction.records import ReferenceRec
+    from graph.nodes.trust import validation_plan
+    from judges.service import input_hash
+
+    def h(ref):
+        [ask] = validation_plan(SimpleNamespace(profile=Profile(references=[ref]), baseline_summary="Data Scientist"))
+        return input_hash(ask.key, ask.context)
+    base = ReferenceRec("Priya", "manager", "p@x.com", "Built the churn model.", id="r1")
+    assert h(base) != h(ReferenceRec("Priya", "manager", "p@x.com", "Led the churn model.", id="r1"))
+    assert h(base) != h(ReferenceRec("Priya", "peer", "p@x.com", "Built the churn model.", id="r1"))
+    assert h(base) == h(ReferenceRec("Priya S.", "manager", "new@x.com", "Built the churn model.", id="r1"))
 
 
 def test_year_only_flag_confirm_and_review_fields(api):  # noqa: F811

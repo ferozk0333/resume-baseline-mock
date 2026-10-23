@@ -4,7 +4,7 @@ import { AlertTriangle, CalendarCheck, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { Certification, Project, Role } from "@/lib/api";
+import type { Certification, Project, Reference, Role } from "@/lib/api";
 import { BulletEditor, newBullet, type DraftBullet } from "./bullet-editor";
 import { friendlyMonth, friendlyRange, monthValue } from "./dates";
 import { useReviewEdit } from "./edit-context";
@@ -249,6 +249,57 @@ export function CertificationCard({ cert: c, onDone }: { cert: Certification | n
       fields={fields} saving={saving} canSave={!!f.name.trim()} defaultOpen={!c}
       onEditStart={reset} onSave={save} onCancel={() => { reset(); onDone?.(); }}
       onDelete={c ? () => api.remove({ op: "delete", item: "certification", id: c.id }, c.name) : undefined} />
+  );
+}
+
+/** Same options as the upload form. Only a manager or supervisor reference counts toward Trust (validation strength). */
+const RELATIONSHIPS: [string, string][] = [["manager", "Manager"], ["supervisor", "Supervisor"], ["peer", "Peer"], ["other", "Other"]];
+const RELATIONSHIP_HINT = "Only Manager or Supervisor references count toward Trust.";
+type RefDraft = { name: string; relationship: string; contact: string; statement: string };
+
+export function ReferenceCard({ reference: r, onDone }: { reference: Reference | null; onDone?: () => void }) {
+  const api = useReviewApi();
+  const id = r?.id ?? "new-reference";
+  const init = (): RefDraft => ({ name: r?.name ?? "", relationship: r?.relationship ?? "", contact: r?.contact ?? "",
+    statement: r?.statement ?? "" });
+  const { draft: f, setDraft: setF, reset } = useDraft(id, init);
+  const [saving, setSaving] = useState(false);
+  const set = (x: Partial<RefDraft>) => setF({ ...f, ...x });
+  const relLabel = (v: string | null | undefined) => RELATIONSHIPS.find(([k]) => k === v)?.[1] ?? null;
+  const fields: FieldSpec[] = [
+    { key: "name", label: "Name", htmlFor: `${id}-name`, view: r?.name,
+      edit: <Input id={`${id}-name`} required value={f.name} onChange={(e) => set({ name: e.target.value })} /> },
+    { key: "relationship", label: "Relationship", htmlFor: `${id}-rel`, view: relLabel(r?.relationship),
+      edit: (
+        <div className="space-y-1">
+          <select id={`${id}-rel`} value={f.relationship} aria-describedby={`${id}-rel-hint`}
+            onChange={(e) => set({ relationship: e.target.value })}
+            className="h-8 w-full rounded-lg border border-field-border bg-field px-2 text-sm">
+            <option value="">Relationship</option>
+            {RELATIONSHIPS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+          <p id={`${id}-rel-hint`} className="text-xs text-muted-foreground">{RELATIONSHIP_HINT}</p>
+        </div>) },
+    { key: "contact", label: "Contact (optional)", htmlFor: `${id}-contact`, view: r?.contact,
+      edit: <Input id={`${id}-contact`} value={f.contact} placeholder="Email or phone" onChange={(e) => set({ contact: e.target.value })} /> },
+    { key: "statement", label: "What they can confirm", htmlFor: `${id}-statement`, wide: true, view: r?.statement,
+      edit: <Textarea id={`${id}-statement`} rows={2} value={f.statement} onChange={(e) => set({ statement: e.target.value })} /> },
+  ];
+  async function save() {
+    setSaving(true);
+    const out = await api.apply({ op: r ? "edit" : "add", item: "reference", id: r?.id, data: {
+      name: f.name, relationship: f.relationship || null, contact: f.contact, statement: f.statement } },
+      r ? "Reference saved" : "Reference added");
+    setSaving(false);
+    if (out) onDone?.();
+    return !!out;
+  }
+  return (
+    <EntryCard id={id} kindLabel="Reference" testId="reference-card" title={r?.name || "New reference"}
+      meta={r ? (relLabel(r.relationship) ?? "Add a relationship") : undefined}
+      fields={fields} saving={saving} canSave={!!f.name.trim()} defaultOpen={!r}
+      onEditStart={reset} onSave={save} onCancel={() => { reset(); onDone?.(); }}
+      onDelete={r ? () => api.remove({ op: "delete", item: "reference", id: r.id }, r.name) : undefined} />
   );
 }
 

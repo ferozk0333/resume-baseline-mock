@@ -1,11 +1,11 @@
 "use client";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { AlertTriangle, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { AttentionBox } from "@/components/app/review/attention";
-import { AddButton, CertificationCard, ProjectCard, RoleCard } from "@/components/app/review/cards";
+import { AddButton, CertificationCard, ProjectCard, ReferenceCard, RoleCard } from "@/components/app/review/cards";
 import { ReviewEditProvider, useReviewEdit } from "@/components/app/review/edit-context";
 import { EDUCATION, MoreProof, NotScored, ProofCard, proofCount, proofItems } from "@/components/app/review/more-proof";
 import { ReviewApiCtx, type Edit, type ReviewApi } from "@/components/app/review/review-api";
@@ -37,6 +37,7 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
   const education = proofItems(EDUCATION, [], [], extra);
   const skills = claims.filter((c) => c.kind !== "award");
   const mentions = data.mentions ?? [];
+  const references = data.profile.references ?? [];
 
   const api: ReviewApi = useMemo(() => {
     async function apply(edit: Edit, ok?: string) {
@@ -70,9 +71,17 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
     { id: "sec-education", label: "Education", count: education.length },
     { id: "sec-skills", label: "Skills", count: skills.length },
     { id: "sec-certifications", label: "Certifications", count: certifications.length },
+    { id: "sec-references", label: "References", count: references.length },
     { id: "sec-more", label: "More proof", count: proof },
     { id: "sec-application", label: "Application details", disabled: true, note: "After your scores" },
   ];
+  useEffect(() => {          // "Add proof" after Mark done opens Review at a section (#sec-…): scroll there, move focus
+    const hash = window.location.hash.slice(1);
+    if (!hash.startsWith("sec-")) return;
+    const section = document.getElementById(hash);
+    section?.scrollIntoView({ block: "start" });
+    section?.focus({ preventScroll: true });
+  }, []);
   const reason = data.blocker ? data.blocker
     : data.reading ? "You can confirm when everything is read."
     : editing ? "Save or cancel the card you're editing first." : null;
@@ -133,6 +142,13 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
             {certifications.length === 0 && <p className="text-sm text-muted-foreground">None yet.</p>}
             {certifications.map((c) => <CertificationCard key={c.id} cert={c} />)}
             <AddButton id="new-certification" label="Add certification" render={(done) => <CertificationCard cert={null} onDone={done} />} />
+          </Section>
+
+          <Section id="sec-references" title="References"
+            description="A manager or supervisor confirming relevant work counts most (Trust).">
+            {references.length === 0 && <p className="text-sm text-muted-foreground">None yet.</p>}
+            {references.map((r) => <ReferenceCard key={r.id} reference={r} />)}
+            <AddButton id="new-reference" label="Add reference" render={(done) => <ReferenceCard reference={null} onDone={done} />} />
           </Section>
 
           <Section id="sec-more" title="More proof">

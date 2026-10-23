@@ -14,9 +14,12 @@ from core import config
 from core.db import new_id, now_iso
 from core.text import normalize_name
 from extraction import store
-from extraction.records import BulletRec, CertificationRec, ClaimRec, Profile, ProjectRec, RoleRec
+from extraction.records import BulletRec, CertificationRec, ClaimRec, Profile, ProjectRec, ReferenceRec, RoleRec
 
 TYPES = {"roles": "role", "projects": "project", "claims": "claim", "certifications": "certification"}
+# References are typed by the candidate, never read from a document, so they are only remembered for Undo.
+UNDO_TYPES = {**TYPES, "references_": "reference"}
+PROFILE_ATTR = {"references_": "references"}          # table name → Profile field, where they differ
 SOURCE_LABELS = {"resume": "Your resume", "linkedin_pdf": "LinkedIn", "github_repo": "GitHub", "portfolio": "Your portfolio"}
 
 
@@ -66,6 +69,9 @@ def record(item_type: str, payload: str):
                         evidence_id=p["evidence_id"], bullet_id=None, source=p["source"], method=p.get("method"),
                         id=p["id"], details=p.get("details") or {}, skill_group=p.get("skill_group"),
                         sources=p.get("sources") or [])
+    if item_type == "reference":
+        return ReferenceRec(name=p["name"], relationship=p["relationship"], contact=p["contact"],
+                            statement=p["statement"], id=p["id"])
     return CertificationRec(name=p["name"], issuer=p["issuer"], issued_date=_d(p["issued_date"]),
                             credential_id=p["credential_id"], verify_url=p["verify_url"], evidence_id=p["evidence_id"],
                             source=p["source"], method=p.get("method"), id=p["id"], sources=p.get("sources") or [])
@@ -74,11 +80,11 @@ def record(item_type: str, payload: str):
 def remember(conn, candidate_id: str, table: str, item_id: str) -> str | None:
     """Call before deleting the item. Returns the id Undo uses (specs/19 item 7). What pointed at the item (a claim
     named in one of its bullets, a project under a role, a claim's bullet) is kept so Undo restores the links."""
-    item_type = TYPES.get(table)
+    item_type = UNDO_TYPES.get(table)
     if item_type is None:
         return None
     profile = store.load_profile(conn, candidate_id)
-    rec = next((x for x in getattr(profile, table) if x.id == item_id), None)
+    rec = next((x for x in getattr(profile, PROFILE_ATTR.get(table, table)) if x.id == item_id), None)
     if rec is None:
         return None
     payload = json.loads(_payload(rec))
@@ -124,7 +130,7 @@ def undo(conn, candidate_id: str, deleted_id: str) -> None:
                     conn.execute("SELECT 1 FROM bullets WHERE id = ?", (links["bullet_id"],)).fetchone():
                 rec.bullet_id = links["bullet_id"]
             insert = {"role": store._insert_role, "project": store._insert_project, "claim": store._insert_claim,
-                      "certification": store._insert_certification}[row["item_type"]]
+                      "certification": store._insert_certification, "reference": store._insert_reference}[row["item_type"]]
             with conn:
                 insert(conn, candidate_id, rec)
                 for claim_id, bullet_id in (links.get("claims") or {}).items():
