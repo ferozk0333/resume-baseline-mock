@@ -177,15 +177,16 @@ def test_mark_done_moves_to_the_next_action_changes_no_score_and_undoes(env):  #
 
 # --- Market templates ---------------------------------------------------------------------------------------------
 
-def test_market_templates_label_test_versions_and_list_full_ones_first(env):  # noqa: F811
+def test_market_templates_say_what_they_are_based_on(env):  # noqa: F811
     from backend import jobs as jb
     with db.connect(env.path) as c:
         for vid, ver, test, title in (("v1", 1, 1, "AI Engineer"), ("v2", 2, 0, "Data Scientist")):
             c.execute("INSERT INTO baselines (id, title, level, required_years, expected_reach, is_mock, "
                       "market_version_id) VALUES (?, ?, 'entry', 1, 2, 0, ?)", (f"b-{vid}", title, vid))
-            c.execute("INSERT INTO market_versions (id, role, level, version, status, test_version, baseline_id) VALUES "
-                      "(?, 'x', 'entry', ?, 'published', ?, ?)", (vid, ver, test, f"b-{vid}"))
+            c.execute("INSERT INTO market_versions (id, role, level, version, status, test_version, baseline_id, postings, "
+                      "companies) VALUES (?, 'x', 'entry', ?, 'published', ?, ?, ?, ?)",
+                      (vid, ver, test, f"b-{vid}", 1 if test else 25, 1 if test else 9))
         c.commit()
         market = [t for t in jb.templates(c) if t["company"] == "Market template"]
-    assert [t["title"] for t in market] == ["Data Scientist (Market v2)",
-                                            "AI Engineer (Market v1) · Test version – insufficient data"]
+    assert [t["title"] for t in market] == ["AI Engineer (Market v1) · Based on 1 posting from 1 company",
+                                            "Data Scientist (Market v2) · Based on 25 postings from 9 companies"]

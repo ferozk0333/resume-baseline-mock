@@ -51,13 +51,12 @@ def documents() -> list[tuple[str, str, str]]:
     from parser_gates import latest_live_candidate
     from extraction.parse.readme import repo_from_text
     conn = db.connect(str(ROOT / "data" / "demo.db"))
-    cid = conn.execute("SELECT id FROM candidates WHERE id = '14153054-8a51-4e70-be1b-1c8ed28209bf'").fetchone()
-    cid = cid[0] if cid else latest_live_candidate(conn)
+    cid = os.getenv("LIVE_CANDIDATE_ID") or latest_live_candidate(conn)
     for (raw,) in conn.execute("SELECT raw_text FROM evidence_items WHERE candidate_id = ? AND type = 'github_repo'",
                                (cid,)):
         repo = repo_from_text(raw)
         if repo.readme:
-            out.append(("Feroz (saved)", f"README {repo.name}", repo.readme))
+            out.append(("live profile (saved)", f"README {repo.name}", repo.readme))
     conn.close()
     return out
 

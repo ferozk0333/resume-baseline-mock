@@ -6,7 +6,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 // Candidate experience, phase C (specs/17 §7, §10): the full path (new profile → onboarding → apply → My
 // applications → recruiter sends "Not moving forward" → the candidate sees the reasons), every status, the closure
 // task, Mark done, the plan's empty state, Role family and the Market template labels. Screenshots: e2e/.tmp/spec17c.
-const API = "http://localhost:8010";
+const API = process.env.E2E_API ?? "http://localhost:8010";
 const OUT = "e2e/.tmp/spec17c";
 const CV = path.join(__dirname, ".tmp/cv.pdf");
 const ROOT = path.resolve(__dirname, "../..");
@@ -30,9 +30,10 @@ async function wait(api: APIRequestContext, task: string) {
 /** Ages an application in the e2e database (the closure task needs one that waited CLOSURE_DAYS). Test only. */
 function age(appId: string, days: number) {
   execFileSync(path.join(ROOT, ".venv/bin/python"), ["-c",
-    "import sqlite3, sys, datetime as d; c = sqlite3.connect('/tmp/rightstaff-e2e.db'); " +
+    "import sqlite3, sys, datetime as d; c = sqlite3.connect(sys.argv[3]); " +
     "t = (d.datetime.now(d.timezone.utc) - d.timedelta(days=int(sys.argv[2]))).isoformat(timespec='seconds'); " +
-    "c.execute('UPDATE applications SET applied_at = ? WHERE id = ?', (t, sys.argv[1])); c.commit()", appId, String(days)]);
+    "c.execute('UPDATE applications SET applied_at = ? WHERE id = ?', (t, sys.argv[1])); c.commit()", appId, String(days),
+    process.env.E2E_DB ?? "/tmp/rightstaff-e2e.db"]);
 }
 
 test("full path, every status, closure, Mark done, plan empty state, Role family, template labels", async ({ page, request }) => {
@@ -86,6 +87,10 @@ test("full path, every status, closure, Mark done, plan empty state, Role family
   // 4. Recruiter: Not moving forward → template draft → Send (Outbox provider, demo redirect)
   const jobs = await (await request.get(`${API}/candidates/${cid}/applications`)).json();
   const { application_id: appId, job_id: jobId } = jobs[0];
+  await expect.poll(async () => {                                   // its score drives the pre-selected reasons
+    const rows = (await (await request.get(`${API}/jobs/${jobId}/applicants`)).json()).applicants;
+    return rows.find((r: { application_id: string; scored: boolean }) => r.application_id === appId)?.scored;
+  }, { timeout: 60_000 }).toBe(true);
   await page.goto(`/recruiter/jobs/${jobId}?app=${appId}`);
   const panel = page.getByRole("article", { name: /Profile of Morgan Avery/ });
   await panel.getByRole("button", { name: "Not moving forward" }).click();
@@ -171,10 +176,10 @@ test("full path, every status, closure, Mark done, plan empty state, Role family
   await expect(page.getByLabel("Role family")).toHaveValue("none");
   await request.delete(`${API}/jobs/${draft.job_id}/draft`);
 
-  // 10. Market templates in "Copy an existing job": test versions labelled, full ones first
+  // 10. Market templates in "Copy an existing job": each says what it is based on
   await page.goto("/recruiter/jobs/new");
   const select = page.getByLabel("Job to copy");
-  await expect(select.locator("optgroup[label^='Market templates'] option").first()).toHaveText(/Test version – insufficient data/);
+  await expect(select.locator("optgroup[label^='Market templates'] option").first()).toHaveText(/Based on \d+ postings? from \d+ compan(y|ies)/);
   await select.evaluate((el) => {
     (el as HTMLSelectElement).size = 12; el.style.height = "auto";
     el.querySelector("optgroup[label^='Market templates']")?.scrollIntoView({ block: "end" });

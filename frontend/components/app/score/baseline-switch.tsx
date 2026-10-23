@@ -52,6 +52,7 @@ export function BaselineSwitch({ runId }: { runId: string }) {
           );
         })}
       </div>
+      {opts.market && <span className="text-xs text-muted-foreground" data-testid="market-basis">Market: {opts.market.basis}</span>}
       {opts.current === "market" && opts.current_version !== opts.market?.version && (
         <span className="text-xs text-muted-foreground">This score used Market v{opts.current_version}.</span>
       )}
@@ -61,9 +62,7 @@ export function BaselineSwitch({ runId }: { runId: string }) {
           <DialogHeader>
             <DialogTitle>Re-score against {notice?.target}?</DialogTitle>
             <DialogDescription>
-              Your profile is scored again against {notice?.target}. The parts of the check that depend on the baseline
-              are redone{notice?.reused ? " (already saved from an earlier score, so it's quick)" : ""}; the rest is reused.
-              Percentiles compare you only with candidates scored on the same baseline version.
+              Your profile is scored again against {notice?.target}.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

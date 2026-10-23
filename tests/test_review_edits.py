@@ -87,14 +87,14 @@ def test_add_project_claim_and_certification(setup):
 def test_remerge_roles_fixes_a_saved_profile_without_extraction(tmp_path):
     from extraction.records import Profile, RoleRec
     conn = db.connect(tmp_path / "r.db")
-    cid = store.create_candidate(conn, "Feroz")
+    cid = store.create_candidate(conn, "Jane")
     resume = store.add_evidence(conn, cid, "resume", "upload", status="validated")
     linkedin = store.add_evidence(conn, cid, "linkedin_pdf", "upload", status="validated")
     role = lambda t, e, ev: RoleRec(title=t, employer=e, industry=None, start_date=date(2022, 7, 1),  # noqa: E731
                                     end_date=date(2023, 6, 1), is_current=False, team_size=None, quote=t,
                                     evidence_id=ev)
-    li = role("Software Engineer", "Oracle", linkedin)       # saved first, as the old merge left it
-    kept = role("Software Engineer, Machine Learning", "Oracle Financial Services Software", resume)
+    li = role("Software Engineer", "Quarry", linkedin)       # saved first, as the old merge left it
+    kept = role("Software Engineer, Machine Learning", "Quarry Financial Services Software", resume)
     store.save_profile(conn, cid, Profile(roles=[li, kept]))
     assert store.remerge_roles(conn, cid) == 1
     roles = store.load_profile(conn, cid).roles
@@ -105,13 +105,13 @@ def test_remerge_roles_fixes_a_saved_profile_without_extraction(tmp_path):
 def test_remove_profile_repos_from_saved_profile(tmp_path):
     from extraction.records import Profile, ProjectRec
     conn = db.connect(tmp_path / "g.db")
-    cid = store.create_candidate(conn, "Feroz", github_username="ferozk0333")
+    cid = store.create_candidate(conn, "Jane", github_username="jdoe-dev")
     def repo(name):
-        eid = store.add_evidence(conn, cid, "github_repo", "api", raw_text=f"Repository: ferozk0333/{name}")
+        eid = store.add_evidence(conn, cid, "github_repo", "api", raw_text=f"Repository: jdoe-dev/{name}")
         return ProjectRec(kind="repo", name=name, description=None, url=None, start_date=None, end_date=None,
                           quote=name, evidence_id=eid, is_fork=False, own_commits=3)
-    store.save_profile(conn, cid, Profile(projects=[repo("ferozk0333"), repo("ferozk0333.github.io"),
+    store.save_profile(conn, cid, Profile(projects=[repo("jdoe-dev"), repo("jdoe-dev.github.io"),
                                                     repo("RoPE-Explainer")]))
-    assert sorted(store.remove_profile_repos(conn, cid)) == ["ferozk0333", "ferozk0333.github.io"]
+    assert sorted(store.remove_profile_repos(conn, cid)) == ["jdoe-dev", "jdoe-dev.github.io"]
     assert [p.name for p in store.load_profile(conn, cid).projects] == ["RoPE-Explainer"]
     assert len([e for e in store.list_evidence(conn, cid) if e["type"] == "github_repo"]) == 1

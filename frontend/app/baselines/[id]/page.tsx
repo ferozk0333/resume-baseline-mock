@@ -44,7 +44,7 @@ function BaselineEditInner() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete this baseline?</DialogTitle>
-            <DialogDescription>Past runs against it are kept and show the baseline as “(deleted)”.</DialogDescription>
+            <DialogDescription>Past scores are kept.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirm(false)}>Cancel</Button>

@@ -2,7 +2,7 @@
 PY := .venv/bin/python
 UVICORN := .venv/bin/uvicorn
 
-.PHONY: dev api web test e2e fake-api demo live
+.PHONY: dev api web test e2e fake-api demo live archive reseed prod-up prod-down
 
 dev:
 	@trap 'kill 0' INT TERM; \
@@ -43,3 +43,20 @@ test:
 
 e2e:
 	cd frontend && npx playwright test
+
+# --- Prototype deployment (docs/deploy.md) ---------------------------------------------------------------------------
+# The judgment archive: saved judgments of the synthetic demo profiles only (copy it to the server's data/).
+archive:
+	$(PY) scripts/judgment_archive.py export --db $${RIGHTSTAFF_DEMO_DB:-data/demo.db} --out data/judgment-archive.db
+	$(PY) scripts/judgment_archive.py check --archive data/judgment-archive.db
+
+# A clean demo database from the archive: synthetic profiles and demo jobs only; no model calls.
+# On the server it runs inside the API container (see prod-reseed in docs/deploy.md).
+reseed:
+	$(PY) scripts/reseed.py --db $${RIGHTSTAFF_DB:-data/demo.db} --archive data/judgment-archive.db --force
+
+prod-up:
+	docker compose -f docker-compose.prod.yml up -d --build
+
+prod-down:
+	docker compose -f docker-compose.prod.yml down

@@ -12,6 +12,7 @@ from core import config, db
 from tests.test_candidate import DETAILS, env, roles, scored  # noqa: F401  (fixture)
 
 DS, AI, PM = "baseline-data-scientist-entry", "baseline-ai-engineer-entry", "baseline-product-manager-entry"
+SWE, BA, DA = "baseline-software-engineer-entry", "baseline-business-analyst-entry", "baseline-data-analyst-entry"
 
 
 @pytest.fixture
@@ -32,15 +33,15 @@ def counts(path):
 
 # --- §9 Seeded demo jobs -----------------------------------------------------------------------------------------
 
-def test_nine_demo_jobs_three_per_role(seeded_env):
-    assert seeded_env.seed["added"] == 9
+def test_fifteen_demo_jobs_three_per_original_role_two_per_new_role(seeded_env):
+    assert seeded_env.seed["added"] == 15
     with db.connect(seeded_env.path) as c:
         rows = [jb.get(c, r[0]) for r in c.execute("SELECT id FROM jobs WHERE data_source = 'demo'")]
-        assert len(rows) == 9 and all(j["status"] == "open" for j in rows)
+        assert len(rows) == 15 and all(j["status"] == "open" for j in rows)
         by_role = {}
         for j in rows:
             by_role.setdefault(j["role_baseline_id"], []).append(j)
-        assert {k: len(v) for k, v in by_role.items()} == {DS: 3, AI: 3, PM: 3}
+        assert {k: len(v) for k, v in by_role.items()} == {DS: 3, AI: 3, PM: 3, SWE: 2, BA: 2, DA: 2}
         assert sum(1 for j in rows if cj.salary(j["details"]) is None) == 2
         now = datetime.now(timezone.utc)
         ages = [(now - datetime.fromisoformat(j["created_at"])).days for j in rows]

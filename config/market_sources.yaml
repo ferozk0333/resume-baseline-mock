@@ -68,3 +68,66 @@ roles:
       - {name: "TODO startup company 3", tier: startup, source: greenhouse, source_id: "", placeholder: true}
       - {name: "TODO startup company 4", tier: startup, source: lever, source_id: "", placeholder: true}
       - {name: "TODO startup company 5", tier: startup, source: ashby, source_id: "", placeholder: true}
+  software_engineer:
+    title: Software Engineer
+    manual_baseline: baseline-software-engineer-entry
+    title_keywords: [software engineer, software developer, backend engineer, back end engineer, frontend engineer, front end engineer, full stack engineer, fullstack engineer, web developer, application developer, sde]
+    title_exclusions: [machine learning, ml, ai, data, sales engineer, solutions engineer, support engineer, manager, director, recruiter, intern]
+    companies:
+      - {name: "TODO large company 1", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 2", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 3", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 4", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 5", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO mid company 1", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 2", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO mid company 3", tier: mid, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO mid company 4", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 5", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 1", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 2", tier: startup, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 3", tier: startup, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO startup company 4", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 5", tier: startup, source: ashby, source_id: "", placeholder: true}
+  business_analyst:
+    title: Business Analyst
+    manual_baseline: baseline-business-analyst-entry
+    title_keywords: [business analyst, business systems analyst, systems analyst, requirements analyst, process analyst, it business analyst]
+    title_exclusions: [data analyst, financial analyst, security analyst, manager, director, recruiter, intern]
+    companies:
+      - {name: "TODO large company 1", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 2", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 3", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 4", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 5", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO mid company 1", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 2", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO mid company 3", tier: mid, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO mid company 4", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 5", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 1", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 2", tier: startup, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 3", tier: startup, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO startup company 4", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 5", tier: startup, source: ashby, source_id: "", placeholder: true}
+  data_analyst:
+    title: Data Analyst
+    manual_baseline: baseline-data-analyst-entry
+    title_keywords: [data analyst, reporting analyst, bi analyst, business intelligence analyst, analytics analyst, insights analyst, product analyst]
+    title_exclusions: [business analyst, data scientist, data engineer, manager, director, recruiter, intern]
+    companies:
+      - {name: "TODO large company 1", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 2", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 3", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 4", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO large company 5", tier: large, source: manual, source_id: "", placeholder: true}
+      - {name: "TODO mid company 1", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 2", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO mid company 3", tier: mid, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO mid company 4", tier: mid, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO mid company 5", tier: mid, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 1", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 2", tier: startup, source: ashby, source_id: "", placeholder: true}
+      - {name: "TODO startup company 3", tier: startup, source: greenhouse, source_id: "", placeholder: true}
+      - {name: "TODO startup company 4", tier: startup, source: lever, source_id: "", placeholder: true}
+      - {name: "TODO startup company 5", tier: startup, source: ashby, source_id: "", placeholder: true}

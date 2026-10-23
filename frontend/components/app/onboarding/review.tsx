@@ -12,6 +12,7 @@ import { ReviewApiCtx, type Edit, type ReviewApi } from "@/components/app/review
 import { SectionMenu, type MenuEntry } from "@/components/app/review/section-menu";
 import { Skills } from "@/components/app/review/skills";
 import { patch, type ProfileResponse } from "@/lib/api";
+import { LinkedText } from "@/components/app/ext-link";
 
 const PROJECT_KINDS = new Set(["project", "repo", "work_sample"]);
 
@@ -114,13 +115,13 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
             </ul>
           )}
 
-          <Section id="sec-roles" title="Roles" description="Your work experience. Edit anything that was read wrongly.">
+          <Section id="sec-roles" title="Roles">
             {roles.length === 0 && <p className="text-sm text-muted-foreground">No roles found.</p>}
             {roles.map((r) => <RoleCard key={r.id} role={r} />)}
             <AddButton id="new-role" label="Add role" render={(done) => <RoleCard role={null} onDone={done} />} />
           </Section>
 
-          <Section id="sec-projects" title="Projects" description="Projects, repositories and work samples. Publications, talks and the like are under More proof.">
+          <Section id="sec-projects" title="Projects">
             {projects.length === 0 && <p className="text-sm text-muted-foreground">No projects found.</p>}
             {projects.map((p) => <ProjectCard key={p.id} project={p} />)}
             <AddButton id="new-project" label="Add project" render={(done) => <ProjectCard project={null} onDone={done} />} />
@@ -132,7 +133,7 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
             <AddButton id="new-education" label="Add education" render={(done) => <ProofCard t={EDUCATION} item={null} onDone={done} />} />
           </Section>
 
-          <Section id="sec-skills" title="Skills and tools" description="Named in your documents, grouped to make them easy to check.">
+          <Section id="sec-skills" title="Skills and tools">
             <Skills claims={skills} groups={data.skill_groups ?? ["Other"]} />
           </Section>
 
@@ -150,18 +151,18 @@ function ReviewInner({ data, onChange, onConfirm, confirming, confirmLabel = "Co
             <AddButton id="new-reference" label="Add reference" render={(done) => <ReferenceCard reference={null} onDone={done} />} />
           </Section>
 
-          <Section id="sec-more" title="More proof" description="Publications, talks, awards and more. Add what applies to you.">
+          <Section id="sec-more" title="More proof">
             <MoreProof projects={data.profile.projects} claims={claims} extra={extra} />
           </Section>
 
-          <Section id="sec-sources" title="Source text" description="Each document as we read it, after clean-up. Quotes are checked against this text.">
+          <Section id="sec-sources" title="Source text">
             {data.sources.map((s) => (
               <details key={s.id} className="rounded-lg border bg-card">
                 <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
                   {{ resume: "Resume", linkedin_pdf: "LinkedIn PDF", portfolio: "Portfolio" }[s.type] ?? s.type}
                   {s.status === "failed" && <span className="ml-2 text-destructive">could not be extracted</span>}
                 </summary>
-                <pre className="max-h-80 overflow-auto border-t px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{s.text}</pre>
+                <pre className="max-h-80 overflow-auto border-t px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground"><LinkedText text={s.text} /></pre>
               </details>
             ))}
           </Section>

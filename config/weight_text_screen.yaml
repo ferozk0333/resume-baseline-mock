@@ -1,0 +1,42 @@
+# Reviewed keyword screen for the weight assistant (specs/21 §4 item 10).
+# Matched against the recruiter's description in code; every hit is listed as "ignored" even if the model missed it.
+# Patterns are case-insensitive regular expressions matched on whole words. Keep them narrow: a job-related phrase
+# ("white-box testing", "manager", "social media marketing", "native app") must not match. Review before changing.
+version: 1
+categories:
+  age:
+    - '\b(?:young|younger|youthful|elderly|old(?:er)?)\b(?!\s*(?:code|codebase|system|version|stack))'
+    - '\bunder\s+\d{2}\b'
+    - '\bover\s+\d{2}\s*(?:years old|y/?o)?\b(?!\s*(?:%|percent|users|customers|people|teams|countries))'
+    - '\b\d{2}\s*(?:years old|year-old|yo)\b'
+    - '\bdigital natives?\b'
+    - '\bage(?:s|d)?\b(?!\s*of\b)'
+  gender:
+    - '\b(?:male|female|man|men|woman|women|guy|guys|gal|girls?|boys?|gentlem[ae]n|lad(?:y|ies)|gender)\b'
+  race_or_ethnicity:
+    - '\b(?:race|racial|ethnicity|ethnic|caucasian|hispanic|latin[oax]|asian|african[- ]american)\b'
+    - '\bwhite\b(?!\s*-?\s*(?:box|board|paper|list|label|space|hat|glove))'
+    - '\bblack\b(?!\s*-?\s*(?:box|list|hat|friday))'
+  religion:
+    - '\b(?:religion|religious|christian|muslim|jewish|hindu|sikh|buddhist|catholic|church|mosque|temple)\b'
+  nationality_or_citizenship:
+    - '\b(?:citizen|citizens|citizenship|nationality|national origin|green card|visa|foreigners?|immigrants?)\b'
+    - '\b(?:american|indian|chinese|british|german|french|canadian)[- ]born\b'
+  disability:
+    - '\b(?:disabled|disability|disabilities|handicapped|wheelchair|able-bodied|mental illness)\b'
+  pregnancy_or_family_status:
+    - '\b(?:pregnant|pregnancy|maternity|paternity|married|unmarried|spouse|kids|children|childless|family plans|mothers?|fathers?)\b'
+  native_speaker_or_accent:
+    - '\bnative(?:\s+english)?\s+speakers?\b'
+    - '\b(?:accent|accents|mother tongue)\b'
+  appearance:
+    - '\b(?:attractive|good[- ]looking|appearance|well[- ]groomed|presentable)\b'
+  culture_fit:
+    - '\bcultur(?:e|al)\s+fit\b'
+    - '\bfits?\s+(?:in\s+with\s+)?our\s+culture\b'
+  school_prestige:
+    - '\b(?:ivy league|prestigious|elite (?:school|university|college)s?|top[- ](?:tier|ranked) (?:school|university|college)s?|top \d+ (?:school|university|college)s?)\b'
+    - '\b(?:harvard|stanford|princeton|yale|oxford|cambridge|caltech|iit|iits)\b'
+    - '\bmit\b(?!\s+licen)'
+  personal_social_media:
+    - '\b(?:personal\s+social\s+media|instagram|tiktok|facebook\s+(?:profile|page)|twitter\s+followers|social\s+media\s+(?:presence|following|followers))\b'

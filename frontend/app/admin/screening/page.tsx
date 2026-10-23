@@ -2,9 +2,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { get } from "@/lib/api";
+import { ExtLink } from "@/components/app/ext-link";
 
 type Flag = { id: string; evidence_id: string | null; source: string; chunk_index: number; chunk: string; score: number;
   hidden: number; model: string; created_at: string };
@@ -33,14 +34,10 @@ export default function Screening() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Screening</h1>
-        <p className="text-sm text-muted-foreground">
-          Hidden text removed before reading, how each document was read, and text the injection screen flagged
-          (threshold {data.threshold}). Admin only: nothing here changes a score or reaches a recruiter.
-        </p>
         <div className="mt-2 flex flex-wrap gap-2 text-xs">
           <Badge variant={data.enabled.remove_hidden_text ? "default" : "outline"}>Hidden-text removal {data.enabled.remove_hidden_text ? "on" : "off"}</Badge>
           <Badge variant={data.enabled.prompt_guard ? "default" : "outline"}>Injection screen {data.enabled.prompt_guard ? "on" : "off"}</Badge>
-          <a className="text-primary hover:underline" href={data.model_doc} target="_blank" rel="noreferrer">Screen model (512-token window)</a>
+          <ExtLink url={data.model_doc}>Screen model (512-token window)</ExtLink>
         </div>
       </div>
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
@@ -70,7 +67,7 @@ export default function Screening() {
             <>
               <Card>
                 <CardHeader><CardTitle className="text-base">Hidden text removed</CardTitle>
-                  <CardDescription>Removed before reading (white or near-background colour, tiny, off-page).</CardDescription></CardHeader>
+                  </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   {detail.documents.every((d) => d.hidden_text.length === 0) && <p className="text-muted-foreground">None.</p>}
                   {detail.documents.filter((d) => d.hidden_text.length).map((d) => (
@@ -85,7 +82,7 @@ export default function Screening() {
                 <CardContent className="overflow-x-auto">
                   {detail.parser_runs.length === 0 ? <p className="text-sm text-muted-foreground">No parser runs.</p> : (
                     <table className="w-full text-left text-sm">
-                      <thead className="text-xs text-muted-foreground"><tr><th className="py-1">Document</th><th>Mode</th><th>Outcome</th><th>Why</th><th>Jev</th><th>LLM</th><th>Time</th></tr></thead>
+                      <thead className="text-xs text-muted-foreground"><tr><th className="py-1">Document</th><th>Mode</th><th>Outcome</th><th>Why</th><th>Label requests</th><th>Model reads</th><th>Time</th></tr></thead>
                       <tbody>{detail.parser_runs.map((r) => (
                         <tr key={r.id} className="border-t align-top"><td className="py-1">{r.doc_type}</td><td>{r.mode}</td><td>{r.outcome}</td>
                           <td className="max-w-xs">{(r.reasons_json ?? []).join("; ")}</td><td>{r.jev_requests}/{r.jev_questions}</td><td>{r.llm_calls}</td>

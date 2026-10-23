@@ -18,7 +18,6 @@ export default function BaselinesPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Baselines</h1>
-          <p className="text-sm text-muted-foreground">The role profiles candidates are scored against.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={async () => {

@@ -406,7 +406,7 @@ def test_without_the_models_code_rules_and_templates_are_used(seeded):
     v = reply(api, a, replies.CANNED["slot"])
     reading = v["step"]["reply"]["reading"]
     assert reading["method"] == replies.CODE_RULES and reading["label"] == "slot_chosen"
-    assert "Reply model unavailable" in reading["notes"][0]
+    assert reading["notes"] == ["Check this reading."]                      # no provider details on screen
 
 
 @pytest.mark.parametrize("key,label", [("slot", "slot_chosen"), ("next_week", "times_proposed"),
@@ -526,7 +526,8 @@ def test_imap_replies_are_matched_by_token_and_read(seeded, monkeypatch):
     assert sorted(x["why"] for x in out["skipped"]) == ["already stored", "no workflow with this token", "our own sent copy"]
     assert ("SINCE",) == box.log[2][:1]                                       # searched by date only
     status = api.get("/workflows/inbox").json()
-    assert status["last_poll"]["fetched"] == 5
+    assert status["last_check"]["failed"] is False and status["last_check"]["at"]
+    assert "@" not in str(status) and "user" not in status                    # never an email address (cleanup)
     va = api.get(f"/applications/{a}/workflow").json()
     assert va["step"]["step"] == "confirm_slot" and va["thread"][-1]["body"] == "Tuesday 11:00 works for me."
     assert va["thread"][-1]["source"] == "imap"
@@ -606,7 +607,7 @@ def test_imap_errors_are_reported_not_raised(seeded, monkeypatch):
     def broken():
         raise OSError("login failed")
     out = api.app.state.rs.hiring.poll_inbox(replies.ImapInbox(broken))
-    assert out["error"] == "OSError: login failed" and api.get("/workflows/inbox").json()["last_poll"]["error"]
+    assert out["error"] == "OSError: login failed" and api.get("/workflows/inbox").json()["last_check"]["failed"] is True
 
 
 def test_a_message_without_message_id_is_read_once_across_polls_and_restarts(seeded, monkeypatch):

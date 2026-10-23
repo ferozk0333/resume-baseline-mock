@@ -36,7 +36,19 @@ _PLACES = ("United States|USA|U\\.S\\.|India|Canada|United Kingdom|UK|Germany|Fr
 _LOCATION = re.compile(rf"^(?:remote|hybrid|on-?site|[A-Z][a-zA-Z .'-]{{1,30}},\s*(?:[A-Z]{{2}}|{_PLACES})"
                        rf"(?:,\s*(?:{_PLACES}|[A-Z]{{2,3}}))?)$", re.I)
 _SPLIT = re.compile(r"\s+[—–|·]\s+|\s+-\s+|\s+at\s+|\s+@\s+")
-_LINKS = re.compile(r"\s*\((?:demo |github |live |project )?link\)|\s*\((?:https?://|www\.|github\.com)[^)]*\)", re.I)
+_LINK_WORD = re.compile(r"\s*\((?:demo |github |live |project )?link\)", re.I)
+
+
+def strip_links(text: str) -> tuple[str, str | None]:
+    """"Name (Link) (https://…/PIIS0140-6736(26)01714-9/abstract) 2026" → ("Name 2026", the first URL). The URL
+    is read with balanced parentheses and kept exactly (core/links.py)."""
+    from core.links import find_urls
+    urls = find_urls(text)
+    for start, end, _ in reversed(urls):
+        if start > 0 and text[start - 1] == "(" and text[end:end + 1] == ")":
+            start, end = start - 1, end + 1
+        text = text[:start].rstrip() + (" " if text[end:].strip() else "") + text[end:].lstrip()
+    return _LINK_WORD.sub("", text).strip(), (urls[0][2] if urls else None)
 
 
 def title_score(text: str) -> int:
@@ -343,7 +355,7 @@ def _not_in_source(out: schemas.ProfileExtract, source: str) -> int:
 
 def _cert_or_pub(ln, key: str, out, methods) -> None:
     cells = ln.cells or [ln.text]
-    main = _LINKS.sub("", cells[0]).strip()
+    main, url = strip_links(cells[0])
     when = next((dates.find_single(c) for c in cells[1:] if dates.find_single(c)), None)
     parts = [p.strip() for p in re.split(r"\s+·\s+", main)]
     name = parts[0]
@@ -358,12 +370,12 @@ def _cert_or_pub(ln, key: str, out, methods) -> None:
         name, issuer = m["name"].strip(), m["issuer"].strip()
     if key == "publications":
         title = re.split(r"\s+[—–]\s+", name)[0].strip(' "“”')
-        p = schemas.Project(kind="publication", name=title, description=name, url=None, start=None,
+        p = schemas.Project(kind="publication", name=title, description=name, url=url, start=None,
                             end=when.end if when else None, role_index=None, bullets=[], source=src(title, "publications"))
         out.projects.append(p)
         methods[id(p)] = "parser"
         return
     c = schemas.Certification(name=name, issuer=issuer, date=when.start if when else None, credential_id=cred,
-                              verify_url=None, source=src(name, "certifications"))
+                              verify_url=url, source=src(name, "certifications"))
     out.certifications.append(c)
     methods[id(c)] = "parser"

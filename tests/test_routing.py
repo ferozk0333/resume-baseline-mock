@@ -119,12 +119,37 @@ def test_a_throttled_model_rests_until_the_stated_reset(env):
 
 
 def test_at_most_four_attempts_per_call(env, monkeypatch):
+    monkeypatch.setattr(config, "ROUTE_OVERLOAD_RETRY_ROUNDS", 0)
     monkeypatch.setitem(config.ROUTES, "judge_single", [A, B, C, "groq/x", "groq/y"])
     bad = [Overloaded("busy")]
     s = Script(**{A: bad, B: bad, C: bad, "groq__x": bad, "groq__y": [Out(label="never")]})
     with pytest.raises(LLMError, match="after 4 attempt"):
         ask(router(env, s))
     assert len(s.calls) == 4
+
+
+def test_when_every_model_is_overloaded_the_route_tries_once_more_after_their_rest(env, caplog):
+    """A 503 storm (every model of a route at once) usually passes in seconds: one more round once the models have
+    rested (OVERLOAD_COOLDOWN_S), instead of telling the candidate to come back later."""
+    caplog.set_level(logging.WARNING, logger="rightstaff.routing")
+    s = Script(**{A: [Overloaded("A: HTTP 503"), Out(label="A after rest")], B: [Overloaded("B: HTTP 503")],
+                  C: [Overloaded("C: HTTP 503")]})
+    assert ask(router(env, s)).label == "A after rest"
+    assert s.calls == [A, B, C, A]
+    assert config.OVERLOAD_COOLDOWN_S - 1 <= sum(env.slept) <= config.ROUTE_MAX_TOTAL_WAIT_S
+    assert any(r.getMessage().startswith("retry: judge_single: every model was overloaded") for r in caplog.records)
+
+
+def test_the_overload_round_happens_once_and_never_after_a_rate_limit(env):
+    always = [Overloaded("HTTP 503")]
+    s = Script(**{A: always, B: always, C: always})
+    with pytest.raises(LLMError):
+        ask(router(env, s))
+    assert len(s.calls) == 6                                           # two rounds of three, then the busy message
+    s2 = Script(**{A: [Throttled("A: HTTP 429", retry_after=30)], B: always, C: always})
+    with pytest.raises(LLMError):
+        ask(router(env, s2))
+    assert s2.calls == [A, B, C]                                       # a rate limit is not a passing overload
 
 
 def test_invalid_output_moves_on_and_an_unusable_model_is_skipped(env):
@@ -237,9 +262,9 @@ def test_a_claude_model_at_the_top_of_a_route_works_with_no_code_change(env, mon
 
 def test_a_single_model_is_a_one_model_route(env):
     s = Script(**{A: [Overloaded("busy")]})
-    with pytest.raises(LLMError, match="no model could answer"):
+    with pytest.raises(LLMError):
         ask(router(env, s), A)
-    assert s.calls == [A] and env.slept == []
+    assert s.calls == [A, A] and sum(env.slept) >= config.OVERLOAD_COOLDOWN_S - 1   # once more after its rest
 
 
 # --- LIVE guard ---------------------------------------------------------------------------------------------------

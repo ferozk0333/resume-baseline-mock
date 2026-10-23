@@ -24,7 +24,7 @@ export function WeightsDrawer({ open, onOpenChange, weights, labels, onChange }:
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
         <SheetHeader>
           <SheetTitle>Weights</SheetTitle>
-          <SheetDescription>Change how much each part counts. The score updates instantly; no model is asked again.</SheetDescription>
+          <SheetDescription>Change how much each part counts.</SheetDescription>
         </SheetHeader>
         <div className="space-y-6 px-4 pb-6">
           <section className="space-y-4">

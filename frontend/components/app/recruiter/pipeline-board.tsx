@@ -28,8 +28,7 @@ export function PipelineBoard({ jobId }: { jobId: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <p className="shrink-0 text-xs text-muted-foreground">
-        {board.unstaged} applicant{board.unstaged === 1 ? "" : "s"} not yet in the interview plan (shortlist them in Ranked).
-        Moving a card logs it and updates the workflow; it never sends anything.
+        {board.unstaged} applicant{board.unstaged === 1 ? "" : "s"} not yet in the interview plan
       </p>
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
         {board.stages.map((s) => (

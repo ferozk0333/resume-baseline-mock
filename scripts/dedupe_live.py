@@ -4,8 +4,8 @@
     LIVE=1 LLM_PROVIDER=gemini RIGHTSTAFF_DB=data/demo.db python scripts/dedupe_live.py --run
     python scripts/dedupe_live.py --report                    # offline: rebuild the report from the saved results
 
-Scope (Feroz's go): the 16 test profiles (synthetic) against their own role, "Feroz Khan test 10" against its own
-role, and Feroz's AI Engineer and PM demo-job scores (applications of "Feroz Khan test 8"). Works on a copy of
+Scope (the owner's go): the 16 test profiles (synthetic) against their own role, the live profile named by
+LIVE_PROFILE against its own role, and the demo-job scores of the profile named by JOBS_PROFILE (env; both optional). Works on a copy of
 data/demo.db (data/dedupe-live.db, kept between runs so the run is resumable). Each candidate is re-merged with
 extraction.store.remerge, exactly as step 4 does on demo.db, then scored: a question with a saved answer for the same
 input reuses it (this candidate's own first), anything else is asked live through the usual judges and routes. At a
@@ -34,8 +34,8 @@ from extraction import store  # noqa: E402
 WORK = ROOT / "data" / "dedupe-live.db"
 ESTIMATE_DB = ROOT / "data" / "dedupe-estimate.db"
 OUT = ROOT / "timings" / "dedupe_live.json"
-LIVE_NAME = "Feroz Khan test 10"
-JOBS_NAME = "Feroz Khan test 8"
+LIVE_NAME = os.getenv("LIVE_PROFILE", "")       # a live profile scored against its own role (optional)
+JOBS_NAME = os.getenv("JOBS_PROFILE", "")       # a live profile whose demo-job scores are included (optional)
 STUFFER_IDS = ("AI2", "DS2", "PM2", "DS4_padded")
 CAUSE = {   # what a merge changes in each subcategory (specs/19 Phase C; formulas unchanged)
     "depth": "fewer double-counted projects (a resume project and its repository are one item)",
@@ -58,7 +58,7 @@ CAUSE = {   # what a merge changes in each subcategory (specs/19 Phase C; formul
 
 
 def targets(conn) -> list[dict]:
-    """One row per (candidate, score): the test profiles' own-role runs, Feroz test 10's own role, Feroz's job scores."""
+    """One row per (candidate, score): the test profiles' own-role runs, LIVE_PROFILE's own role, JOBS_PROFILE's jobs."""
     from parser_gates import final_of
     from report_test_profiles import profile_id
     from score_test_profiles import targets as test_targets

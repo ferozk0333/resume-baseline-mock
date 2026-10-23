@@ -1,6 +1,6 @@
 """Acceptance gates for code-first extraction (specs/18 §4.4), offline: no provider is called.
 
-    python scripts/parser_gates.py [--db data/demo.db] [--feroz-candidate ID]
+    python scripts/parser_gates.py [--db data/demo.db] [--live-candidate ID]
 
 Works on a scratch copy of the demo database. Judging is replayed (judges/replay_judge.py): a question gets the answer
 recorded for exactly the same input; a question never asked before is counted as "unrecorded" (it would need a live

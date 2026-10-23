@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmailEditor, SendNotice } from "@/components/app/recruiter/email-editor";
 import { cn } from "@/lib/utils";
 import type { FeedbackSummary, Message, Reading, Scorecard, WorkflowStep, WorkflowView } from "@/lib/api";
+import { LinkedText } from "@/components/app/ext-link";
 
 export type Act = (body: Record<string, unknown>, label?: string) => Promise<void>;
 
@@ -70,7 +71,6 @@ export function StepCard({ v, act, busy, onSaveEmail, onReply, onScorecard }: {
       {s.step === "choose" && (
         <div className="space-y-3">
           {s.reply && <ReplyBox m={s.reply} />}
-          <p className="text-sm text-muted-foreground">Nothing is sent until you approve an email.</p>
           <div className="flex flex-wrap gap-2">
             {s.options?.map((o, i) => (
               <Button key={o.key} size="sm" variant={i === 0 ? "default" : "outline"} disabled={busy !== null}
@@ -162,11 +162,10 @@ export function ReplyBox({ m }: { m: Message }) {
   return (
     <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>Reply · {fmt(m.created_at)} · {m.source}</span>
+        <span>Reply · {fmt(m.created_at)}</span>
         {r && <Badge variant="secondary">{LABEL[r.label]}</Badge>}
-        {r && <span>{r.method === "model" ? `read by ${r.model}` : "read by code rules"}</span>}
       </div>
-      <p className="whitespace-pre-wrap">{m.body}</p>
+      <p className="whitespace-pre-wrap"><LinkedText text={m.body} /></p>
       {r && <p className="text-xs text-muted-foreground">Because: “{r.quote}”{r.question ? ` · Question: ${r.question}` : ""}</p>}
       {r?.notes?.map((n) => <p key={n} className="text-xs text-amber-700">{n}</p>)}
     </div>
@@ -231,7 +230,7 @@ function Feedback({ s, act, busy, onScorecard }: { s: WorkflowStep; act: Act; bu
   }
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{s.stage}: one scorecard per interviewer, each focus area rated 1–4.</p>
+      <p className="text-sm text-muted-foreground">{s.stage}: rate each focus area 1–4.</p>
       {cards.length > 0 && <Scorecards cards={cards} />}
       <form aria-label="Scorecard" className="space-y-2 rounded-lg border bg-muted/30 p-3" onSubmit={(e) => { e.preventDefault(); add(); }}>
         <div className="flex gap-2">
@@ -305,7 +304,7 @@ function Decide({ s, act, busy }: { s: WorkflowStep; act: Act; busy: string | nu
       {sum && (
         <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>{sum.scorecards} scorecard{sum.scorecards === 1 ? "" : "s"} · {sum.method === "model" ? `summarized by ${sum.model}` : "code summary"}</span>
+            <span>{sum.scorecards} scorecard{sum.scorecards === 1 ? "" : "s"}</span>
             <span className="ml-auto">Interviewers: {Object.entries(sum.recommendations).filter(([, n]) => n).map(([k, n]) => `${REC[k]} ${n}`).join(", ")}</span>
           </div>
           <Points title="Agreements" points={sum.agreements} />
@@ -313,7 +312,6 @@ function Decide({ s, act, busy }: { s: WorkflowStep; act: Act; busy: string | nu
           <Points title="Open questions" points={sum.open_questions} />
           {sum.notes.length > 0 && <details className="text-xs text-muted-foreground"><summary>Checks ({sum.notes.length})</summary>
             {sum.notes.map((n) => <p key={n}>{n}</p>)}</details>}
-          <p className="text-xs text-muted-foreground">The summary makes no recommendation. The decision is yours.</p>
         </div>
       )}
       {s.scorecards && s.scorecards.length > 0 && <Scorecards cards={s.scorecards} />}

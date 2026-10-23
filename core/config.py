@@ -222,6 +222,9 @@ ROUTE_MAX_ATTEMPTS = int(_env("ROUTE_MAX_ATTEMPTS", "4"))      # model calls per
 ROUTE_MAX_WAIT_S = float(_env("ROUTE_MAX_WAIT_S", "5"))        # one wait when every model is busy
 ROUTE_BUSY_BUDGET_S = float(_env("ROUTE_BUSY_BUDGET_S", "60"))  # longer than this is "exhausted", not "busy"
 ROUTE_MAX_TOTAL_WAIT_S = float(_env("ROUTE_MAX_TOTAL_WAIT_S", "90"))   # all models busy this long: give up the call
+# When every model in a round failed only because it was overloaded (HTTP 5xx or a timeout; usually gone in seconds),
+# try the route this many more times once the models have rested, within ROUTE_MAX_TOTAL_WAIT_S. 0 = fail at once.
+ROUTE_OVERLOAD_RETRY_ROUNDS = int(_env("ROUTE_OVERLOAD_RETRY_ROUNDS", "1"))
 OVERLOAD_COOLDOWN_S = float(_env("OVERLOAD_COOLDOWN_S", "20"))  # a model that answered 5xx/timeout rests this long
 # Hedging (off by default): a single-item call with no answer after N s also goes to the next model; first answer
 # wins. Each hedge costs one more request of quota.
@@ -232,7 +235,8 @@ HEDGE_TASKS = tuple(t.strip() for t in _env("HEDGE_TASKS", "judge_single").split
 # The route each role uses with LLM_PROVIDER=gemini (specs/18 §2 item 1).
 ROLE_ROUTES = {"extract": "extract_document", "extract_web": "extract_web", "judge": "judge_single",
                "judge_batch": "judge_grouped", "complexity": "judge_single", "plan": "plan", "email": "judge_single",
-               "reply": "judge_single", "feedback": "judge_single", "job_extract": "extract_document"}
+               "reply": "judge_single", "feedback": "judge_single", "job_extract": "extract_document",
+               "weights": "plan"}
 
 
 def _role_model(env: str, claude_default: str, role: str) -> str:
@@ -261,6 +265,8 @@ JOB_EXTRACT_MODEL = _env("JOB_EXTRACT_MODEL", "route:extract_document")
 # summary when the model is unavailable; the recruiter always decides.
 REPLY_MODEL = _role_model("REPLY_MODEL", "claude-haiku-4-5-20251001", "reply")
 FEEDBACK_MODEL = _role_model("FEEDBACK_MODEL", "claude-haiku-4-5-20251001", "feedback")
+# Recruiter weight assistant (specs/21): one call per suggestion on the plan route; presets when unavailable.
+WEIGHTS_MODEL = _role_model("WEIGHTS_MODEL", "claude-haiku-4-5-20251001", "weights")
 JEV_MODEL = _env("JEV_MODEL", "jev-1.13.0")   # pinned; saved judgments are matched on this version
 JEV_URL = "https://api.typesafe.ai/v1/systemone"
 # Effort per purpose (low | medium | high; empty = the model's default: high on Sonnet 5.5, medium on
@@ -282,6 +288,9 @@ PUNCT_SPACING = _env("PUNCT_SPACING", "1") == "1"
 # Duplicate claims, certifications and projects merge on the matching key or the reviewed alias file (specs/19
 # Phase C, a bug fix under "one claim per name"). Off only to reproduce the old merge for the before/after report.
 DEDUPE_NAMES = _env("DEDUPE_NAMES", "1") == "1"
+# The "Computation" block under each score (audit round, item 1): inputs, labels, values and the arithmetic, read-only.
+# On for now; to be removed later.
+SCORE_AUDIT = _env("SCORE_AUDIT", "1") == "1"
 MAX_PORTFOLIO_CHARS = 50_000
 GITHUB_MAX_REPOS = 30           # most recently pushed, non-archived
 GITHUB_README_CHARS = 4_000
@@ -453,6 +462,13 @@ SUBCATEGORY_LABELS: dict[str, str] = {
 }
 
 
+# Weight assistant bounds (specs/21 §3): every suggested group sums to 100 in steps of WEIGHT_STEP.
+WEIGHT_DIM_MIN = float(_env("WEIGHT_DIM_MIN", "5"))
+WEIGHT_DIM_MAX = float(_env("WEIGHT_DIM_MAX", "60"))
+WEIGHT_STEP = float(_env("WEIGHT_STEP", "5"))
+WEIGHT_TEXT_MAX = 800
+
+
 def default_weights() -> dict:
     """A fresh, mutable copy of the default weight table."""
     return copy.deepcopy(_DEFAULT_WEIGHTS)
@@ -468,6 +484,17 @@ EMAIL_FROM = _env("EMAIL_FROM", "")
 # Demo redirect: while set, every email goes to this address only (subject and body name the intended recipient).
 # Set DEMO_EMAIL_TO= (empty) to turn the redirect off.
 DEMO_EMAIL_TO = os.getenv("DEMO_EMAIL_TO", "you@example.com").split("#", 1)[0].strip()
+# Prototype deployment (docs/deploy.md): the API refuses to start without the demo redirect.
+REQUIRE_DEMO_EMAIL_TO = _env("REQUIRE_DEMO_EMAIL_TO", "0") == "1"
+
+# --- Spending and abuse limits (deploy item 6) --------------------------------------------------------------------
+# Daily request caps on the paid providers (core/spend.py); 0 = no paid calls. Free tiers keep their own limits.
+JEV_DAILY_MAX_REQUESTS = int(_env("JEV_DAILY_MAX_REQUESTS", "300"))
+CLAUDE_DAILY_MAX_REQUESTS = int(_env("CLAUDE_DAILY_MAX_REQUESTS", "20"))
+# Uploads per client address per hour (resume/LinkedIn, job descriptions, market postings); 0 = no limit.
+UPLOAD_RATE_PER_HOUR = int(_env("UPLOAD_RATE_PER_HOUR", "20"))
+# Behind the reverse proxy, the client address is the first X-Forwarded-For entry (set TRUST_PROXY=1 only there).
+TRUST_PROXY = _env("TRUST_PROXY", "0") == "1"
 REJECTION_MAX_WORDS = 150
 SCHEDULING_MAX_WORDS = 120
 
@@ -486,7 +513,8 @@ MESSAGE_MAX_WORDS = 120                                  # nudge, answer and off
 MARKET_SOURCES = ROOT / "config" / "market_sources.yaml"
 MARKET_SYNONYMS = ROOT / "config" / "market_synonyms.json"     # reviewed synonym map (versioned, not in data/)
 MARKET_FIXTURES = ROOT / "tests" / "fixtures" / "market"        # test mode: hand-labelled postings, no model
-MARKET_EXTRACT_MODEL = _env("MARKET_EXTRACT_MODEL", "gemini/gemini-3.8-flash")   # once per new posting, cached
+# Once per new posting, cached. The document route, so a model at its daily limit fails over to the next one.
+MARKET_EXTRACT_MODEL = _env("MARKET_EXTRACT_MODEL", "route:extract_document")
 MARKET_SUMMARY_MODEL = _env("MARKET_SUMMARY_MODEL", "gemini/gemini-3.8-flash")   # scope/complexity/description per version
 MARKET_MERGE_MODEL = _env("MARKET_MERGE_MODEL", "gemini/gemini-3.5-flash-lite")  # proposes merges for leftover names
 MARKET_MERGE_BATCH = 40
@@ -496,8 +524,6 @@ FETCH_DAYS = 7                                          # weekly fetch; only upd
 REQ_SHARE = float(_env("REQ_SHARE", "0.5"))             # required if listed as required by ≥ this share (proposal)
 PREF_SHARE = float(_env("PREF_SHARE", "0.2"))           # preferred if listed at all by ≥ this share (proposal)
 MARGIN = float(_env("MARGIN", "0.05"))                  # hysteresis: a category changes only past threshold ± margin
-MIN_COMPANIES = int(_env("MIN_COMPANIES", "8"))
-MIN_POSTINGS = int(_env("MIN_POSTINGS", "20"))
 TIER_WEIGHTS = {"large": 1.0, "mid": 1.0, "startup": 1.0}   # equal by default
 DEDUPE_SIMILARITY = 0.92                                # same company + this text similarity = one posting
 MARKET_USER_AGENT = "RightStaff-market-baseline/0.1 (local research mock; weekly)"

@@ -340,7 +340,7 @@ def _li_dates(text: str) -> str:
 
 def linkedin_export_pdf(md: str, path: Path, total: int | None = None) -> None:
     """The LinkedIn section laid out like LinkedIn's own "Save to PDF": a dark sidebar (Contact, Top Skills,
-    Certifications) in white text, and a main column with the name (26 pt), headline, grey location, section headings
+    Certifications, Honors-Awards) in white text, and a main column with the name (26 pt), headline, grey location, section headings
     (15.8 pt) and entries: employer (12), title (11.5), dates (10.5), description (10.5). Roles at one employer share
     its line. All information of the section is kept (skills and credential lines included)."""
     from reportlab.lib.pagesizes import LETTER
@@ -417,6 +417,7 @@ def linkedin_export_pdf(md: str, path: Path, total: int | None = None) -> None:
         if extra:
             certs.append(extra)
     side_block("Certifications", certs)
+    side_block("Honors-Awards", entries.get("honors-awards", []))
 
     y = H - 60
     c.setFillColorRGB(*dark)

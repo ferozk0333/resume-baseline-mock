@@ -54,8 +54,12 @@ def env(tmp_path, monkeypatch):
         yield type("Env", (), {"api": client, "judge": judge, "llm": llm, "planner": planner, "path": path})
 
 
+ORIGINAL_ROLES = ("baseline-ai-engineer-entry", "baseline-data-scientist-entry", "baseline-product-manager-entry")
+
+
 def roles(api) -> list[str]:
-    return [b["id"] for b in api.get("/baselines").json()]
+    """The three original roles, in the order the API lists them (a candidate targets at most 3)."""
+    return [b["id"] for b in api.get("/baselines").json() if b["id"] in ORIGINAL_ROLES]
 
 
 def new_profile(api, name="Ada"):
@@ -315,7 +319,8 @@ def test_details_never_change_scores_or_pools(env):
 
 def test_only_the_candidate_module_reads_application_details():
     """Scoring, judging, extraction, pools, the plan, the recruiter side and the market never touch the table."""
-    allowed = {ROOT / "backend" / "candidate.py", ROOT / "core" / "db.py"}
+    allowed = {ROOT / "backend" / "candidate.py", ROOT / "core" / "db.py",
+               ROOT / "scripts" / "purge_person.py"}                     # deletes a person's rows; reads nothing out
     hits = []
     for folder in ("backend", "core", "scoring", "judges", "extraction", "graph", "market", "ingest", "scripts"):
         for f in (ROOT / folder).rglob("*.py"):

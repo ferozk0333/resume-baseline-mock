@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProgressPanel } from "@/components/app/progress-panel";
 import { SubcategoryRow } from "@/components/app/score/subcategory-row";
+import { DimensionComputation, FinalComputation, useComputation } from "@/components/app/score/computation";
 import { WeightsDrawer } from "@/components/app/score/weights-drawer";
 import { useTask } from "@/hooks/use-task";
 import { DIMENSIONS, get, post, titleCase, type Baseline, type Benchmarks, type Pct, type RunView, type Weights } from "@/lib/api";
@@ -29,6 +30,7 @@ export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { i
   const [confirm, setConfirm] = useState(false);
   const [rejudgeTask, setRejudgeTask] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const computation = useComputation(id, weights, !!view?.audit && view?.run.status !== "running");
 
   useEffect(() => {
     get<RunView>(`/runs/${id}`).then((v) => {
@@ -102,8 +104,7 @@ export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { i
           {onOpenPlan ? <h2 className="text-lg font-semibold tracking-tight">Score</h2>
             : <h1 className="text-2xl font-semibold tracking-tight">Score</h1>}
           <p className="text-sm text-muted-foreground">Against {baseline?.title ?? "…"} ({baseline?.level ?? ""})
-            {pct?.demo_pool && <Badge variant="outline" className="ml-2 border-amber-300 bg-amber-50 text-amber-800"
-              title={`Comparisons use a small demo pool (minimum ${pct.min_pool}); real use needs at least 20.`}>demo pool</Badge>}
+            {pct?.demo_pool && <Badge variant="outline" className="ml-2 border-amber-300 bg-amber-50 text-amber-800">demo pool</Badge>}
           </p>
         </div>
         <div className="flex gap-2">
@@ -146,6 +147,7 @@ export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { i
           </Card>
         ))}
       </div>
+      <FinalComputation c={computation} />
 
       {DIMENSIONS.map((d) => (
         <Card key={d} className="gap-0 py-0">
@@ -153,8 +155,10 @@ export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { i
             <CardTitle className="text-base">{titleCase(d)}</CardTitle>
           </CardHeader>
           <div>
-            {view.subcategories.filter((s) => s.dimension === d).map((s) => <SubcategoryRow key={s.key} sub={s} technical={technical} />)}
+            {view.subcategories.filter((s) => s.dimension === d).map((s) => <SubcategoryRow key={s.key} sub={s}
+              technical={technical} computation={computation?.subcategories[s.key]} />)}
           </div>
+          <DimensionComputation d={computation?.dimensions[d]} label={titleCase(d)} />
         </Card>
       ))}
 
@@ -165,7 +169,7 @@ export function ScoreView({ id, onOpenPlan, onRescored, technical = false }: { i
           <DialogHeader>
             <DialogTitle>Check everything again?</DialogTitle>
             <DialogDescription>
-              Saved answers for this role are cleared and every part of your profile is checked again. This takes a few minutes.
+              This takes a few minutes.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

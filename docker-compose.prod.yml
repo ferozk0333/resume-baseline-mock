@@ -1,0 +1,56 @@
+# Prototype deployment on one host (docs/deploy.md): API, web app and a reverse proxy on :80.
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Data (database, uploads, the judgment archive) lives in ./data on the host, which git never touches.
+name: rightstaff
+
+services:
+  api:
+    build: { context: ., dockerfile: Dockerfile }
+    image: rightstaff-api
+    restart: always
+    env_file: ${RS_ENV_FILE:-.env}          # the server's .env (local checks point this elsewhere)
+    environment:
+      RIGHTSTAFF_DB: /app/data/demo.db
+      RIGHTSTAFF_UPLOADS: /app/data/uploads
+      TRUST_PROXY: "1"
+      REQUIRE_DEMO_EMAIL_TO: "1"
+    volumes:
+      - ${RS_DATA_DIR:-./data}:/app/data
+    expose: ["8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).read() == b'ok' else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  web:
+    build:
+      context: ./frontend
+      args: { NEXT_PUBLIC_API_URL: /api }
+    image: rightstaff-web
+    restart: always
+    expose: ["3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  proxy:
+    image: caddy:2-alpine
+    restart: always
+    ports: ["80:80"]
+    environment:
+      PROXY_MAX_BODY_MB: ${PROXY_MAX_BODY_MB:-21}       # 2 × UPLOAD_MAX_MB + 1
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

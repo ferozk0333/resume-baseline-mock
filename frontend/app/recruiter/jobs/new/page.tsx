@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Copy, FilePlus2, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Stepper } from "@/components/app/jobs/job-form";
@@ -49,7 +49,6 @@ export default function NewJob() {
           <CardHeader>
             <FileText className="size-5 text-primary" />
             <CardTitle className="text-base">Upload or paste a job description</CardTitle>
-            <CardDescription>PDF, DOCX or text. Fields are filled for you and marked “From JD”; everything stays editable.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <FileDrop id="jd-file" label="File" what="job description" accept={[".pdf", ".docx", ".txt", ".md"]}
@@ -62,14 +61,13 @@ export default function NewJob() {
             <Button disabled={busy !== null || (!file && text.trim().length < 200)} onClick={readJd}>
               {busy === "jd" ? <><Loader2 className="animate-spin" /> Reading…</> : "Read job description"}
             </Button>
-            {busy === "jd" && <p className="text-xs text-muted-foreground">One model call, usually 10–30 seconds.</p>}
+            {busy === "jd" && <p className="text-xs text-muted-foreground">Usually 10–30 seconds.</p>}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <Copy className="size-5 text-primary" />
             <CardTitle className="text-base">Copy an existing job</CardTitle>
-            <CardDescription>Any job or a role template. Opens prefilled; change what differs.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <select aria-label="Job to copy" value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}
@@ -99,7 +97,6 @@ export default function NewJob() {
           <CardHeader>
             <FilePlus2 className="size-5 text-primary" />
             <CardTitle className="text-base">Start from scratch</CardTitle>
-            <CardDescription>An empty form. Saved as a draft as you type.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button variant="outline" disabled={busy !== null} onClick={() => go("scratch", () => post<JobForm>("/jobs/drafts"))}>

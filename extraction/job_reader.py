@@ -234,13 +234,15 @@ def check(raw: JobExtract, text: str) -> dict:
             "good_quotes": good_quotes, "responsibilities": resp, "dropped": dropped}
 
 
+UNREAD = "The job description could not be read. Fill in the form; the job description is on the right to copy from."
+
+
 def read_job(llm, text: str, model: str | None = None) -> dict:
     """One JOB_EXTRACT_MODEL call (or `model`, e.g. MARKET_EXTRACT_MODEL) + code checks.
     {"status": "ok", ...} or {"status": "unavailable", "notice"}."""
     model = model or config.JOB_EXTRACT_MODEL
     if llm is None:
-        return {"status": "unavailable", "notice": "Reading job descriptions needs a model (JOB_EXTRACT_MODEL). "
-                                                    "Fill in the form; the job description is on the right to copy from."}
+        return {"status": "unavailable", "notice": UNREAD}
     try:
         raw = llm.parse(model=model, system=load_prompt("job_extract_system"),
                         user=wrap_tag("job_description", text), output_type=JobExtract)
@@ -248,6 +250,5 @@ def read_job(llm, text: str, model: str | None = None) -> dict:
         if not isinstance(exc, LLMError):
             log.exception("job description reading failed")
         log.warning("job description model unavailable: %s", exc)
-        return {"status": "unavailable", "notice": f"The job description could not be read automatically ({exc}). "
-                                                    "Fill in the form; the job description is on the right to copy from."}
+        return {"status": "unavailable", "notice": UNREAD}
     return {"status": "ok", "model": model, **check(raw, text)}

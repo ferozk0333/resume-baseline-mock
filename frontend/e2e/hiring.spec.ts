@@ -72,7 +72,7 @@ test("hiring workflow: invite → reply → slot → feedback → advance", asyn
   await step.getByRole("button", { name: /Summarize feedback/ }).click();
 
   await expect(step.getByRole("heading", { name: "Decide the next step" })).toBeVisible();
-  await expect(step.getByText("The summary makes no recommendation.")).toBeVisible();
+  await expect(step.getByText(/makes no recommendation|summarized by|code summary/)).toHaveCount(0);   // cleanup round
   await page.screenshot({ path: "e2e/.tmp/wf-7-decide.png" });
   await step.getByRole("button", { name: /^Advance to Interview/ }).click();
   await expect(step.getByRole("heading", { name: "Approve scheduling email" })).toBeVisible();
@@ -87,7 +87,7 @@ test("hiring workflow: invite → reply → slot → feedback → advance", asyn
 
 // Report screenshots: Tasks with several kinds of steps, the board with status badges, the .ics email in the Outbox.
 test("tasks and board across several workflows", async ({ page, request }) => {
-  const API = "http://localhost:8010";
+  const API = process.env.E2E_API ?? "http://localhost:8010";
   await page.setViewportSize({ width: 1440, height: 900 });
   const jobs = await (await request.get(`${API}/jobs`)).json();
   const job = jobs.find((j: { title: string }) => j.title === "AI Engineer");

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: "standalone",          // production image (frontend/Dockerfile): server.js with only the files it needs
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

@@ -35,8 +35,7 @@ export function EmailEditor({ email, subject, body, onSubject, onBody, limit }: 
       )}
       {email.template && (email.checks.model_errors?.length ?? 0) > 0 && (
         <p className="text-xs text-muted-foreground">
-          Template used because the model draft {email.checks.model_errors!.some((e) => e.startsWith("model unavailable"))
-            ? "was unavailable" : "failed the checks twice"}.
+          Template used.
         </p>
       )}
     </div>
@@ -52,9 +51,8 @@ export function SendNotice() {
     <p className="flex items-start gap-1.5 rounded-md bg-sky-50 px-2.5 py-1.5 text-xs text-sky-900">
       <Mail className="mt-0.5 size-3.5 shrink-0" />
       <span>
-        {cfg.provider === "outbox" ? "Outbox mode: sent emails are stored and shown on the Outbox page; nothing leaves this machine."
-          : "SMTP: Send delivers the email."}
-        {cfg.demo_redirect && <> Demo redirect on: every email goes to {cfg.demo_redirect} only.</>}
+        {cfg.provider === "outbox" ? "Emails are kept in the Outbox; nothing is delivered." : "Send delivers the email."}
+        {cfg.demo_redirect && <> Demo: every email goes to the demo inbox only.</>}
       </span>
     </p>
   );

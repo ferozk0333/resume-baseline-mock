@@ -438,12 +438,12 @@ class ClaimsLLM:
         from extraction.parse.resume import SkillNames
         self.calls.append(user)
         assert output_type is SkillNames and "<bullets>" in user
-        return SkillNames.model_validate({"names": [{"name": "Metabase", "bullet": 1},
-                                                    {"name": "Metabase BI", "bullet": 1}]})
+        return SkillNames.model_validate({"names": [{"name": "Sisense", "bullet": 1},
+                                                    {"name": "Sisense BI", "bullet": 1}]})
 
 
 SHADOW_RESUME = ["Ada Lovelace", "ada@example.com", "EXPERIENCE", "Data Analyst | Acme Retail    Jan 2023 - Present",
-                 "- Set up Metabase views that the sales team reads every Monday morning.",
+                 "- Set up Sisense views that the sales team reads every Monday morning.",
                  "- Built a churn model in Python and scikit-learn that cut churn 12%.", "SKILLS",
                  "Languages: SQL, Tableau"]
 
@@ -467,8 +467,8 @@ def test_shadow_calls_are_off_by_default_and_on_ask_jev_and_the_claims_call(monk
     res = parse_resume("cv.pdf", pdf.read_bytes(), text, VOCAB, lab, llm=llm)
     claims = {c.name: res.method_of(c) for c in res.extract.claims}
     assert claims["Python"] == "jev" and claims["scikit-learn"] == "jev"          # vocabulary names, Jev-confirmed
-    assert claims["Metabase"] == "llm" and "Metabase BI" not in claims       # verbatim only
-    assert len(llm.calls) == 1 and "Metabase views" in llm.calls[0] and "churn model" not in llm.calls[0]
+    assert claims["Sisense"] == "llm" and "Sisense BI" not in claims       # verbatim only
+    assert len(llm.calls) == 1 and "Sisense views" in llm.calls[0] and "churn model" not in llm.calls[0]
     assert res.report.llm_calls == 1
 
     monkeypatch.setattr(config, "PARSE_SHADOW_CALLS", True)
@@ -546,3 +546,31 @@ def test_no_gain_gate_for_keyword_stuffers_and_padded_profiles(tmp_path):
         "PM1": {"control": 87.7, "parser": 89.7, "control_cid": same_a, "cid": same_b}})       # not a stuffer
     assert [ln.rsplit("→ ", 1)[1] for ln in lines] == ["FAIL", "PASS", "PASS"]
     assert "gained with the same evidence text" in lines[0]
+
+
+LINKEDIN_HONORS_MD = LINKEDIN_MD.replace("Licenses & certifications", """Honors-Awards
+- Dean's Merit Scholarship Award for outstanding academic performance
+- Marion and Theo Alder Endowed Fellowship
+
+Licenses & certifications""")
+
+
+def test_linkedin_honors_awards_become_award_claims_never_skills(tmp_path):
+    """Cleanup item 5: names under Honors-Awards (also when they wrap onto two lines) are awards, not skills, and no
+    screen lists an award among skills."""
+    from render_test_profiles import linkedin_export_pdf
+    path = tmp_path / "li-honors.pdf"
+    linkedin_export_pdf(LINKEDIN_HONORS_MD, path)
+    data = path.read_bytes()
+    text = normalize_document(path.name, data)
+    res = parse_linkedin(data, text, VOCAB, FakeLabeller(nobody))
+    assert res.report.ok, res.report.reasons
+    kinds = {c.name: c.kind for c in res.extract.claims}
+    assert kinds["Dean's Merit Scholarship Award for outstanding academic performance"] == "award"
+    assert kinds["Marion and Theo Alder Endowed Fellowship"] == "award"
+    assert [n for n, k in kinds.items() if k != "award"] == ["Excel", "SQL", "Power BI"]
+    profile, _ = validate_extraction(SourceDoc("e", "linkedin_pdf", text, "LinkedIn"), res.extract,
+                                     method_of=res.method_of)
+    from backend.recruiter import _evidence_items
+    listed = [i["text"] for i in _evidence_items(profile, {}) if i["kind"] == "listed"]
+    assert listed == ["Excel", "SQL", "Power BI"]

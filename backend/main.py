@@ -10,12 +10,13 @@ import importlib
 import json
 import logging
 import os
+import re
 from contextlib import contextmanager
 from typing import Literal
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend import media
@@ -47,7 +48,7 @@ def default_deps() -> Deps:
         raise RuntimeError("ANTHROPIC_API_KEY is not set in .env (or set LLM_PROVIDER=gemini).")
     return Deps(str(config.DB_PATH), get_judge(), llm=RoutedLLM(effort=config.EXTRACT_EFFORT), extraction_cache=True,
                 planner=RoutedLLM(max_tokens=config.PLAN_MAX_TOKENS, effort=config.PLAN_EFFORT),
-                writer=RoutedLLM(), job_llm=RoutedLLM(max_tokens=config.EXTRACT_MAX_TOKENS))
+                writer=RoutedLLM(), job_llm=RoutedLLM(max_tokens=config.EXTRACT_MAX_TOKENS), weights_llm=RoutedLLM())
 
 
 def build_deps() -> Deps:
@@ -164,6 +165,15 @@ class WeightsIn(BaseModel):
     weights: dict
 
 
+class WeightSuggestIn(BaseModel):
+    text: str
+    fresh: bool = False             # "Suggest again": bypass the cache
+
+
+class PostingUrlIn(BaseModel):
+    url: str
+
+
 class JobUpdate(BaseModel):
     weights: dict | None = None
     must_haves: list[str] | None = None
@@ -226,7 +236,7 @@ class ApplyIn(BaseModel):
 
 
 class RecomputeIn(BaseModel):
-    test: bool = False                   # no model: only postings whose extraction is cached or hand-labelled
+    test: bool | None = None             # None: the model only when a posting needs reading; True/False forces it
 
 
 class DecideIn(BaseModel):
@@ -273,10 +283,6 @@ class SaveJobPrefIn(BaseModel):
 
 class HideJobIn(BaseModel):
     reason: Literal["location", "salary", "role", "seniority", "other"] | None = None
-
-
-class MarketSettingsIn(BaseModel):
-    allow_test_versions: bool
 
 
 class WorkflowStart(BaseModel):
@@ -364,9 +370,45 @@ def start_ticker(state: State) -> None:
     threading.Thread(target=loop, name="workflow-tick", daemon=True).start()
 
 
+UPLOAD_PATHS = re.compile(r"^/candidates/[^/]+/onboard$|^/jobs/drafts/read$|^/market/[^/]+/postings(/from-url)?$")
+
+
+class UploadRateLimit:
+    """Per-address upload limit (deploy item 6): at most UPLOAD_RATE_PER_HOUR upload requests per client address in
+    any hour, kept in memory (the API runs as one process). Behind the proxy the address is the first X-Forwarded-For
+    entry (TRUST_PROXY=1); otherwise the socket's peer."""
+
+    def __init__(self, per_hour: int, clock=None):
+        import threading
+        import time
+        self.per_hour, self.clock = per_hour, clock or time.time
+        self.seen: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def address(request: Request) -> str:
+        fwd = request.headers.get("x-forwarded-for", "") if config.TRUST_PROXY else ""
+        return fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+    def wait_seconds(self, addr: str) -> int:
+        """0 and counted when allowed; else seconds until the oldest upload in the window ages out."""
+        now = self.clock()
+        with self._lock:
+            hits = [t for t in self.seen.get(addr, []) if now - t < 3600]
+            if len(hits) >= self.per_hour:
+                self.seen[addr] = hits
+                return int(3600 - (now - hits[0])) + 1
+            hits.append(now)
+            self.seen[addr] = hits
+            return 0
+
+
 def create_app(deps: Deps | None = None) -> FastAPI:
     from contextlib import asynccontextmanager
+    if config.REQUIRE_DEMO_EMAIL_TO and not config.DEMO_EMAIL_TO:
+        raise RuntimeError("DEMO_EMAIL_TO must be set: every email goes to that address only (REQUIRE_DEMO_EMAIL_TO=1).")
     state = State(deps)
+    uploads = UploadRateLimit(config.UPLOAD_RATE_PER_HOUR)
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -384,6 +426,22 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         except Exception as exc:                            # noqa: BLE001
             log.exception("request failed: %s %s", request.method, request.url.path)
             return JSONResponse(status_code=500, content={"detail": clean_error(exc)})
+
+    @app.middleware("http")
+    async def upload_rate_limit(request: Request, call_next):
+        if request.method == "POST" and config.UPLOAD_RATE_PER_HOUR > 0 and UPLOAD_PATHS.match(request.url.path):
+            wait = uploads.wait_seconds(UploadRateLimit.address(request))
+            if wait:
+                return JSONResponse(status_code=429, headers={"Retry-After": str(wait)}, content={
+                    "detail": f"Too many uploads from this address. Try again in {max(1, round(wait / 60))} min."})
+        return await call_next(request)
+
+    @app.get("/healthz", tags=["ops"], response_class=PlainTextResponse)
+    def healthz():
+        """Liveness for the proxy and Docker: the app answers and its database opens."""
+        with conn() as c:
+            c.execute("SELECT 1").fetchone()
+        return "ok"
 
     app.add_middleware(CORSMiddleware, allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
                        allow_methods=["*"], allow_headers=["*"])     # local mock: any local web port
@@ -1053,7 +1111,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                                             "finished_at", "logic_version", "plan_status")} | {"baseline_source": source},
                 "progress": {"done": sum(1 for x in subs if x["status"] != "pending"), "total": len(subs)},
                 "weights": weights, "final": agg.final, "dimensions": agg.dimensions, "subcategories": subs,
-                "gaps": [g.as_dict() for g in run_gaps(c, run["id"], weights)]}
+                "gaps": [g.as_dict() for g in run_gaps(c, run["id"], weights)], "audit": config.SCORE_AUDIT}
 
     @app.get("/runs/{run_id}", tags=["scoring"])
     def get_run(run_id: str):
@@ -1078,6 +1136,27 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 return run_view(c, run, body.weights)
             except (KeyError, TypeError) as exc:
                 raise HTTPException(422, f"weights are incomplete: missing {exc}") from exc
+
+    def computation_view(run_id: str, weights: dict | None):
+        """How each score was computed (SCORE_AUDIT): read-only, from saved data, no model call."""
+        if not config.SCORE_AUDIT:
+            raise HTTPException(404, "The computation view is turned off (SCORE_AUDIT=0).")
+        from graph.audit import computation
+        with conn() as c:
+            run_row(c, run_id)
+        try:
+            return computation(state.db_path, run_id, weights)
+        except (KeyError, TypeError) as exc:
+            raise HTTPException(422, f"weights are incomplete: missing {exc}") from exc
+
+    @app.get("/runs/{run_id}/computation", tags=["scoring"])
+    def get_computation(run_id: str):
+        return computation_view(run_id, None)
+
+    @app.post("/runs/{run_id}/computation", tags=["scoring"])
+    def post_computation(run_id: str, body: WeightsIn):
+        """The same with the weights on the sliders (dimension and final arithmetic follow them)."""
+        return computation_view(run_id, body.weights)
 
     @app.put("/runs/{run_id}/weights", tags=["scoring"])
     def save_weights(run_id: str, body: WeightsIn):
@@ -1405,10 +1484,9 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                                            "placeholders": sum(c2.placeholder for c2 in r.companies),
                                            "fetchable": sum(1 for c2 in r.companies if not c2.placeholder and
                                                             c2.source != "manual" and c2.source_id)}})
-            return {"roles": out, "allow_test_versions": mb.allow_test_versions(c),
+            return {"roles": out,
                     "thresholds": {"WINDOW_DAYS": config.WINDOW_DAYS, "REQ_SHARE": config.REQ_SHARE,
-                                   "PREF_SHARE": config.PREF_SHARE, "MARGIN": config.MARGIN,
-                                   "MIN_COMPANIES": config.MIN_COMPANIES, "MIN_POSTINGS": config.MIN_POSTINGS}}
+                                   "PREF_SHARE": config.PREF_SHARE, "MARGIN": config.MARGIN}}
 
     @app.get("/market/{role}/versions", tags=["market"])
     def market_versions(role: str):
@@ -1442,6 +1520,20 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             return market_call(mp.add_manual, c, r, company=company, tier=tier, title=title, text=text or "", url=url,
                                posted_at=posted_at)
 
+    @app.post("/market/{role}/postings/from-url", tags=["market"])
+    def market_from_url(role: str, body: PostingUrlIn):
+        """Read a posting's page to fill the Add form (job-board APIs, schema.org, else the page text). Code only, no
+        model call, nothing saved: the recruiter checks the fields and adds the posting."""
+        from market import from_url
+        r = role_or_404(role)
+        try:
+            got = from_url.read(body.url)
+        except from_url.UrlError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        known = next((c for c in r.companies if not c.placeholder and c.name.lower() == got["company"].lower()), None)
+        return {**got, "tier": known.tier if known else None, "title_matches": r.title_matches(got["title"]),
+                "role_title": r.title}
+
     @app.post("/market/{role}/fetch", tags=["market"])
     def market_fetch(role: str):
         """Read the role's public job boards now (normally weekly). No model calls."""
@@ -1456,7 +1548,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
         def work():
             with conn() as c:
-                return mb.recompute(c, r, llm=state.job_llm, test=bool(body and body.test))
+                return mb.recompute(c, r, llm=state.job_llm, test=body.test if body else None)
         return await asyncio.to_thread(work)
 
     @app.post("/market/{role}/fixtures", tags=["market"])
@@ -1472,7 +1564,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             v = mb.get_version(c, vid) or not_found("Version")
             r = msrc.load()[v["role"]]
             return {**v, "diff": mb.diff(c, vid), "side_by_side": mb.side_by_side(c, r, vid), "role_title": r.title,
-                    "can_publish": (not v["insufficient"] or mb.allow_test_versions(c)) and v["status"] == "draft"}
+                    "can_publish": v["status"] == "draft"}
 
     @app.post("/market/versions/{vid}/publish", tags=["market"])
     def market_publish(vid: str):
@@ -1510,12 +1602,6 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 raise HTTPException(409, est)
             mb.set_setting(c, f"source:{role}", body.source)
             return {"source": body.source, **est}
-
-    @app.put("/market/settings", tags=["market"])
-    def market_settings(body: MarketSettingsIn):
-        with conn() as c:
-            mb.set_setting(c, "allow_test_versions", "1" if body.allow_test_versions else "0")
-            return {"allow_test_versions": body.allow_test_versions}
 
     @app.get("/runs/{run_id}/baselines", tags=["market"])
     def run_baselines(run_id: str):
@@ -1573,6 +1659,59 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                 return rc.update_job(c, job_id, weights=body.weights, must_haves=body.must_haves, preset=body.preset)
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
+
+    # --- Weight assistant (specs/21): suggest → preview → Apply / Discard → Undo. Nothing changes until Apply. ---
+
+    def suggestion_or_404(c, job_id: str, sid: str) -> dict:
+        from backend import weight_assistant as wa
+        return wa.get(c, job_id, sid) or not_found("Suggestion")
+
+    @app.post("/jobs/{job_id}/weight-suggestions", tags=["recruiter"])
+    def suggest_weights(job_id: str, body: WeightSuggestIn):
+        """One model call (or the cache): weights only, from the recruiter's text and the job's title, level and
+        weights. No applicant data is sent. The preview re-aggregates saved scores; nothing is applied."""
+        from backend import weight_assistant as wa
+        with conn() as c:
+            j = job_or_404(c, job_id)
+            try:
+                out = wa.suggest(c, state.deps.weights_llm, j, body.text, fresh=body.fresh)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            if out["status"] != "ok":
+                return out
+            return {"status": "ok", "suggestion": wa.view(c, j, wa.get(c, job_id, out["id"]))}
+
+    @app.get("/jobs/{job_id}/weight-suggestions", tags=["recruiter"])
+    def weight_suggestion_history(job_id: str):
+        from backend import weight_assistant as wa
+        with conn() as c:
+            job_or_404(c, job_id)
+            return wa.history(c, job_id)
+
+    @app.get("/jobs/{job_id}/weight-suggestions/{sid}", tags=["recruiter"])
+    def weight_suggestion(job_id: str, sid: str):
+        """Re-open a suggestion: changes and preview against the job's weights now."""
+        from backend import weight_assistant as wa
+        with conn() as c:
+            j = job_or_404(c, job_id)
+            return wa.view(c, j, suggestion_or_404(c, job_id, sid))
+
+    @app.post("/jobs/{job_id}/weight-suggestions/{sid}/apply", tags=["recruiter"])
+    def apply_weight_suggestion(job_id: str, sid: str):
+        from backend import weight_assistant as wa
+        with conn() as c:
+            j = job_or_404(c, job_id)
+            return {"job": wa.apply(c, j, suggestion_or_404(c, job_id, sid))}
+
+    @app.post("/jobs/{job_id}/weight-suggestions/{sid}/undo", tags=["recruiter"])
+    def undo_weight_suggestion(job_id: str, sid: str):
+        from backend import weight_assistant as wa
+        with conn() as c:
+            j = job_or_404(c, job_id)
+            try:
+                return {"job": wa.undo(c, j, suggestion_or_404(c, job_id, sid))}
+            except ValueError as exc:
+                raise HTTPException(409, str(exc)) from exc
 
     @app.get("/jobs/{job_id}/applicants", tags=["recruiter"])
     def applicants(job_id: str, sort: str = "match", status: str | None = None, all_must_haves: bool = False,
@@ -1779,10 +1918,10 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     @app.get("/workflows/inbox", tags=["hiring"])
     def inbox_status():
-        """Whether replies are read from the demo inbox, and the last poll (also in the API log: "inbox:")."""
+        """Whether replies are read from the demo inbox, and when it was last checked. Never the address itself."""
         last = getattr(state._hiring, "last_poll", None) if state._hiring else None
-        return {"enabled": config.REPLY_INBOX == "imap", "every_minutes": config.IMAP_POLL_MINUTES,
-                "user": config.IMAP_USER or None, "last_poll": last}
+        return {"enabled": config.REPLY_INBOX == "imap",
+                "last_check": {"at": last["at"], "failed": bool(last.get("error"))} if last else None}
 
     @app.get("/recruiter/tasks", tags=["hiring"])
     def recruiter_tasks():
@@ -1864,18 +2003,20 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
 
-    @app.get("/candidates/{candidate_id}/files/resume", tags=["candidates"])
-    def resume_file(candidate_id: str):
-        """The uploaded (or rendered demo) resume, for the inline viewer."""
+    @app.get("/candidates/{candidate_id}/files/{kind}", tags=["candidates"])
+    def candidate_file(candidate_id: str, kind: Literal["resume", "linkedin"]):
+        """The uploaded (or rendered demo) resume or LinkedIn PDF, for the recruiter's inline viewer."""
         from fastapi.responses import FileResponse
+        etype = {"resume": "resume", "linkedin": "linkedin_pdf"}[kind]
         with conn() as c:
-            ev = next((e for e in store.list_evidence(c, candidate_id) if e["type"] == "resume" and e["file_path"]), None)
+            ev = next((e for e in store.list_evidence(c, candidate_id) if e["type"] == etype and e["file_path"]), None)
         if ev is None or not os.path.exists(ev["file_path"]):
-            not_found("Resume file")
-        kind = "application/pdf" if ev["file_path"].endswith(".pdf") else \
+            not_found("Resume file" if kind == "resume" else "LinkedIn PDF")
+        ext = ev["file_path"].rsplit(".", 1)[-1].lower()
+        media = "application/pdf" if ext == "pdf" else \
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        return FileResponse(ev["file_path"], media_type=kind,
-                            headers={"Content-Disposition": f'inline; filename="resume.{ev["file_path"].rsplit(".", 1)[-1]}"'})
+        return FileResponse(ev["file_path"], media_type=media,
+                            headers={"Content-Disposition": f'inline; filename="{kind}.{ext}"'})
 
     @app.get("/config/mode", tags=["scoring"])
     def mode():

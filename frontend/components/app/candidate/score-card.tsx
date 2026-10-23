@@ -99,7 +99,7 @@ export function RoleScoreCard({ card, onOpenPlan, children }: { card: ScoreCard;
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
                     {card.plan_status === "failed" ? "Your plan could not be prepared. Your biggest gaps so far:"
-                      : "Your plan for this role is prepared when you open it. Your biggest gaps so far:"}
+                      : "Your biggest gaps so far:"}
                   </p>
                   <ol className="space-y-2">
                     {card.gaps.map((g, i) => (

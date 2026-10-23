@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import date
 
 from core import config, db
@@ -26,7 +27,7 @@ TAG_MIN_SCORE = 0.8               # proposal (specs/11 §5): subcategory scores 
 MAX_TAGS = 3
 STALE_YEARS = 3                   # proposal (specs/11 §6.2): best evidence older than this → a question
 TEMPLATE_MODEL = "template-v1"
-DEMO_LABELS = {"demo_parsed": "Demo data: parsed from structured profile",
+DEMO_LABELS = {"demo_parsed": "Demo data",
                "archetype": "Test archetype"}
 STATUSES = ("new", "shortlisted", "in_loop", "not_moving_forward")
 # [OPEN] presets: storage and UI exist, but every preset equals the team table until the team sets values.
@@ -231,7 +232,7 @@ def _evidence_items(profile: Profile, evidence: dict) -> list[dict]:
         items.append({"text": c.name, "kind": "certification", "id": c.id, "source": "certification", "link": None,
                       "quote": c.name})
     for c in profile.claims:
-        if c.bullet_id is None:
+        if c.bullet_id is None and c.kind in ("skill", "tool"):          # awards are not a skills list
             items.append({"text": c.name_raw, "kind": "listed", "id": c.id, "source": "skills list", "link": None,
                           "quote": c.name_raw})
     return items
@@ -465,7 +466,8 @@ def panel(conn, app: dict, job: dict) -> dict:
                       "own_commits": p.own_commits, "fork": bool(p.is_fork), "counted": not (p.is_fork and not p.own_commits),
                       "last_update": pushed[:7] or None, "readme_excerpt": readme[:280] or None})
     linkedin = next((e for e in evidence if e["type"] == "linkedin_pdf"), None)
-    portfolio = [p for p in profile.projects if any(e["id"] == p.evidence_id and e["type"] == "portfolio" for e in evidence)]
+    portfolio_ids = {e["id"] for e in evidence if e["type"] == "portfolio"}
+    portfolio = [p for p in profile.projects if portfolio_ids & {p.evidence_id, *p.sources}]
     resume = next((e for e in evidence if e["type"] == "resume"), None)
     row = applicant_row(conn, app, job)
     from scoring import benchmarks
@@ -481,6 +483,8 @@ def panel(conn, app: dict, job: dict) -> dict:
         "generated_label": "Demo text" if scores else None,
         "requirements": reqs,
         "dimensions": agg.dimensions if agg else None,
+        # The Computation block (SCORE_AUDIT): the run and the job's weights it is aggregated with.
+        "audit": {"run_id": app["run_id"], "weights": job["weights"]} if config.SCORE_AUDIT and scores else None,
         "subcategories": [{"key": s, "label": config.SUBCATEGORY_LABELS[s], "dimension": config.SUBCATEGORY_DIMENSION[s],
                            **{k: v for k, v in scores[s].items() if k != "details"},
                            "effective_weight": agg.effective_weights.get(s, 0.0),
@@ -491,7 +495,10 @@ def panel(conn, app: dict, job: dict) -> dict:
             "repos": repos,
             "portfolio": [{"name": p.name, "description": p.description, "url": p.url} for p in portfolio],
             "portfolio_url": cand.get("portfolio_url"),
-            "linkedin": json.loads(linkedin["extracted_json"]) if linkedin and linkedin["extracted_json"] else None,
+            # The LinkedIn tab shows the uploaded PDF itself (cleanup item 4), never a parsed list.
+            "linkedin_uploaded": linkedin is not None,
+            "linkedin_file": bool(linkedin and linkedin["file_path"] and linkedin["file_path"].lower().endswith(".pdf")
+                                  and os.path.exists(linkedin["file_path"])),
             "linkedin_link": li.profile_link(cand, evidence),
             "resume_file": bool(resume and resume["file_path"]),
             "resume_file_kind": (resume["file_path"].rsplit(".", 1)[-1] if resume and resume["file_path"] else None),

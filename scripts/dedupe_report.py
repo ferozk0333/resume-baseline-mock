@@ -1,6 +1,6 @@
 """Phase C before/after report (specs/19 item 19), offline: no provider is called.
 
-    python scripts/dedupe_report.py [--db data/demo.db] [--candidate "Feroz Khan test 10"]
+    python scripts/dedupe_report.py [--db data/demo.db] [--candidate "<live profile name>"]
 
 Works on a scratch copy of the demo database. Judging is replayed (judges/replay_judge.py): a question gets the answer
 recorded for exactly the same input; a question never asked before is counted as "unrecorded" (a live run would ask
@@ -203,7 +203,7 @@ def stuffer_gate(results: dict) -> list[str]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default=str(ROOT / "data" / "demo.db"))
-    ap.add_argument("--candidate", default="Feroz Khan test 10")
+    ap.add_argument("--candidate", default=os.getenv("LIVE_PROFILE", ""))
     a = ap.parse_args()
     db_copy(Path(a.db), WORK)
     work = str(WORK)

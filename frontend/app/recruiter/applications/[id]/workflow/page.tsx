@@ -1,4 +1,5 @@
 "use client";
+import { LinkedText } from "@/components/app/ext-link";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -148,7 +149,7 @@ function Thread({ v }: { v: WorkflowView }) {
             </div>
             <details>
               <summary className="cursor-pointer font-medium">{m.subject}</summary>
-              <pre className="mt-1 font-[inherit] text-xs whitespace-pre-wrap">{m.body}</pre>
+              <pre className="mt-1 font-[inherit] text-xs whitespace-pre-wrap"><LinkedText text={m.body} /></pre>
             </details>
           </li>
         ))}

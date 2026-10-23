@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SendNotice } from "@/components/app/recruiter/email-editor";
 import { get, type Email } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { LinkedText } from "@/components/app/ext-link";
 
 const KIND: Record<string, string> = { not_moving_forward: "Not moving forward", scheduling: "Scheduling", stage: "Stage",
   nudge: "Nudge", answer: "Answer", confirmation: "Confirmation", offer: "Offer note" };
@@ -20,7 +21,6 @@ export default function OutboxPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Outbox</h1>
-        <p className="text-sm text-muted-foreground">Emails sent from the recruiter view, with their full text.</p>
       </div>
       <SendNotice />
       <div role="group" aria-label="Filter" className="flex w-fit rounded-lg border bg-muted p-0.5 text-sm">
@@ -55,7 +55,7 @@ export default function OutboxPage() {
                 </dl>
                 <details>
                   <summary className="cursor-pointer text-sm font-medium">{e.subject}</summary>
-                  <pre className="mt-2 rounded-md border bg-white p-3 font-[inherit] text-sm whitespace-pre-wrap">{e.body}</pre>
+                  <pre className="mt-2 rounded-md border bg-white p-3 font-[inherit] text-sm whitespace-pre-wrap"><LinkedText text={e.body} /></pre>
                 </details>
               </Card>
             </li>

@@ -1,0 +1,154 @@
+# Weight assistant sample set (specs/21 §7). Ten recruiter descriptions with the expected direction of change.
+#   up:      weights (dimension or subcategory keys) the suggestion should raise against the job's current weights
+#   ignored: phrases that must end up in "ignored" (protected or non-job-related)
+#   small:   a vague text: no weight should move by more than 10 points
+# `stub` is a hand-written stand-in for a model answer, used by the offline tests and the fake demo until the live
+# run (after the owner's go) records real ones. Stubs are not evidence that a model behaves this way.
+version: 1
+texts:
+  - id: projects_certs
+    text: "We want people with extensive project experience and certifications."
+    up: [expertise, work_samples, complexity, validation_strength]
+    stub:
+      dimensions: {experience: 25, expertise: 40, authority: 15, trust: 20}
+      subcategories:
+        expertise: {role_skills: 25, applied_knowledge: 25, tools: 15, complexity: 20, work_samples: 15}
+        trust: {proof_density: 30, validation_strength: 40, consistency: 20, evidence_quality: 10}
+      reasons:
+        expertise: "Project experience is the main ask."
+        work_samples: "Projects are best shown through work samples."
+        complexity: "Extensive projects suggest weighing problem difficulty."
+        validation_strength: "Certifications were asked for explicitly."
+        experience: "Lowered to make room for project evidence."
+        authority: "Not mentioned; lowered slightly."
+      summary: "Favors applicants with substantial projects and certifications with a credential link; employment history and leadership count a little less."
+  - id: senior_leads
+    text: "Senior people who've led teams and owned delivery end to end."
+    up: [authority, ownership, scope_of_impact]
+    stub:
+      dimensions: {experience: 30, expertise: 20, authority: 35, trust: 15}
+      subcategories:
+        authority: {outcomes: 20, impact: 20, ownership: 35, scope_of_impact: 20, recognition: 5}
+      reasons:
+        authority: "Leading teams and owning delivery is about ownership and reach."
+        ownership: "Explicitly wants people who owned delivery."
+        scope_of_impact: "Leading teams means work reaching beyond themselves."
+        expertise: "Lowered to make room for leadership."
+        trust: "Lowered slightly; not mentioned."
+      summary: "Puts leadership first: owning delivery and leading teams rank higher; individual skills and proof count a little less."
+  - id: stakeholders
+    text: "Someone who will work closely with product and stakeholders across teams."
+    up: [scope_of_impact]
+    stub:
+      dimensions: {experience: 30, expertise: 30, authority: 20, trust: 20}
+      subcategories:
+        authority: {outcomes: 25, impact: 25, ownership: 20, scope_of_impact: 25, recognition: 5}
+      reasons:
+        scope_of_impact: "Cross-team work with product and stakeholders."
+        outcomes: "Lowered to make room for cross-team reach."
+        impact: "Lowered to make room for cross-team reach."
+        recognition: "Not mentioned."
+      summary: "Raises the weight on work that reached other teams and stakeholders; dimensions stay as they are."
+  - id: shipped_metrics
+    text: "Measurable results matter most: show me numbers like latency cut, revenue or adoption."
+    up: [authority, outcomes, impact]
+    stub:
+      dimensions: {experience: 25, expertise: 25, authority: 35, trust: 15}
+      subcategories:
+        authority: {outcomes: 40, impact: 35, ownership: 15, scope_of_impact: 5, recognition: 5}
+      reasons:
+        authority: "Results are what the description values most."
+        outcomes: "Numbers and measurable results asked for."
+        impact: "Revenue and adoption are business impact."
+        experience: "Lowered to make room for results."
+        expertise: "Lowered to make room for results."
+        trust: "Lowered slightly."
+      summary: "Ranks applicants with measurable, business-relevant results higher; the other areas give up a little weight."
+  - id: hands_on_tools
+    text: "Hands-on with PyTorch, Docker and AWS; we care about the tools more than titles."
+    up: [expertise, tools]
+    stub:
+      dimensions: {experience: 20, expertise: 45, authority: 15, trust: 20}
+      subcategories:
+        expertise: {role_skills: 25, applied_knowledge: 25, tools: 30, complexity: 10, work_samples: 10}
+        experience: {relevance: 30, depth: 25, scope: 15, progression: 10, recency: 20}
+      reasons:
+        expertise: "Hands-on skill matters more than titles."
+        tools: "Specific tools named: PyTorch, Docker, AWS."
+        experience: "Titles matter less, as stated."
+        scope: "Titles matter less."
+        recency: "Hands-on work should be current."
+        relevance: "Titles matter less."
+        authority: "Lowered to make room for tools."
+      summary: "Puts hands-on tool use first and gives job titles less weight."
+  - id: verified
+    text: "We've been burned by inflated resumes, so verifiable claims and references matter."
+    up: [trust, proof_density, validation_strength]
+    stub:
+      dimensions: {experience: 25, expertise: 25, authority: 15, trust: 35}
+      subcategories:
+        trust: {proof_density: 35, validation_strength: 35, consistency: 25, evidence_quality: 5}
+      reasons:
+        trust: "Verifiable claims are the stated priority."
+        proof_density: "Claims should be backed by artifacts."
+        validation_strength: "References asked for."
+        experience: "Lowered to make room for proof."
+        expertise: "Lowered to make room for proof."
+        authority: "Lowered slightly."
+      summary: "Ranks applicants whose claims are backed and referenced higher; the other areas give up some weight."
+  - id: recent_relevant
+    text: "Recent, directly relevant industry experience; long gaps since the last relevant role are a concern."
+    up: [experience, relevance, recency]
+    stub:
+      dimensions: {experience: 40, expertise: 25, authority: 15, trust: 20}
+      subcategories:
+        experience: {relevance: 40, depth: 20, scope: 15, progression: 5, recency: 20}
+      reasons:
+        experience: "Relevant industry experience is the main ask."
+        relevance: "Directly relevant experience asked for."
+        recency: "Recent experience and gaps were mentioned."
+        depth: "Lowered to make room for relevance and recency."
+        scope: "Lowered slightly."
+        progression: "Not mentioned."
+        expertise: "Lowered to make room for experience."
+        authority: "Lowered slightly."
+      summary: "Favors recent, directly relevant work history; skills and results count a little less."
+  - id: protected_1
+    text: "Young, energetic native English speakers who are a great culture fit; strong Python and SQL."
+    up: [role_skills]
+    ignored: ["Young", "native English speakers", "culture fit"]
+    stub:
+      dimensions: {experience: 30, expertise: 35, authority: 15, trust: 20}
+      subcategories:
+        expertise: {role_skills: 35, applied_knowledge: 30, tools: 15, complexity: 10, work_samples: 10}
+      reasons:
+        expertise: "Python and SQL skills were asked for."
+        role_skills: "Python and SQL named as required skills."
+        complexity: "Lowered to make room for core skills."
+        authority: "Lowered slightly."
+      summary: "Uses only the skills request: Python and SQL weigh more."
+      ignored: ["Young", "energetic", "native English speakers", "culture fit"]
+  - id: protected_2
+    text: "Ideally an Ivy League grad with no kids so they can travel; must be able to deploy machine learning models."
+    up: [applied_knowledge]
+    ignored: ["Ivy League", "no kids"]
+    stub:
+      dimensions: {experience: 30, expertise: 35, authority: 15, trust: 20}
+      subcategories:
+        expertise: {role_skills: 25, applied_knowledge: 40, tools: 15, complexity: 10, work_samples: 10}
+      reasons:
+        expertise: "Deploying models is a hands-on requirement."
+        applied_knowledge: "Deploying ML models needs applied skill with results."
+        role_skills: "Lowered to favor applied evidence."
+        complexity: "Lowered slightly."
+        authority: "Lowered slightly."
+      summary: "Uses only the deployment requirement: applied machine-learning work weighs more."
+      ignored: ["Ivy League", "no kids"]
+  - id: vague
+    text: "A great engineer."
+    small: true
+    stub:
+      dimensions: {experience: 30, expertise: 30, authority: 20, trust: 20}
+      subcategories: {}
+      reasons: {}
+      summary: "The description is too general to change much; the weights stay close to the current ones."

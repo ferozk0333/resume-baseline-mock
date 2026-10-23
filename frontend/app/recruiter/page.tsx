@@ -62,7 +62,6 @@ export default function JobsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Jobs</h1>
-          <p className="text-sm text-muted-foreground">Applicants are ranked by match score. Open a job to review them.</p>
         </div>
         <Link href="/recruiter/jobs/new" className={buttonVariants()}><Plus /> Create job</Link>
       </div>
@@ -76,7 +75,7 @@ export default function JobsPage() {
       </div>
       {jobs === null ? <Skeleton className="h-48" /> : shown.length === 0 ? (
         <p className="rounded-xl border border-dashed bg-white px-4 py-8 text-center text-sm text-muted-foreground">
-          {tab === "draft" ? "No drafts. Create job saves a draft as you go." : tab === "closed" ? "No closed jobs." : "No open jobs yet."}
+          {tab === "draft" ? "No drafts." : tab === "closed" ? "No closed jobs." : "No open jobs yet."}
         </p>
       ) : (
         <div className="rounded-xl border bg-white">

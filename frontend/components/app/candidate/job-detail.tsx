@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { get, post, postedAgo, salaryText, WORKPLACE, type JobActivity, type JobDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { LinkedText } from "@/components/app/ext-link";
 
 /** "Preview" badge on every JobMatch number (specs/17 §1, §6). */
 export function PreviewBadge() {
@@ -100,8 +101,6 @@ export function JobDetailView({ cid, jobId, onChanged }: { cid: string; jobId: s
                 <div className="text-lg font-medium tabular-nums">{d.jobmatch.must_haves_met}/{d.jobmatch.must_haves_total}</div>
               </div>
             )}
-            <p className="min-w-0 flex-1 basis-60 text-sm text-muted-foreground">
-              Sample value. JobMatch compares your evidence to this job&apos;s requirements and is coming soon.</p>
           </div>
         ) : <p className="text-sm text-muted-foreground">JobMatch is coming soon.</p>}
         <p className="mt-3 border-t pt-3 text-sm" data-testid="baseline-under-jobmatch">
@@ -142,7 +141,7 @@ export function JobDetailView({ cid, jobId, onChanged }: { cid: string; jobId: s
         <h3 className="font-semibold">What would raise your match</h3>
         {d.raise.length > 0 ? (
           <>
-            {d.raise_fallback && <p className="text-sm text-muted-foreground">None of your plan&apos;s actions name this job&apos;s requirements; your top action:</p>}
+            {d.raise_fallback && <p className="text-sm text-muted-foreground">Your top action:</p>}
             <ol className="space-y-2">
               {d.raise.map((a, i) => (
                 <li key={i} className="rounded-xl border bg-white px-4 py-3 text-sm">
@@ -157,7 +156,7 @@ export function JobDetailView({ cid, jobId, onChanged }: { cid: string; jobId: s
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            {d.role.run_id ? <>Your plan for {d.role.title} is prepared when you open it. <Link
+            {d.role.run_id ? <><Link
               href={`/scores?role=${d.role.baseline_id}&tab=plan`} className="font-medium text-primary hover:underline">Open the plan</Link></>
               : "Add this role in My scores to get a plan for it."}
           </p>
@@ -167,7 +166,7 @@ export function JobDetailView({ cid, jobId, onChanged }: { cid: string; jobId: s
       {/* 5. About the job */}
       <section className="space-y-2 text-sm">
         <h3 className="font-semibold">About the job</h3>
-        {j.short_description && <p>{j.short_description}</p>}
+        {j.short_description && <p><LinkedText text={j.short_description} /></p>}
         {j.responsibilities?.length > 0 && (
           <div><h4 className="font-medium">What you&apos;ll do</h4>
             <ul className="mt-1 list-disc space-y-0.5 pl-5">{j.responsibilities.map((r, i) => <li key={i}>{r}</li>)}</ul></div>

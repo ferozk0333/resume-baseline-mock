@@ -1,6 +1,6 @@
 # Spec 18 — Speed, model failover, Jev-assisted extraction, prompt-injection screen
 
-Status: approved by Feroz (2026-10-16): "do it all". Phased; stop and report after each phase. Items marked **[verify]** must be checked against provider docs before building.
+Status: approved by the owner (2026-10-16): "do it all". Phased; stop and report after each phase. Items marked **[verify]** must be checked against provider docs before building.
 
 ## 0. Why
 **Measured (free tier):**
@@ -49,7 +49,7 @@ Not used: allam-2-7b, gpt-oss-safeguard-20b, speech models.
 
 **Rules:**
 - Never create extra projects or API keys to multiply quota.
-- Only Feroz's own or synthetic profiles go to free-tier providers.
+- Only the owner's own or synthetic profiles go to free-tier providers.
 - Before any live run, link Google's and Groq's free-tier data-use pages in the report.
 
 ## 2. Phase 1: routing, failover, fail fast, early start
@@ -90,7 +90,7 @@ No change to *how* questions are asked.
 **Report:**
 - expected calls per task and model for one onboarding (2 roles);
 - failover and fail-fast log lines;
-- then, **only after Feroz says go**, one live run on Feroz's resume with 2 roles, with per-step timings.
+- then, **only after the owner says go**, one live run on the owner's resume with 2 roles, with per-step timings.
 
 ## 3. Phase 2: fewer calls + routine use of new model families (flags, default OFF)
 10. **`GROUPED_ITEM_JUDGING`:**
@@ -115,7 +115,7 @@ No change to *how* questions are asked.
       - average seconds per call per model;
       - whether the ranking is still 1 > {3,4} > 2 > 5;
       - any failed DESIGN check.
-    - Feroz decides per flag.
+    - the owner decides per flag.
 
 ## 4. Phase 3: Code-first extraction (flags, default OFF). **Build this before Phase 2.**
 
@@ -186,7 +186,7 @@ No change to *how* questions are asked.
 
 ### 4.4 Acceptance gates ("works just as well as now")
 A flag can be turned on only if all of these pass. Compare against today's LLM extraction:
-26. **Reference** (`scripts/compare_extraction.py`, Feroz's resume and LinkedIn PDF in `tests/extraction_reference/`):
+26. **Reference** (`scripts/compare_extraction.py`, the owner's resume and LinkedIn PDF in `tests/extraction_reference/`):
     - no fewer items found;
     - no extra items that aren't in the source;
     - dates identical (or more precise);
@@ -201,7 +201,7 @@ A flag can be turned on only if all of these pass. Compare against today's LLM e
     - Report the pass/fallback/wrong counts per layout.
 29. **Timing and calls per source:** parser time, Jev calls, LLM calls, and how often the fallback is used.
 
-Report all gates per flag. Feroz decides per flag.
+Report all gates per flag. The owner decides per flag.
 
 ## 5. Phase 4: prompt-injection screen (never affects scores)
 20. **Hidden text, in code:**
@@ -217,7 +217,7 @@ Report all gates per flag. Feroz decides per flag.
     - **Hidden text that is also flagged:** stays removed. The candidate sees on Review: "We ignored hidden text in your <document>."
     - **Visible text that is flagged:** kept as is; logged for Admin only (new Admin page listing document, chunk and score).
     - **Never:** change a score, show recruiters a flag, or block onboarding or applying.
-    - AI Engineer READMEs often contain prompts, so expect false positives. Report the false-positive rate on the 16 test profiles and on Feroz's repos.
+    - AI Engineer READMEs often contain prompts, so expect false positives. Report the false-positive rate on the 16 test profiles and on the owner's repos.
 
 ## 6. Rules (all phases)
 - Scoring formulas, weights and `logic_version` v0.1 unchanged. Archetype regression identical. Jev confidence threshold unchanged.

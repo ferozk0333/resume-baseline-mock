@@ -31,7 +31,7 @@ def main() -> None:
     if v["content"]["material"] and not args.no_publish:
         try:
             v = mb.publish(conn, v["id"])
-            print(f"Published v{v['version']} ({'test version' if v['test_version'] else 'full'})")
+            print(f"Published v{v['version']} ({v['basis']})")
         except ValueError as exc:
             print("Not published:", exc)
     s = mb.side_by_side(conn, role, v["id"])

@@ -12,6 +12,7 @@ uploads/
 *.pyc
 .env.*
 !.env.example
+!.env.prod.example
 tests/fixtures/profiles/rendered/
 rightstaff-test-profiles/rendered/
 *.sqlite
@@ -23,3 +24,6 @@ tests/extraction_reference/*.json
 
 # Recruiter demo database and its uploads (make demo)
 data/
+
+# Local checks of the production stack (docs/deploy.md)
+.verify/

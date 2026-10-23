@@ -116,8 +116,8 @@ ask if wanted.
     public and unauthenticated, built for careers pages. None publishes a read rate limit or a separate terms page
     for third-party aggregation. The fetchers read each board once per weekly fetch, with an identifying User-Agent,
     and stop a board on 429. Please confirm this use is acceptable before adding real companies.
-14. **Market thresholds are proposals.** REQ_SHARE 0.5, PREF_SHARE 0.2, MARGIN 0.05, MIN_COMPANIES 8, MIN_POSTINGS 20,
-    equal tier weights. They are not tuned on any data.
+14. **Market thresholds are proposals.** REQ_SHARE 0.5, PREF_SHARE 0.2, MARGIN 0.05, equal tier weights (MIN_COMPANIES
+    and MIN_POSTINGS were removed in the cleanup round: no minimum data; a person publishes). They are not tuned on any data.
 15. **Synonym map location.** The spec names `data/market_synonyms.json`, but `data/` is gitignored (databases). The
     reviewed map lives in `config/market_synonyms.json` so approvals are versioned.
 16. **Baseline scores don't apply to demo jobs (specs/17).** Before, a real-judge run on a role baseline also applied
@@ -195,11 +195,11 @@ ask if wanted.
 
 ## Spec 19 (Review UX, dedupe, more proof types)
 
-35. **Phase C after-scores need live judgments** — done (spec 19 review): one live run (16 test profiles, Feroz test 10, the AI Engineer and APM demo-job scores of Feroz test 8; 290 questions asked); résumé-project ↔ repo merges by URL/slug stay on. All gates passed; largest change: the AI Engineer Intern job −3.57 (Role skills re-asked on the shorter skills list). Merging duplicates is done in code, but it creates
+35. **Phase C after-scores need live judgments** — done (spec 19 review): one live run (16 test profiles, owner profile 10, the AI Engineer and APM demo-job scores of owner profile 8; 290 questions asked); résumé-project ↔ repo merges by URL/slug stay on. All gates passed; largest change: the AI Engineer Intern job −3.57 (Role skills re-asked on the shorter skills list). Merging duplicates is done in code, but it creates
     judge inputs that were never recorded: a merged project has a new text (resume project + its repository), and
     the skills lists in the Tools / Role skills questions get shorter. Offline replay counts those as errors, so the
     "after" scores in `timings/dedupe_report.md` understate the real result (e.g. AI3 70.18 → 47.12 with 41
-    unrecorded questions). 235 unique questions in all (Feroz test 10: 45; test profiles: 190). Every new project merge
+    unrecorded questions). 235 unique questions in all (owner profile 10: 45; test profiles: 190). Every new project merge
     on the test profiles is a resume project matched to its own repository by URL (item 16). Options: one live run
     for those questions, or keep URL/slug project merges off until then.
 36. **market_synonyms.json in dedupe** — decided (spec 19 review). It maps names to market *concepts* (MySQL →
@@ -218,13 +218,36 @@ ask if wanted.
 41. **Saved profiles re-merged** — done (spec 19 review, step 4): `scripts/dedupe_apply.py` re-merged every saved
     profile in demo.db (12 candidates had duplicates; backup data/demo.db.bak-spec19-*) and re-scored the 19 scores
     of the live run with its recorded answers (0 new calls, identical to the live run). `store.remerge` keeps the
-    saved order, so only merged items change judge inputs. Feroz Khan tests 3, 4, 6, 7 and 9 were re-merged but keep
+    saved order, so only merged items change judge inputs. owner profile 3, 4, 6, 7 and 9 were re-merged but keep
     their old runs (re-scoring them would need new judgments).
 42. **Section menu on mobile** — decided (spec 19 review): a dropdown in the sticky Confirm bar (the mobile site header is ~170 px tall, so a
     top sticky menu would hide behind it). "Application details" is listed but disabled during onboarding ("After
     your scores"): that step comes after scoring.
-43. **Skill groups** — decided (spec 19 review; Feroz reviews the `# added` entries): `config/skill_groups.yaml` seeded from the baseline criteria, their aliases and
+43. **Skill groups** — decided (spec 19 review; the owner reviews the `# added` entries): `config/skill_groups.yaml` seeded from the baseline criteria, their aliases and
     market_synonyms.json, plus common names marked `# added`, for review. "+ Add skill" stores kind `skill` and the
     chosen group (display only).
 44. **Publication year** typed in More proof is saved as December of that year (the same as a year-only end date
     read from a document).
+
+## Cleanup round (feature/cleanup)
+
+45. **Awards were listed under "Skills and tools" in the Consistency judge's source summary** — fixed (the owner's go
+    for live calls): `graph/nodes/trust.py` `_summary` lists them on their own "Awards:" line. Only the owner's profiles have
+    award claims; `scripts/consistency_live.py` re-scored their 14 current scores live (229 questions; Consistency
+    unchanged in all 14: the 18 re-asked alignment questions gave the same answers) and applied them to demo.db with
+    recorded answers only (identical results). The other movements (−0.87 to +1.55) are the spec 19 dedupe catching up
+    on owner profile 3, 4, 7, 8 and 9, which were re-merged but not re-scored then.
+46. **Recompute skips the model automatically** (my interpretation; please confirm): the model is used only when a
+    posting in the window has never been read. Then the version also gets a new summary; otherwise the previous scope,
+    complexity and description text is kept (no summary call), and new names are only suggested, not proposed by a
+    model.
+47. **Kept on purpose in the sweep** (my interpretation; please confirm): the one-line "why it helps" notes on the
+    upload form ("Confirms your resume (Trust)" …) and the "Good to know" tips on the wait screens (both product
+    decisions of spec 17, no model or provider names); the bullet editor's tip (paste to split, Alt+↑/↓), the only
+    place those keyboard and paste features are mentioned; the empty and error states ("Percentile not available yet:
+    fewer than N other candidates…", "No slots could be read from the availability windows. Enter a time."); the
+    "demo pool" and "Demo text" badges (real facts about the data shown); the score-definition hints ("The Trust score
+    (0–100): …", "Share of the final score after N/A and errors are excluded"). The Admin Screening page keeps its data
+    (parser log, flags); only its explanation and the provider-named columns changed.
+48. **The material-change rule stays** (a draft identical to the active version can't be published). It is not a
+    minimum-data rule.

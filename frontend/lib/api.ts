@@ -100,7 +100,21 @@ export type Weights = { dimensions: Record<string, number>; subcategories: Recor
 export type RunView = { run: { id: string; candidate_id: string; baseline_id: string; plan_status: string | null;
     status?: string }; progress?: { done: number; total: number };
   weights: Weights; final: number | null; dimensions: Record<string, number | null>; subcategories: Subcategory[];
-  gaps: Gap[] };
+  gaps: Gap[]; audit?: boolean };
+
+// --- Computation (audit round, item 1; SCORE_AUDIT): read-only, from the saved data the score used ------------------
+export type Decided = { question?: string; label: string | null; decided_by: string; confidence?: number | null;
+  fallback?: { from: string; label: string | null; confidence: number | null } | null; route?: string; reason?: string };
+export type CompInput = { kind: string; text: string; label: string | null; value: number | null; relevance: number | null;
+  factors: Record<string, unknown>; decided_by: Decided[]; source: string | null; reason?: string };
+export type SubComputation = { dimension: string; status: string; score: number | null;
+  recomputed: { status: string; score: number | null }; matches_saved: boolean; status_reason: string;
+  inputs: CompInput[]; excluded: CompInput[]; arithmetic: string[] };
+export type DimComputation = { terms: { subcategory: string; label: string; weight: number; score: number; missing: boolean }[];
+  excluded: { subcategory: string; label: string; weight: number; reason: string }[]; arithmetic: string; value: number | null };
+export type Computation = { run_id: string; logic_version: string; today: string;
+  subcategories: Record<string, SubComputation>; dimensions: Record<string, DimComputation>;
+  final: { value: number | null; arithmetic: string; weights: Record<string, number>; excluded: string[] } };
 export type PlanAction = { type: string; type_label: string; title: string; what_to_do: string; must_show: string[]; addresses: string[];
   covers_criteria: string[]; builds_on: string | null; points: number; points_text: string };
 export type Plan = { status: "ready" | "generating" | "failed" | "none" | "deferred"; error?: string | null; actions: PlanAction[];
@@ -130,13 +144,14 @@ export type Panel = ApplicantRow & {
   must_haves: MustHave[]; why_points: { text: string; evidence_ids: string[] }[];
   questions: { question: string; topic: string; reason: string }[]; generated_label: string | null;
   requirements: Requirement[]; dimensions: Record<string, number | null> | null;
+  audit: { run_id: string; weights: Weights } | null;
   subcategories: { key: string; label: string; dimension: string; status: string; score: number | null;
     effective_weight: number; guidance: string | null;
     evidence: { question: string; label: string; text: string | null; supported: boolean }[] }[];
   differentiators: { tags: string[]; evidence: { name: string; quote: string | null; source: string | null;
     link: string | null; backing: string; evidence_id: string | null }[] };
   work: { videos: MediaLink[]; repos: Repo[]; portfolio: { name: string; description: string | null; url: string | null }[];
-    portfolio_url: string | null; linkedin: { roles: Role[]; claims: Claim[]; certifications: Certification[] } | null;
+    portfolio_url: string | null; linkedin_uploaded: boolean; linkedin_file: boolean;
     resume_file: boolean; resume_file_kind: string | null; linkedin_link: { url: string; source: string } | null;
     certifications?: { name: string; issuer: string | null; credential_status: string | null; sources: string[] }[];
     /** Display-only proof (specs/19 Phase D): shown to recruiters, not scored. */
@@ -255,7 +270,7 @@ export type MarketCriterion = { name: string; kind: string; share: number; requi
   quotes: string[] };
 export type MarketVersion = { id: string; role: string; level: string; version: number; window_start: string;
   window_end: string; postings: number; companies: number; status: "draft" | "published" | "discarded" | "retired";
-  insufficient: boolean; test_version: boolean; baseline_id: string | null; summary_method: string; created_at: string;
+  basis: string; left_out_note?: string | null; baseline_id: string | null; summary_method: string; created_at: string;
   published_at: string | null;
   content: { criteria: MarketCriterion[]; required_years: number | null; expected_reach: number | null;
     scope_expectation: string | null; complexity_criteria: string | null; description: string | null;
@@ -264,7 +279,7 @@ export type MarketVersion = { id: string; role: string; level: string; version: 
 export type MarketRole = { key: string; title: string; manual_baseline: string; source: "manual" | "market";
   active: MarketVersion | null; latest: MarketVersion | null; postings: number; companies: number;
   configured: { companies: number; placeholders: number; fetchable: number }; levels: Record<string, number> };
-export type MarketLabel = { version: number; date: string; baseline_id: string; test: boolean; label: string };
+export type MarketLabel = { version: number; date: string; baseline_id: string; basis: string; label: string };
 export type RunBaselines = { role: string | null; role_title?: string; current: "standard" | "market";
   current_version?: number | null; standard: { baseline_id: string; label: string } | null; market: MarketLabel | null };
 export type MarketView = MarketLabel & { role: string; title: string; postings: number; companies: number;
@@ -365,3 +380,16 @@ export function useUploadLimit(): number {
   useEffect(() => { get<{ max_bytes: number }>("/settings/uploads").then((s) => setMax(s.max_bytes)).catch(() => {}); }, []);
   return max;
 }
+
+// --- Weight assistant (specs/21) ------------------------------------------------------------------------------------
+export type WeightChange = { key: string; label: string; dimension: string | null; current: number; suggested: number;
+  reason?: string };
+export type PreviewRow = { application_id: string; name: string; match: number; match_before: number; rank: number;
+  was: number; move: number };
+export type WeightPreview = { available: true; top: PreviewRow[]; up: number; down: number; same: number; total: number }
+  | { available: false; message: string };
+export type WeightSuggestion = { id: string; text: string; created_at: string; summary: string; label: string;
+  weights: Weights; changes: WeightChange[]; unchanged: WeightChange[]; ignored: string[]; ignored_notice: string | null;
+  applied: boolean; applied_at: string | null; undone_at: string | null; preview: WeightPreview };
+export type SuggestResult = { status: "ok"; suggestion: WeightSuggestion } | { status: "unavailable" | "invalid"; message: string };
+export type SuggestionSummary = { id: string; created_at: string; text: string; applied: boolean; undone: boolean };

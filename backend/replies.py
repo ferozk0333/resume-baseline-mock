@@ -96,7 +96,7 @@ def read_reply(writer, text: str, *, sent_context: str, default_tz: str, at: dat
                          output_type=ReplyReading)
     except LLMError as exc:
         log.warning("reply model unavailable, using code rules: %s", exc)
-        return code_reading(text, default_tz, at) | {"notes": [f"Reply model unavailable ({exc}): read by code rules."]}
+        return code_reading(text, default_tz, at) | {"notes": ["Check this reading."]}
     notes, times = [], []
     for t in r.times:
         if not _found(t.quote, text):

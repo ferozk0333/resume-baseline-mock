@@ -404,9 +404,9 @@ def summarize(writer, stage: str, focus: list[str], cards: list[dict]) -> dict:
         except LLMError as exc:
             log.warning("feedback model unavailable, code summary: %s", exc)
             return base | code_summary(cards) | {"method": "code", "model": None,
-                                                 "notes": [f"Feedback model unavailable ({exc}): code summary."]}
+                                                 "notes": ["Check this summary."]}
     return base | code_summary(cards) | {"method": "code", "model": None,
-                                         "notes": ["Feedback model not configured: code summary."]}
+                                         "notes": []}
 
 
 # --- Drafts: nudge, answer, offer note (model), confirmation (code) ---------------------------------------------------
