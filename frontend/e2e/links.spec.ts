@@ -18,7 +18,8 @@ async function shownLinks(page: Page): Promise<{ withSource: Shown[]; bare: stri
     els.map((e) => ({ href: e.getAttribute("href"), src: e.getAttribute("data-source-url"), text: e.textContent ?? "" })));
   // An external link that did not come through ExtLink (the API's own file links and in-page anchors excepted).
   const bare = await page.locator("a[href^='http']:not([data-source-url])").evaluateAll((els, api) =>
-    els.map((e) => e.getAttribute("href") ?? "").filter((h) => !h.startsWith(api as string)), API);
+    els.filter((e) => e.getRootNode() === document)          // Next.js dev tools live in a shadow root: not the app
+      .map((e) => e.getAttribute("href") ?? "").filter((h) => !h.startsWith(api as string)), API);
   return { withSource, bare };
 }
 

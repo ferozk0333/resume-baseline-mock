@@ -104,3 +104,29 @@ test("candidate sees the market view and switches a score to the Market baseline
     .toHaveAttribute("aria-checked", "true", { timeout: 30_000 });
   await page.screenshot({ path: "e2e/.tmp/market-7-scored-on-market.png" });
 });
+
+test("Add a posting: the dialog never grows past the window; the text scrolls; a refused URL says why", async ({ page }) => {
+  for (const [w, h] of [[1440, 800], [390, 700]] as const) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto("/admin/market");
+    await page.getByRole("button", { name: "Add postings" }).click();
+    const dialog = page.getByRole("dialog");
+    const text = dialog.getByLabel("Posting text");
+    await text.fill(Array.from({ length: 150 }, (_, i) => `Line ${i + 1} of a long posting.`).join("\n"));
+    const box = (await dialog.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(h);
+    const t = (await text.boundingBox())!;
+    expect(t.height).toBeLessThan(h / 2 + 1);                                   // capped: it scrolls inside
+    expect(await text.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    await expect(dialog.getByRole("button", { name: "Add posting" })).toBeInViewport();
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toBeInViewport();
+    if (w === 1440) {
+      await page.screenshot({ path: "e2e/.tmp/cleanup/market-add-posting.png" });
+      await dialog.getByLabel("Posting URL").fill("http://127.0.0.1:8010/baselines");
+      await dialog.getByRole("button", { name: "Fill from URL" }).click();
+      await expect(dialog.getByRole("status")).toContainText("Only public web pages can be read.");
+    }
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+  }
+});

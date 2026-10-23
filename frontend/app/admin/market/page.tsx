@@ -228,12 +228,38 @@ function Suggestions() {
   );
 }
 
+type FromUrl = { source: string; title: string; company: string; text: string; posted_at: string | null; url: string;
+  tier: string | null; title_matches: boolean; role_title: string };
+const SOURCE_LABEL: Record<string, string> = { greenhouse: "the Greenhouse job board", lever: "the Lever job board",
+  ashby: "the Ashby job board", "schema.org": "the page's job data", page: "the page text" };
+
 function AddPosting({ role, onAdded }: { role: MarketRole; onAdded: () => void }) {
+  const empty = { company: "", tier: "mid", title: role.title, url: "", posted_at: "", text: "" };
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ company: "", tier: "mid", title: role.title, url: "", posted_at: "", text: "" });
+  const [f, setF] = useState(empty);
   const [file, setFile] = useState<File | null>(null);
   const maxBytes = useUploadLimit();
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [read, setRead] = useState<{ ok: boolean; message: string } | null>(null);
+  const [titleOk, setTitleOk] = useState(true);
+  const looksLikeUrl = (u: string) => /^https?:\/\/\S+\.\S+/i.test(u.trim());
+
+  async function fillFromUrl(url = f.url) {
+    if (!looksLikeUrl(url)) { setRead({ ok: false, message: "Enter a full URL starting with https://." }); return; }
+    setReading(true); setRead(null);
+    try {
+      const d = await post<FromUrl>(`/market/${role.key}/postings/from-url`, { url: url.trim() });
+      setF((cur) => ({ ...cur, url: url.trim(), company: d.company || cur.company, title: d.title || cur.title,
+        posted_at: d.posted_at ?? cur.posted_at, text: d.text, tier: d.tier ?? cur.tier }));
+      setFile(null);
+      setTitleOk(d.title_matches);
+      setRead({ ok: true, message: `Filled from ${SOURCE_LABEL[d.source] ?? "the page"}: ${d.text.length.toLocaleString()} characters. Check the fields, then add.` });
+    } catch (e) {
+      setRead({ ok: false, message: (e as Error).message });
+    } finally { setReading(false); }
+  }
+
   async function submit() {
     setBusy(true);
     const form = new FormData();
@@ -242,9 +268,11 @@ function AddPosting({ role, onAdded }: { role: MarketRole; onAdded: () => void }
     try {
       const out = await post<{ new: boolean }>(`/market/${role.key}/postings`, form);
       toast.success(out.new ? "Posting added" : "Already known: last seen updated");
-      setOpen(false); onAdded();
+      setOpen(false); setF(empty); setFile(null); setRead(null); onAdded();
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   }
+  const missing = !f.company.trim() ? "Add the company." : !file && f.text.trim().length < 200
+    ? "Add the posting text (at least 200 characters), a URL to fill it from, or a file." : null;
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}><Plus /> Add postings</Button>
@@ -252,23 +280,46 @@ function AddPosting({ role, onAdded }: { role: MarketRole; onAdded: () => void }
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Add a posting · {role.title}</DialogTitle>
+            <DialogDescription>Paste the posting&apos;s link to fill everything in, then check and add.</DialogDescription>
           </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="mp-url">Posting URL</Label>
+            <div className="flex gap-2">
+              <Input id="mp-url" value={f.url} placeholder="https://job-boards.greenhouse.io/company/jobs/123"
+                onChange={(e) => setF({ ...f, url: e.target.value })}
+                onPaste={(e) => { const u = e.clipboardData.getData("text"); if (looksLikeUrl(u)) { e.preventDefault(); setF({ ...f, url: u.trim() }); fillFromUrl(u); } }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); fillFromUrl(); } }} />
+              <Button type="button" variant="outline" className="shrink-0" disabled={reading || !f.url.trim()} onClick={() => fillFromUrl()}>
+                {reading ? <><Loader2 className="animate-spin" /> Reading…</> : <><Download /> Fill from URL</>}
+              </Button>
+            </div>
+            {read && <p role="status" className={cn("text-xs", read.ok ? "text-emerald-800" : "text-amber-800")}>{read.message}</p>}
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1"><Label htmlFor="mp-company">Company</Label><Input id="mp-company" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} /></div>
             <div className="space-y-1"><Label htmlFor="mp-tier">Tier</Label>
               <select id="mp-tier" value={f.tier} onChange={(e) => setF({ ...f, tier: e.target.value })} className="h-9 w-full rounded-lg border border-field-border bg-field px-2 text-sm">
                 <option value="large">Large tech</option><option value="mid">Mid-size</option><option value="startup">Small startup</option></select></div>
-            <div className="space-y-1"><Label htmlFor="mp-title">Job title</Label><Input id="mp-title" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></div>
+            <div className="space-y-1"><Label htmlFor="mp-title">Job title</Label>
+              <Input id="mp-title" value={f.title} onChange={(e) => { setF({ ...f, title: e.target.value }); setTitleOk(true); }} />
+              {!titleOk && <p className="text-xs text-amber-800">This title doesn&apos;t look like a {role.title} role, so it may be refused when you add it.</p>}</div>
             <div className="space-y-1"><Label htmlFor="mp-date">Posted date</Label><Input id="mp-date" type="date" value={f.posted_at} onChange={(e) => setF({ ...f, posted_at: e.target.value })} /></div>
-            <div className="space-y-1 sm:col-span-2"><Label htmlFor="mp-url">URL</Label><Input id="mp-url" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} /></div>
-            <div className="sm:col-span-2"><FileDrop id="mp-file" label="File" what="posting" accept={[".pdf", ".docx"]}
-              typesLabel="PDF or DOCX" file={file} onFile={setFile} maxBytes={maxBytes} /></div>
-            <div className="space-y-1 sm:col-span-2"><Label htmlFor="mp-text">Or paste the text</Label>
-              <Textarea id="mp-text" value={f.text} disabled={!!file} onChange={(e) => setF({ ...f, text: e.target.value })} className="min-h-32" /></div>
           </div>
-          <DialogFooter>
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between"><Label htmlFor="mp-text">Posting text</Label>
+              <span className="text-xs tabular-nums text-muted-foreground">{f.text.length.toLocaleString()} characters</span></div>
+            <Textarea id="mp-text" value={f.text} disabled={!!file} placeholder="Filled from the URL, or paste the posting here."
+              onChange={(e) => setF({ ...f, text: e.target.value })} className="h-48 min-h-48 [field-sizing:fixed] resize-y" />
+          </div>
+          <details className="group rounded-lg border px-3 py-2" open={!!file}>
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">Or upload a file instead</summary>
+            <div className="pt-2"><FileDrop id="mp-file" label="File" what="posting" accept={[".pdf", ".docx"]}
+              typesLabel="PDF or DOCX" file={file} onFile={setFile} maxBytes={maxBytes} /></div>
+          </details>
+          <DialogFooter className="items-center">
+            {missing && <span className="mr-auto text-xs text-muted-foreground">{missing}</span>}
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button disabled={busy || !f.company || (!file && f.text.length < 200)} onClick={submit}>Add posting</Button>
+            <Button disabled={busy || !!missing} onClick={submit}>Add posting</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

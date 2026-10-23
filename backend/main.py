@@ -170,6 +170,10 @@ class WeightSuggestIn(BaseModel):
     fresh: bool = False             # "Suggest again": bypass the cache
 
 
+class PostingUrlIn(BaseModel):
+    url: str
+
+
 class JobUpdate(BaseModel):
     weights: dict | None = None
     must_haves: list[str] | None = None
@@ -365,7 +369,7 @@ def start_ticker(state: State) -> None:
     threading.Thread(target=loop, name="workflow-tick", daemon=True).start()
 
 
-UPLOAD_PATHS = re.compile(r"^/candidates/[^/]+/onboard$|^/jobs/drafts/read$|^/market/[^/]+/postings$")
+UPLOAD_PATHS = re.compile(r"^/candidates/[^/]+/onboard$|^/jobs/drafts/read$|^/market/[^/]+/postings(/from-url)?$")
 
 
 class UploadRateLimit:
@@ -1510,6 +1514,20 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         with conn() as c:
             return market_call(mp.add_manual, c, r, company=company, tier=tier, title=title, text=text or "", url=url,
                                posted_at=posted_at)
+
+    @app.post("/market/{role}/postings/from-url", tags=["market"])
+    def market_from_url(role: str, body: PostingUrlIn):
+        """Read a posting's page to fill the Add form (job-board APIs, schema.org, else the page text). Code only, no
+        model call, nothing saved: the recruiter checks the fields and adds the posting."""
+        from market import from_url
+        r = role_or_404(role)
+        try:
+            got = from_url.read(body.url)
+        except from_url.UrlError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        known = next((c for c in r.companies if not c.placeholder and c.name.lower() == got["company"].lower()), None)
+        return {**got, "tier": known.tier if known else None, "title_matches": r.title_matches(got["title"]),
+                "role_title": r.title}
 
     @app.post("/market/{role}/fetch", tags=["market"])
     def market_fetch(role: str):
