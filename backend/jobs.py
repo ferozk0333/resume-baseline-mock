@@ -10,7 +10,6 @@ Scoring formulas, weights and logic do not change: a job-owned baseline is read 
 """
 from __future__ import annotations
 
-import copy
 import json
 
 from backend import recruiter as rc
@@ -487,7 +486,3 @@ def apply(conn, job_id: str, candidate_id: str) -> str:
 def link_run(conn, application_id: str, run_id: str) -> None:
     with conn:
         conn.execute("UPDATE applications SET run_id = ? WHERE id = ?", (run_id, application_id))
-
-
-def clone(d: dict) -> dict:
-    return copy.deepcopy(d)

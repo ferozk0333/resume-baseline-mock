@@ -333,10 +333,6 @@ class DailyLimitReached(LLMError):
     """A free-tier daily quota is used up. Saved extractions and judgments are kept: run again after the reset."""
 
 
-def pacific_day():
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-    return datetime.now(ZoneInfo("America/Los_Angeles")).date()
 
 
 def gemini_schema(schema: dict) -> dict:

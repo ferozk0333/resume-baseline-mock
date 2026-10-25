@@ -55,9 +55,6 @@ def find_urls(text: str | None) -> list[tuple[int, int, str]]:
     return out
 
 
-def first_url(text: str | None) -> str | None:
-    found = find_urls(text)
-    return found[0][2] if found else None
 
 
 def markdown_links(text: str | None) -> list[tuple[int, int, str, str]]:
