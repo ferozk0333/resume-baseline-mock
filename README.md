@@ -204,8 +204,7 @@ human reviewers: don't send real personal data on the free tier.
   the same field grid in view and edit, one card in edit at a time, bullets edited one by one (drag or ↑/↓, paste
   splits lines), delete with Undo, grouped and searchable skills (`config/skill_groups.yaml`), a section menu,
   "Needs your attention" and a sticky Confirm bar. Duplicates merge on a normalized name or
-  `config/claim_aliases.json` (never on similarity; near misses are listed by `scripts/dedupe_report.py`, which also
-  writes the offline before/after report to `timings/dedupe_report.md`). Education, patents, volunteering, courses
+  `config/claim_aliases.json` (never on similarity). Education, patents, volunteering, courses
   and languages are display only: shown to recruiters, never judged or scored.
 - **Capabilities per model** (`config.model_caps`, override `MODEL_CAPS`): a request sends only what the model accepts
   (Gemma: no thinking setting). `scripts/render_test_profiles.py --stress` renders the layout stress set.
@@ -227,14 +226,6 @@ local Chrome, against the API on fakes (`make fake-api`: FakeJudge, scripted ext
 database). No model calls.
 
 `tests/test_regression.py` pins the FakeJudge archetype scores: they must not change in iteration 2.
-
-## Timing a run
-```bash
-.venv/bin/python scripts/time_run.py --resume R.pdf --linkedin L.pdf --github USER \
-    --github-fixture timings/github.json --label before
-```
-Uses a fresh database (nothing cached), records GitHub responses on the first run and replays them
-afterwards, and writes a timing table, token counts and an estimated Claude cost to `timings/`.
 
 ## Third-party licences
 - **PyMuPDF, pymupdf4llm and pymupdf-layout** (PDF → Markdown in `ingest/documents.py`) are

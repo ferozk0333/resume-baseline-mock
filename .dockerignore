@@ -16,7 +16,6 @@ logs/
 docs/
 specs/
 frontend/
-tests/extraction_reference/*.json
 tests/fixtures/profiles/rendered/
 **/.pytest_cache
 AI_Engineer_JD_Brightwater.pdf

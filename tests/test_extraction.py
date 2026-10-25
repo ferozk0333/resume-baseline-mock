@@ -745,25 +745,6 @@ def test_prompts_have_no_provider_specific_wording():
         assert not any(name in text for name in ("claude", "gemini", "groq", "haiku", "sonnet")), path.name
 
 
-def test_compare_helpers_report_kinds_and_structural_proof_density():
-    import importlib.util
-    from core import config
-    spec = importlib.util.spec_from_file_location("compare_extraction", config.ROOT / "scripts" / "compare_extraction.py")
-    cmp = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cmp)
-    profile = {"roles": [{"title": "Analyst", "employer": "Acme", "bullets": [{"text": "Built churn model in Python"}]}],
-               "projects": [{"kind": "publication", "name": "Paper on SQL tuning", "description": None, "bullets": []}],
-               "claims": [{"kind": "tool", "name_raw": "Python", "name_norm": "python"},
-                          {"kind": "tool", "name_raw": "SQL", "name_norm": "sql"},
-                          {"kind": "skill", "name_raw": "Tableau", "name_norm": "tableau"}],
-               "certifications": []}
-    score, counts = cmp.structural_proof_density(profile)
-    assert counts == {"artifact": 1, "bullet": 1, "claimed_only": 1} and score == pytest.approx(0.5)
-    other = {**profile, "claims": [{"kind": "skill", "name_raw": "Python", "name_norm": "python"}]}
-    assert cmp.kinds(profile)["python"] == "tool" and cmp.kinds(other)["python"] == "skill"
-    assert set(cmp.items(profile)) == {"role", "bullet", "project", "claim", "certification"}
-
-
 def test_runs_record_provider_and_models():
     from judges.service import judge_models
     m = judge_models()
