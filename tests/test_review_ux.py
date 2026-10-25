@@ -27,17 +27,17 @@ def test_punctuation_spacing():
     assert fix("one\n. two") == "one\n. two"                                      # line breaks kept
 
 
-def test_punctuation_applies_to_new_extractions_only(tmp_path, monkeypatch):
+def test_punctuation_applies_to_new_extractions_only(tmp_path):
     """The fix is part of the normalizer key: text stored under the old key is not reused or changed."""
     from ingest import documents
     from tests.helpers import SAMPLE_RESUME_LINES, make_pdf
     conn = db.connect(tmp_path / "t.db")
     pdf = make_pdf([*SAMPLE_RESUME_LINES, "Skills : Python , SQL", "Built a churn model in Python and scikit-learn ( 2023 ) ."])
-    monkeypatch.setattr(config, "PUNCT_SPACING", False)
-    old = documents.extract_text("cv.pdf", pdf, conn)
-    assert "Skills : Python" in old and "( 2023 ) ." in old
-    monkeypatch.setattr(config, "PUNCT_SPACING", True)
+    old = "Skills : Python , SQL\nBuilt a churn model in Python and scikit-learn ( 2023 ) .\n"
     assert documents.normalizer().endswith("+punct-1")
+    with conn:                                                    # saved before the fix, under the old key
+        conn.execute("INSERT INTO document_texts (file_sha256, normalizer, text, created_at) VALUES (?, ?, ?, 'then')",
+                     (documents.sha256(pdf), documents.normalizer().removesuffix("+punct-1"), old))
     new = documents.extract_text("cv.pdf", pdf, conn)
     assert "Skills: Python" in new and "scikit-learn (2023)." in new
     keys = {r[0] for r in conn.execute("SELECT normalizer FROM document_texts")}
@@ -157,11 +157,6 @@ def test_projects_merge_by_slug_and_url_and_stay_project():
     p = merged.projects[0]
     assert p.kind == "project" and p.own_commits == 12 and p.url and set(p.sources) == {"g", "p"}
 
-
-def test_dedupe_off_reproduces_the_old_merge(monkeypatch):
-    monkeypatch.setattr(config, "DEDUPE_NAMES", False)
-    merged, _ = merge_profiles([Profile(claims=[_claim("Hugging Face", "r")]), Profile(claims=[_claim("HuggingFace", "l")])])
-    assert len(merged.claims) == 2
 
 
 def test_sources_are_never_read_by_scoring():

@@ -278,19 +278,12 @@ JEV_CONFIDENCE_THRESHOLD = float(_env("JEV_CONFIDENCE_THRESHOLD", "0.6"))
 MIN_DOCUMENT_CHARS = 100        # fewer non-space characters → "unreadable" (no OCR)
 MIN_PORTFOLIO_CHARS = 200       # fewer → probably JavaScript-rendered
 UPLOAD_MAX_MB = float(_env("UPLOAD_MAX_MB", "10"))   # resume, LinkedIn PDF, JD and market uploads (specs/19 item 2)
-# No space before . , ; : ! ? ) or after ( in document text (specs/19 item 6). Part of the normalizer key, so only
-# documents read from now on change; saved text (and its judgments) stays as it is.
-PUNCT_SPACING = _env("PUNCT_SPACING", "1") == "1"
-# Duplicate claims, certifications and projects merge on the matching key or the reviewed alias file (specs/19
-# Phase C, a bug fix under "one claim per name"). Off only to reproduce the old merge for the before/after report.
-DEDUPE_NAMES = _env("DEDUPE_NAMES", "1") == "1"
 # The "Computation" block under each score (audit round, item 1): inputs, labels, values and the arithmetic, read-only.
 # On for now; to be removed later.
 SCORE_AUDIT = _env("SCORE_AUDIT", "1") == "1"
 MAX_PORTFOLIO_CHARS = 50_000
 GITHUB_MAX_REPOS = 30           # most recently pushed, non-archived
 GITHUB_README_CHARS = 4_000
-GITHUB_README_EXTRACTION = True  # one LLM call per counted repo README (05 §A)
 GITHUB_CACHE_HOURS = 24          # GitHub API responses reused for this long (ETag revalidation after)
 GITHUB_CONCURRENCY = 8           # repos whose details are fetched at once
 EXTRACT_MAX_TOKENS = 12_000     # a dense one-page resume needs ~7.3k (phase 9); runaway output is cut earlier
