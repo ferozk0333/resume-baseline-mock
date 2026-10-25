@@ -127,7 +127,7 @@ MODEL_LIMITS = {
     **_model_limits(",".join(f"gemini/{m}={_FLASH}" for m in ("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
                                                               "gemini-3-flash-preview", "gemini-2.5-flash"))),
     **_model_limits("gemini/gemini-3.5-flash-lite=15/250000/500,gemini/gemini-3.1-flash-lite=15/250000/500,"
-                    "gemini/gemma-4-31b-it=30/16000/14400,gemini/gemma-4-26b-it=30/16000/14400,"
+                    "gemini/gemma-4-31b-it=30/16000/14400,"
                     "groq/openai/gpt-oss-120b=30/8000/1000/200000,groq/openai/gpt-oss-20b=30/8000/1000/200000,"
                     "groq/qwen/qwen3.8-27b=30/8000/1000/200000,"
                     "groq/meta-llama/llama-prompt-guard-2-86m=30/15000/14400/500000,"
@@ -226,10 +226,6 @@ ROUTE_MAX_TOTAL_WAIT_S = float(_env("ROUTE_MAX_TOTAL_WAIT_S", "90"))   # all mod
 # try the route this many more times once the models have rested, within ROUTE_MAX_TOTAL_WAIT_S. 0 = fail at once.
 ROUTE_OVERLOAD_RETRY_ROUNDS = int(_env("ROUTE_OVERLOAD_RETRY_ROUNDS", "1"))
 OVERLOAD_COOLDOWN_S = float(_env("OVERLOAD_COOLDOWN_S", "20"))  # a model that answered 5xx/timeout rests this long
-# Hedging (off by default): a single-item call with no answer after N s also goes to the next model; first answer
-# wins. Each hedge costs one more request of quota.
-HEDGE_AFTER_S = float(_env("HEDGE_AFTER_S", "0"))
-HEDGE_TASKS = tuple(t.strip() for t in _env("HEDGE_TASKS", "judge_single").split(","))
 
 
 # The route each role uses with LLM_PROVIDER=gemini (specs/18 §2 item 1).
@@ -302,26 +298,11 @@ PLAN_MAX_TOKENS = 16_000
 EXTRACT_CONCURRENCY = 16        # resume, LinkedIn, portfolio and READMEs at once (specs/09 §2.5); Claude cap applies
 
 # Code-first extraction (specs/18 §4). A parsed document is used only when its confidence gate passes; otherwise the
-# whole document goes to the LLM. PARSE_LINKEDIN is on (Phase 3 review); README and resume parsing are parked (off).
-PARSE_README = _env("PARSE_README", "0") == "1"          # README blocks kept by rule or Jev; no LLM call
+# whole document goes to the LLM. PARSE_LINKEDIN is on (Phase 3 review).
 PARSE_LINKEDIN = _env("PARSE_LINKEDIN", "1") == "1"      # LinkedIn "Save to PDF" layout parser
-PARSE_RESUME = _env("PARSE_RESUME", "off")               # off | shadow (runs after the LLM, logged, never used)
-PARSE_SHADOW_CALLS = _env("PARSE_SHADOW_CALLS", "0") == "1"   # shadow parser may ask Jev / the small claims call
 REMOVE_HIDDEN_TEXT = _env("REMOVE_HIDDEN_TEXT", "1") == "1"   # white-on-white, tiny or off-page text (spec item 20)
 PARSER_MAX_UNCLEAR = int(_env("PARSER_MAX_UNCLEAR", "3"))     # more unclear lines after Jev → LLM fallback
-README_MAX_CHARS = int(_env("README_MAX_CHARS", "1500"))       # kept README blocks, verbatim, as the description
-README_TABLE_MAX_ROWS = int(_env("README_TABLE_MAX_ROWS", "10"))   # data rows in a kept results table (one bullet)
 JEV_PARSE_BATCH = int(_env("JEV_PARSE_BATCH", "20"))           # questions per Jev request when parsing
-# All-bullets judging per source document (Phase 3 review 2b): one ask per document (resume, LinkedIn, each repo,
-# portfolio) instead of one over everything, so an unchanged document keeps its saved answer and a new source can only
-# add credit. Final label = the best across sources.
-PARTITIONED_BATCHES = _env("PARTITIONED_BATCHES", "0") == "1"
-# specs/18 Phase 2 (all default off; the comparison script decides each).
-GROUPED_ITEM_JUDGING = _env("GROUPED_ITEM_JUDGING", "0") == "1"   # complexity / work samples: one call per family
-REPO_CAP = _env("REPO_CAP", "0") == "1"                            # judge and read at most MAX_REPOS repositories
-MAX_REPOS = int(_env("MAX_REPOS", "8"))
-GEMMA_JUDGE = _env("GEMMA_JUDGE", "0") == "1"                      # Gemma in routine judging, not only overflow
-GROQ_JUDGE = _env("GROQ_JUDGE", "0") == "1"                        # Groq in routine single-item judging
 # Prompt-injection screen (specs/18 Phase 4; default off). Llama Prompt Guard 2 on Groq: a 512-token context window
 # (https://console.groq.com/docs/model/llama-prompt-guard-2-86m), so text is screened in chunks. Background only:
 # never blocks reading, never changes a score, never shown to recruiters.

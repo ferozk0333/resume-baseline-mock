@@ -16,13 +16,11 @@ The model that answered is recorded (`last_model()`), so judgments and extractio
 from __future__ import annotations
 
 import contextvars
-import itertools
 import logging
 import random
 from contextlib import contextmanager
 import threading
 import time
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait as wait_futures
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -303,28 +301,6 @@ def daily_message(task: str, models: list[str], now: float) -> str:
             f"{hours:.0f} h) and it continues where it stopped.")
 
 
-_TURN = itertools.count()
-
-
-def routine_order(task: str | None, models: list[str]) -> list[str]:
-    """GROQ_JUDGE / GEMMA_JUDGE (specs/18 item 12): judging calls take turns across Flash-Lite and the allowed family
-    instead of using it only as overflow. Groq: single-item judging only (never grouped calls, extraction or plans);
-    Gemma: single and grouped judging. The rest of the route stays behind as overflow, in order."""
-    if task not in ("judge_single", "judge_grouped"):
-        return models
-    allowed = [m for m in models if "flash-lite" in m
-               or (config.GROQ_JUDGE and task == "judge_single" and m.startswith("groq/"))
-               or (config.GEMMA_JUDGE and "/gemma-" in m)]
-    if len(allowed) == sum(1 for m in models if "flash-lite" in m):
-        return models                                   # flags off: today's order
-    turn = next(_TURN) % len(allowed)
-    first = allowed[turn:] + allowed[:turn]
-    return first + [m for m in models if m not in first]
-
-
-_HEDGE_POOL = ThreadPoolExecutor(max_workers=16, thread_name_prefix="rightstaff-hedge")
-
-
 class Router:
     """Sends one structured call along a route. `client_for(model)` returns the provider client (one attempt per
     parse; a provider client never sleeps)."""
@@ -338,10 +314,7 @@ class Router:
 
     def parse(self, *, model: str, system: str, user: str, output_type):
         _set_last(None)
-        task, models = task_of(model), routine_order(task_of(model), models_of(model))
-        if config.HEDGE_AFTER_S > 0 and task in config.HEDGE_TASKS and len(models) > 1:
-            return self._hedged(task, models, system, user, output_type)
-        return self._run(task, models, system, user, output_type)
+        return self._run(task_of(model), models_of(model), system, user, output_type)
 
     def _pick(self, models: list[str], tokens: int, tried: set[str]) -> tuple[str | None, list[tuple[str, str, float]]]:
         seen = []
@@ -354,11 +327,10 @@ class Router:
             seen.append((m, state if state != "ok" else "busy", wait))
         return None, seen
 
-    def _run(self, task: str, models: list[str], system: str, user: str, output_type, tried: set | None = None):
+    def _run(self, task: str, models: list[str], system: str, user: str, output_type):
         from core.llm import LLMError, DailyLimitReached
         tokens = estimate_tokens(system, user, current_budget(self.max_tokens))
-        own_tried = tried is None                              # a hedged call shares `tried`: no extra round there
-        tried = tried if tried is not None else set()
+        tried: set[str] = set()
         attempts, waited, last_error, bad = 0, 0.0, None, 0
         rounds, overload_only = 0, True                        # this round failed only on overloads (5xx, timeouts)
         while True:
@@ -424,7 +396,7 @@ class Router:
             timing.count("failover")
             log.warning("failover: %s %s → %s (%s)", task, m, nxt or "none left", why)
             if attempts >= config.ROUTE_MAX_ATTEMPTS or nxt is None:
-                if overload_only and own_tried and rounds < config.ROUTE_OVERLOAD_RETRY_ROUNDS:
+                if overload_only and rounds < config.ROUTE_OVERLOAD_RETRY_ROUNDS:
                     rounds, attempts = rounds + 1, 0               # a 503 storm usually passes in seconds:
                     tried.clear()                                  # once more, after the models have rested
                     log.warning("retry: %s: every model was overloaded; one more round once they have rested", task)
@@ -446,26 +418,3 @@ class Router:
         finally:
             _timeout.reset(ttoken)
             _routed.reset(token)
-
-    def _hedged(self, task: str, models: list[str], system: str, user: str, output_type):
-        """No answer after HEDGE_AFTER_S: a duplicate goes to the next model; the first answer wins (the other call
-        still uses its quota)."""
-        first_tried: set[str] = set()
-        f1 = _HEDGE_POOL.submit(timing.bind(self._run), task, models, system, user, output_type, first_tried)
-        done, _ = wait_futures([f1], timeout=config.HEDGE_AFTER_S)
-        if done:
-            return f1.result()
-        rest = models[1:]                                      # the first call started on models[0] (or later)
-        timing.count("hedged")
-        log.info("hedge: %s sends a duplicate to %s after %.1f s", task, rest[0] if rest else "-", config.HEDGE_AFTER_S)
-        f2 = _HEDGE_POOL.submit(timing.bind(self._run), task, rest, system, user, output_type, set())
-        pending = {f1, f2}
-        error = None
-        while pending:
-            done, pending = wait_futures(pending, return_when=FIRST_COMPLETED)
-            for f in done:
-                try:
-                    return f.result()
-                except Exception as exc:                       # noqa: BLE001 - the other one may still answer
-                    error = exc
-        raise error

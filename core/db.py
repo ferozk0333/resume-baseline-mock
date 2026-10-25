@@ -490,6 +490,16 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def copy_db(src, dst) -> None:
+    """A consistent copy of a database in use (a running server's recent writes may still be in its WAL file)."""
+    Path(dst).unlink(missing_ok=True)
+    a, b = sqlite3.connect(str(src)), sqlite3.connect(str(dst))
+    with b:
+        a.backup(b)
+    a.close()
+    b.close()
+
+
 def new_id() -> str:
     return str(uuid.uuid4())
 

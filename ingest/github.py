@@ -35,7 +35,7 @@ class Repo:
     languages: dict[str, int] = field(default_factory=dict)
     own_commits: int = 0
     readme: str | None = None
-    stars: int = 0                       # REPO_CAP's last tie-break; not part of the source text
+    stars: int = 0                       # from the API; not part of the source text
 
     @property
     def counted(self) -> bool:

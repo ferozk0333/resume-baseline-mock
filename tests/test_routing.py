@@ -232,25 +232,6 @@ def test_concurrency_per_model_up_to_its_limit(env, monkeypatch):
     assert results == ["A slow"]
 
 
-# --- Hedging (off by default) --------------------------------------------------------------------------------------
-
-def test_hedging_is_off_by_default_and_the_first_answer_wins_when_on(env, monkeypatch):
-    assert config.HEDGE_AFTER_S == 0
-    monkeypatch.setattr(config, "HEDGE_AFTER_S", 0.05)
-    gate = threading.Event()
-
-    def slow():
-        gate.wait(2)
-        return Out(label="A late")
-    s = Script(**{A: [slow]})
-    rec = timing.Recorder()
-    with timing.recording(rec):
-        out = Router(s.client_for, limiter=env.lim, sleep=time.sleep, clock=env.clock).parse(
-            model="route:judge_single", system="S", user="U", output_type=Out)
-    gate.set()
-    assert out.label == B and rec.counters["hedged"] == 1                # the duplicate on B answered first
-
-
 # --- Routes in config ---------------------------------------------------------------------------------------------
 
 def test_a_claude_model_at_the_top_of_a_route_works_with_no_code_change(env, monkeypatch):

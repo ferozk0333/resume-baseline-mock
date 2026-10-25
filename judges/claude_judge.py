@@ -57,16 +57,9 @@ def batch_output_model(key: str) -> type[BaseModel]:
 
 
 def batch_system_prompt(q: Question) -> str:
-    if q.key in ITEM_FAMILIES:
-        return (f"{system_prompt(q)}\n\nThe input lists several items in <criteria>, each with an id (C1, C2, ...). "
-                "Answer the question separately for each item, against the same shared context. "
-                "Return one entry per item, in the order given.")
     return (f"{system_prompt(q)}\n\nThe input lists several criteria in <criteria>, each with an id (C1, C2, ...). "
             "Answer the question separately for each criterion, using the same candidate text for all of them. "
             "Return one entry per criterion, in the order given.")
-
-
-ITEM_FAMILIES = {"complexity"}      # batched per item (GROUPED_ITEM_JUDGING)
 
 
 def split_shared(contexts: list[dict]) -> tuple[dict, list[dict]]:
@@ -100,10 +93,10 @@ class ClaudeJudge:
 
     def models_for(self, key: str) -> list[str]:
         """Every model that may answer this family (saved judgments from any of them are reused): the route's
-        members, and the batch route's too (complexity is batched under GROUPED_ITEM_JUDGING)."""
+        members, and the batch route's too (complexity is never batched)."""
         from core.routing import models_of
         out = []
-        batched = key != "complexity" or config.GROUPED_ITEM_JUDGING
+        batched = key != "complexity"
         for m in (self.model_for(key), self.batch_model_for(key)) if batched else (self.model_for(key),):
             for x in models_of(m):
                 if x not in out:

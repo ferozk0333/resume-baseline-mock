@@ -69,16 +69,6 @@ def test_href_is_the_stored_url_exactly():
     assert href_for("github.com/jdoe-dev") == "https://github.com/jdoe-dev"
 
 
-def test_the_resume_parser_keeps_certificate_and_publication_links():
-    from extraction.parse.resume import strip_links
-    name, url = strip_links("AWS Certified Machine Learning Engineer – Associate (MLA-C01), Amazon Web Services (Link) "
-                            "(https://www.credly.com/badges/3f6b2d1e-0a4c-4b7e-9d21-5c8e7a1f0b42) 2026")
-    assert url == "https://www.credly.com/badges/3f6b2d1e-0a4c-4b7e-9d21-5c8e7a1f0b42"
-    assert name == "AWS Certified Machine Learning Engineer – Associate (MLA-C01), Amazon Web Services 2026"
-    name, url = strip_links(f"Co-Author, “The Harbor Commission,” The Harbor Review (Link) ({PAPER}) 2026")
-    assert url == PAPER and name == "Co-Author, “The Harbor Commission,” The Harbor Review 2026"
-
-
 NODE = shutil.which("node")
 
 

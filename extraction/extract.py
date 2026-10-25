@@ -120,8 +120,6 @@ def extract_all(docs: list[SourceDoc], llm: StructuredLLM, cache: ExtractionCach
             hit = cache.get(doc, cache_model(model)) if cache is not None else None
             if hit is not None:
                 t["cached"] = True
-                if parsers is not None:
-                    parsers.shadow(doc, hit)
                 return doc.evidence_id, hit
             from core.routing import clear_last
             clear_last()
@@ -132,8 +130,6 @@ def extract_all(docs: list[SourceDoc], llm: StructuredLLM, cache: ExtractionCach
             t["model"] = last_model(model)                # the model that answered
             if cache is not None:
                 cache.put(doc, cache_model(model), out, used=t["model"])
-        if parsers is not None:
-            parsers.shadow(doc, out)                      # résumé shadow parse, in the background
         return doc.evidence_id, out
 
     with ThreadPoolExecutor(max_workers=config.EXTRACT_CONCURRENCY) as pool:

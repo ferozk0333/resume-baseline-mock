@@ -180,24 +180,19 @@ human reviewers: don't send real personal data on the free tier.
   every model is busy is there a wait of at most `ROUTE_MAX_WAIT_S` (5 s). At most `ROUTE_MAX_ATTEMPTS` (4) calls per
   request. Every model out of quota for the day: fail fast ("Daily free-tier limit reached…"; saved work is kept).
 - **Limits per model** (requests and tokens per minute and per day, from `MODEL_LIMITS`); calls in flight per model up
-  to its requests per minute; timeouts Gemini 45 s, Groq 20 s. Optional hedging (`HEDGE_AFTER_S`, off).
+  to its requests per minute; timeouts Gemini 45 s, Groq 20 s.
 - **Early start:** the roles picked during reading are judged as soon as the documents are read; Confirm only
   finishes what's left (an item edited in Review is judged again).
 - **LIVE guard:** real provider calls only with `LIVE=1` (`make live` sets it). Scripts that call real models need it too.
 - Logs (`rightstaff.routing`): `failover: <task> <model> → <next> (<why>)`, `all busy: …`, `fail fast: …`. Runs record
   calls per task per model (`calls_by_task`) and failovers in their timings.
 
-### Code-first extraction (specs/18, phase 3; PARSE_LINKEDIN on; README and resume parsing parked)
+### Code-first extraction (specs/18, phase 3; PARSE_LINKEDIN on)
 - **Design:** code builds the structure, Jev decides what is unclear, the LLM is the fallback. Every field is a
   verbatim span of the source, so the usual quote check, claim, award and publication rules apply unchanged.
 - **`PARSE_LINKEDIN`** (on by default): a parser for LinkedIn's "Save to PDF" layout (sidebar + main column, font
   tiers read from the document). A real export shows less than the profile: only the top 3 skills, certificate names
-  without issuer, date or credential ID, and no projects; the parser reads what the export shows, as the LLM does. **`PARSE_README`:** README blocks kept by rule (overview, features, architecture, results) or by Jev;
-  setup, install, licence, badges and code are dropped. Kept "what was built" text becomes the repository's
-  description (after its GitHub description, ≤1,500 characters); kept results become the project's bullets, one per
-  sentence, list item or table row, verbatim.
-  **`PARSE_RESUME=shadow`:** the résumé is still read by the LLM; afterwards the parser reads it too and the
-  comparison is logged (`parser_runs`); nothing from it is shown or scored.
+  without issuer, date or credential ID, and no projects; the parser reads what the export shows, as the LLM does.
 - **Confidence gate:** a document goes to the LLM when it doesn't look like the expected layout, a role has no dates,
   more than `PARSER_MAX_UNCLEAR` lines stay unclear, reading order looks scrambled, or a Jev label is below
   `JEV_CONFIDENCE_THRESHOLD`. Every item records how it was read (`method`: parser | jev | llm).
@@ -215,25 +210,8 @@ human reviewers: don't send real personal data on the free tier.
   `config/claim_aliases.json` (never on similarity; near misses are listed by `scripts/dedupe_report.py`, which also
   writes the offline before/after report to `timings/dedupe_report.md`). Education, patents, volunteering, courses
   and languages are display only: shown to recruiters, never judged or scored.
-- **Gates:** `scripts/parser_gates.py` (offline; replays recorded judgments, `judges/replay_judge.py`) writes
-  `timings/parser_gates.md`. `scripts/render_test_profiles.py --stress` renders the layout stress set.
-  `scripts/readme_live_gate.py --estimate` counts the calls of the README gate on the latest live profile; `--run`
-  (LIVE=1, after approval) runs it.
-- **Shadow calls** (`PARSE_SHADOW_CALLS=1`): Jev confirms vocabulary skills inside résumé bullets, and one small call
-  per document (`prompts/bullet_skills_system.txt`, the judge fallback model) lists skill and tool names from bullets
-  that matched no vocabulary; names not written exactly as in their bullet are dropped.
-
-### Fewer calls, more model families (specs/18 phase 2; all flags off, parked — see docs/spec18_summary.md)
-- **`GROUPED_ITEM_JUDGING`:** complexity and work-sample questions in one batched call per family (same schema, a
-  quote required above the lowest label, each failed item retried alone; complexity reasons first).
-- **`REPO_CAP`** (`MAX_REPOS` 8): read and judge only the repositories most relevant to the role (then latest push,
-  then stars); the others stay listed. **`GEMMA_JUDGE` / `GROQ_JUDGE`:** judging calls take turns across Flash-Lite and
-  the family (Groq: single items only, never grouped calls, extraction or plans).
-- **`PARTITIONED_BATCHES`:** the all-bullets skill/tool checks per source document; an unchanged document keeps its
-  saved answer and the label is the best across sources.
 - **Capabilities per model** (`config.model_caps`, override `MODEL_CAPS`): a request sends only what the model accepts
-  (Gemma: no thinking setting). `scripts/phase2_compare.py --estimate` states the calls per flag; `--run FLAG` (LIVE)
-  compares on vs off on the test profiles.
+  (Gemma: no thinking setting). `scripts/render_test_profiles.py --stress` renders the layout stress set.
 
 ### Prompt-injection screen (specs/18 phase 4; `PROMPT_GUARD` on)
 Llama Prompt Guard 2 on Groq (86M, then 22M; 512-token window, so overlapping chunks), in the background: never

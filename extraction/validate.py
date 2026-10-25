@@ -387,8 +387,7 @@ def validate_extraction(
 
 def repo_profile(doc: SourceDoc, readme_extract: schemas.PortfolioExtract | None,
                  today: date | None = None, method_of=None) -> tuple[Profile, ValidationReport]:
-    """A GitHub repo becomes one project from API metadata; its README adds bullets and tool claims.
-    A parsed README (PARSE_README) brings the kept README text as the description instead of bullets."""
+    """A GitHub repo becomes one project from API metadata; its README adds bullets and tool claims."""
     repo = doc.repo
     pushed = date.fromisoformat(repo.pushed_at[:10]) if repo.pushed_at else None
     created = date.fromisoformat(repo.created_at[:10]) if repo.created_at else None
@@ -404,8 +403,6 @@ def repo_profile(doc: SourceDoc, readme_extract: schemas.PortfolioExtract | None
         sub, report = validate_extraction(doc, readme_extract, today, method_of)
         for p in sub.projects:  # fold README "projects" into the repo instead of duplicating it
             project.bullets += p.bullets
-            if p.method in ("parser", "jev") and p.description:
-                project.description, project.method = p.description, p.method   # kept README text, verbatim
             project.description = project.description or p.description
             report.project_remap[p.id] = project.id
         for d in report.dropped_items:  # dropped README bullets now belong to the repo project

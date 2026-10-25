@@ -36,7 +36,6 @@ def main() -> None:
     a = ap.parse_args()
     from backend import recruiter as rc
     from backend import weight_assistant as wa
-    from parser_gates import db_copy
     from tests.test_weight_assistant import check_direction
     if a.live:
         if not config.LIVE:
@@ -46,7 +45,7 @@ def main() -> None:
     else:
         from tests.ui_fakes import StubWeightsLLM
         llm, mode = StubWeightsLLM(), "stubs"
-    db_copy(ROOT / "data" / "demo.db", WORK)
+    db.copy_db(ROOT / "data" / "demo.db", WORK)
     conn = db.connect(str(WORK))
     job = next(rc.get_job(conn, j["id"]) for j in rc.list_jobs(conn) if j["title"] == a.job)
     texts = yaml.safe_load((ROOT / "tests" / "fixtures" / "weight_texts.yaml").read_text())["texts"]
