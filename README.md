@@ -3,8 +3,9 @@
 Scores a candidate profile (resume, LinkedIn PDF, GitHub, portfolio) against a baseline role
 profile with the EEAT framework (Experience, Expertise, Authority, Trust; 19 subcategories), then
 ranks the gaps and writes an improvement plan. Non-production: it exists to check that the scoring
-logic works end to end. `CLAUDE.md` and `specs/` describe the design; `ITERATION_2.md` the current
-iteration.
+logic works end to end. Where things live: [docs/architecture.md](docs/architecture.md); the tables:
+[docs/schema.md](docs/schema.md); the design: [specs/](specs/README.md) (`specs/04_scoring_rules.md` is the source of
+truth for scoring).
 
 ## Setup
 ```bash
@@ -14,7 +15,14 @@ cp .env.example .env        # then fill in ANTHROPIC_API_KEY, JEV_API_KEY and (r
 cd frontend && npm install && cd ..
 make dev                    # API on :8000 (docs at /docs) + web app on :3000
 ```
-`make api` and `make web` start them separately.
+`make api` and `make web` start them separately. Python 3.13 (the venv and the API image).
+
+### Databases
+`make dev` and `make api` use `rightstaff.db` in the repo root; `make demo` and `make live` use `data/demo.db`
+(`RIGHTSTAFF_DB` overrides either). Both are gitignored, created on first use and migrated when opened.
+- `make reset-db`: an empty database at the current schema with only the seed baselines (`seed/baselines.json`).
+- `make reseed`: the demo database: the synthetic profiles scored from the judgment archive, plus the demo jobs.
+Both move the old file aside (`<db>.before-reset`, `<db>.before-reseed`) and make no model calls.
 
 `GITHUB_TOKEN` can be a fine-grained, read-only token for public repositories. Without it GitHub
 allows 60 requests an hour, which one profile with ~20 repos nearly uses up. GitHub responses are
@@ -225,7 +233,10 @@ RIGHTSTAFF_LIVE=1 .venv/bin/python -m pytest -q     # adds the live model checks
 local Chrome, against the API on fakes (`make fake-api`: FakeJudge, scripted extraction and plan, throwaway
 database). No model calls.
 
-`tests/test_regression.py` pins the FakeJudge archetype scores: they must not change in iteration 2.
+`tests/test_regression.py` pins the FakeJudge archetype scores: they must not change unless a scoring change is
+intended and approved.
+
+`make lint` runs ruff (`ruff.toml`), eslint and the TypeScript check.
 
 ## Third-party licences
 - **PyMuPDF, pymupdf4llm and pymupdf-layout** (PDF → Markdown in `ingest/documents.py`) are

@@ -2,7 +2,7 @@
 PY := .venv/bin/python
 UVICORN := .venv/bin/uvicorn
 
-.PHONY: dev api web test e2e fake-api demo live archive reseed prod-up prod-down
+.PHONY: dev api web test lint e2e fake-api demo live archive reseed reset-db prod-up prod-down
 
 dev:
 	@trap 'kill 0' INT TERM; \
@@ -41,6 +41,10 @@ live:
 test:
 	$(PY) -m pytest -q
 
+lint:
+	uvx ruff check .
+	cd frontend && npx eslint . && npx tsc --noEmit
+
 e2e:
 	cd frontend && npx playwright test
 
@@ -54,6 +58,11 @@ archive:
 # On the server it runs inside the API container (see prod-reseed in docs/deploy.md).
 reseed:
 	$(PY) scripts/reseed.py --db $${RIGHTSTAFF_DB:-data/demo.db} --archive data/judgment-archive.db --force
+
+# An empty database at the current schema with the seed baselines only (no profiles, jobs or runs); no model calls.
+# The old file is moved aside to <db>.before-reset.
+reset-db:
+	$(PY) scripts/reset_db.py --db $${RIGHTSTAFF_DB:-data/demo.db} --force
 
 prod-up:
 	docker compose -f docker-compose.prod.yml up -d --build

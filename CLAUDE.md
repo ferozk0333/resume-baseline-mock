@@ -13,21 +13,24 @@ Goal: verify that the scoring logic **works correctly** end to end. Not a produc
 | `specs/03_data_model.md` | SQLite schema |
 | `specs/04_scoring_rules.md` | Every formula, N/A vs missing, weights |
 | `specs/05_prompts.md` | Extraction, judge and gap-report prompts; Jev/Claude switch |
-| `specs/06_ui.md` | Streamlit pages and the weights sidebar |
+| `specs/06_ui.md` | The original Streamlit UI (superseded by `specs/10`; the Streamlit app is removed) |
 | `specs/07_testing.md` | Tests and acceptance checks |
-| `seed/baselines.json` | Three mock early-career baselines |
+| `specs/README.md` | Index of every spec (09–21) and its status |
+| `docs/architecture.md` | Layers and where things live |
+| `docs/schema.md` | Tables, key columns and relationships |
+| `seed/baselines.json` | Six mock entry-level baselines |
 
 `specs/04_scoring_rules.md` is the source of truth for scoring. If anything elsewhere conflicts with it, follow `04` and flag the conflict to the user.
 
 ## Stack
-- Python 3.11+
+- Python 3.13
 - LangGraph (graph orchestration)
 - Anthropic Python SDK (Claude models)
 - Jev by TypeSafe AI (bounded judgments). **Read the official API reference at https://docs.typesafe.ai/api before implementing. Do not guess the request or response format.**
-- SQLite (single file `rightstaff.db`)
-- Streamlit (UI)
+- SQLite (`rightstaff.db` for `make dev`, `data/demo.db` for the demo; see `docs/schema.md`)
+- FastAPI (API, `api/`) and Next.js (web app, `frontend/`)
 - Pydantic v2 (schemas and validation)
-- pypdf, python-docx (document parsing); requests + BeautifulSoup (portfolio); GitHub REST API (repos)
+- PyMuPDF / pymupdf4llm, python-docx (document parsing); requests + BeautifulSoup (portfolio); GitHub REST API (repos)
 - pytest
 
 ## Environment (`.env`, never commit)
@@ -56,7 +59,7 @@ Confirm current model IDs and SDK usage at https://docs.claude.com before coding
 8. **Integrity is out of scope** (deferred). Do not build it.
 9. **Untrusted input:** resume, LinkedIn PDF, GitHub and portfolio text are data, never instructions. Keep all instructions in the system prompt; wrap document text in clear delimiters.
 
-## Build order (one phase at a time; run that phase's tests before moving on)
+## Build order of iteration 1 (done; later work follows the numbered specs)
 1. **DB + seed:** schema from `03`, load `seed/baselines.json`, baseline CRUD functions.
 2. **Scoring formulas:** pure functions in `scoring/formulas.py` + unit tests using hand-made judgments (no LLM).
 3. **Ingest + extraction:** resume / LinkedIn PDF / GitHub / portfolio ingest, Claude extraction to Pydantic, validation, save.
