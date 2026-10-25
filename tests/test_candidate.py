@@ -319,8 +319,8 @@ def test_details_never_change_scores_or_pools(env):
 
 def test_only_the_candidate_module_reads_application_details():
     """Scoring, judging, extraction, pools, the plan, the recruiter side and the market never touch the table."""
-    allowed = {ROOT / "services" / "candidate.py", ROOT / "core" / "db.py",
-               ROOT / "scripts" / "purge_person.py"}                     # deletes a person's rows; reads nothing out
+    allowed = {ROOT / "services" / "candidate.py", ROOT / "core" / "db" / "schema.py",
+               ROOT / "core" / "db" / "migrations.py", ROOT / "scripts" / "purge_person.py"}                     # deletes a person's rows; reads nothing out
     hits = []
     for folder in ("api", "services", "workflows", "providers", "core", "scoring", "judges", "extraction", "graph",
                    "market", "ingest", "scripts"):
