@@ -1,6 +1,6 @@
 """Hiring workflow data (specs/16 §6): workflows, events, the message thread, interviews, scorecards, Tasks.
 
-The LangGraph graph (backend/hiring_flow.py) decides what happens next; this module stores and shows it.
+The LangGraph graph (workflows/hiring_flow.py) decides what happens next; this module stores and shows it.
 Model calls here: `draft_message` (EMAIL_MODEL: nudge, answer, offer note) and `summarize` (FEEDBACK_MODEL).
 Both are checked in code and fall back to a template / a code summary. Nothing here sends email: sending is
 `workflows.send_email`, reached only from the graph's approve step.
@@ -15,10 +15,10 @@ from datetime import datetime, timedelta
 
 from pydantic import BaseModel, Field
 
-from backend import recruiter as rc
-from backend import replies
-from backend import scheduling as sch
-from backend import workflows as wf
+from services import recruiter as rc
+from workflows import replies
+from workflows import scheduling as sch
+from workflows import engine as wf
 from core import config, db
 from core.db import new_id, now_iso
 from providers.llm import LLMError

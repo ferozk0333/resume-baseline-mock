@@ -34,8 +34,8 @@ def main() -> None:
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--job", default="AI Engineer")
     a = ap.parse_args()
-    from backend import recruiter as rc
-    from backend import weight_assistant as wa
+    from services import recruiter as rc
+    from services import weight_assistant as wa
     from tests.test_weight_assistant import check_direction
     if a.live:
         if not config.LIVE:

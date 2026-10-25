@@ -13,8 +13,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from backend import candidate_jobs as cj
-from backend import recruiter as rc
+from services import candidate_jobs as cj
+from services import recruiter as rc
 from core import config
 
 INTERVIEW_STAGES = {"Scheduling", "Phone screen", "Interview", "Hiring manager review"}
@@ -87,7 +87,7 @@ def _reasons(conn, app: dict, job: dict, role_id: str | None) -> tuple[list[dict
 def application_view(conn, app: dict, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     job = rc.get_job(conn, app["job_id"]) or {}
-    from backend import jobs as jb
+    from services import jobs as jb
     full = jb.get(conn, app["job_id"]) or job
     role_id = cj.job_role(conn, full) if full else None
     wfrow = _workflow(conn, app["id"])

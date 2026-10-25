@@ -85,7 +85,7 @@ class StubWeightsLLM:
     def stub(text: str):
         import yaml
         from pathlib import Path
-        from backend.weight_assistant import DimWeight, Reason, SubWeight, WeightsOut
+        from services.weight_assistant import DimWeight, Reason, SubWeight, WeightsOut
         texts = yaml.safe_load((Path(__file__).parent / "fixtures" / "weight_texts.yaml").read_text())["texts"]
         t = next((x for x in texts if x["text"].strip().lower() == text.strip().lower()),
                  next(x for x in texts if x["id"] == "vague"))["stub"]

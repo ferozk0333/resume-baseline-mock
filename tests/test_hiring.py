@@ -5,11 +5,12 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import hiring as hr
-from backend import mailer, replies
-from backend import scheduling as sch
-from backend import workflows as wf
-from backend.hiring_flow import HiringFlow
+from workflows import hiring as hr
+from workflows import mailer
+from workflows import replies
+from workflows import scheduling as sch
+from workflows import engine as wf
+from workflows.hiring_flow import HiringFlow
 from backend.main import create_app
 from core import config, db
 from providers.llm import LLMError

@@ -444,8 +444,8 @@ def applicants(conn, job: dict, *, sort: str = "match", status: str | None = Non
 
 def panel(conn, app: dict, job: dict) -> dict:
     """Everything the profile panel shows for one applicant."""
-    from backend import linkedin as li
-    from backend import media
+    from services import linkedin as li
+    from services import media
     baseline, profile, scores, agg, evidence_by_id = _context(conn, app, job)
     cand = store.get_candidate(conn, app["candidate_id"])
     evidence = list(evidence_by_id.values())
@@ -514,7 +514,7 @@ EXTRA_LABELS = {"education": "Education", "patent": "Patents", "volunteering": "
 def proof_shown(conn, candidate_id: str, profile, evidence: list[dict]) -> dict:
     """Certifications with honest credential wording, and the display-only proof types (specs/19 Phase D: shown to
     recruiters, not scored). Application details and EEO answers are never part of this."""
-    from backend.review import chips, credential_status
+    from services.review import chips, credential_status
     from extraction import store as st
     types = {e["id"]: e["type"] for e in evidence}
     extra = st.list_extra(conn, candidate_id)

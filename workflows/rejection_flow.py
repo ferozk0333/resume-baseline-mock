@@ -22,10 +22,10 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
-from backend import workflows as wf
+from workflows import engine as wf
 from core import config, db
 from providers.llm import LLMError
-from backend import recruiter as rc
+from services import recruiter as rc
 
 
 class State(TypedDict, total=False):
@@ -116,7 +116,7 @@ class RejectionFlow:
         if sent["status"] == "sent":
             terminal = next(s for s in wf.stages(conn, app["job_id"]) if s["terminal"])
             wf.move(conn, app, terminal["id"], reason="decision email sent")
-            from backend import hiring
+            from workflows import hiring
             hiring.close(conn, app["id"], "not_moving_forward")         # an open hiring workflow ends here
             wf.log_activity(conn, app, "decision", "Decision: not moving forward",
                             {"email_id": sent["id"], "reasons": [r["title"] for r in (sent["reasons"] or {}).get(

@@ -268,14 +268,14 @@ def test_role_family_follows_the_title_until_picked_and_is_stored_on_publish(api
 
 
 def test_role_family_none_means_jobmatch_starts_from_55(api):
-    from backend import candidate_jobs as cj
+    from services import candidate_jobs as cj
     form = read(api)
     d = form["draft"]
     d["details"].update(role_family="none", role_family_auto=False)
     api.put(f"/jobs/{form['job_id']}/draft", json={"draft": d})
     api.post(f"/jobs/{form['job_id']}/publish")
     with db.connect(api.db_path) as c:
-        from backend import jobs as jb
+        from services import jobs as jb
         job = jb.get(c, form["job_id"])
         assert job["role_baseline_id"] == "none" and cj.job_role(c, job) is None
         assert cj.jobmatch_preview(c, "cand", job)["value"] == cj.jobmatch_value("cand", job["id"], None)

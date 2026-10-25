@@ -12,8 +12,8 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
 
-from backend import candidate as cx
-from backend import jobs as jb
+from services import candidate as cx
+from services import jobs as jb
 from core import config, db
 from core.db import new_id, now_iso
 from extraction import store
@@ -244,7 +244,7 @@ def closest_evidence(conn, candidate_id: str, role_id: str | None, job_baseline)
     run = cx.role_run(conn, candidate_id, role_id) if role_id else None
     if run is None:
         return {}, None
-    from backend import recruiter as rc
+    from services import recruiter as rc
     from graph.pipeline import run_scores
     role_b = db.get_baseline(conn, run["baseline_id"])
     profile = store.load_profile(conn, candidate_id)

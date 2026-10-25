@@ -57,7 +57,7 @@ def _seed_events(conn, jid: str, spec: dict, now: datetime) -> None:
 def seed(conn, now: datetime | None = None, path: Path | None = None) -> dict:
     """Insert the demo jobs that are not there yet, and mark the earlier demo jobs (the 3 seeded jobs and
     Brightwater) as demo data. Returns counts."""
-    from backend import workflows as wf
+    from workflows import engine as wf
     now = now or datetime.now(timezone.utc)
     data = json.loads((path or SEED_FILE).read_text())["jobs"]
     added = 0

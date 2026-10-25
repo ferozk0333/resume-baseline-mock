@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from backend import wait_screens as ws
+from services import wait_screens as ws
 from core import config, db
 from tests.helpers import SAMPLE_RESUME_LINES, make_pdf
 from tests.test_candidate import env, roles, scored  # noqa: F401  (fixture)

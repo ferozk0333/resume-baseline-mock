@@ -28,12 +28,12 @@ from typing import TypedDict
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
-from backend import hiring as hr
-from backend import recruiter as rc
-from backend import replies
-from backend import scheduling as sch
-from backend import workflows as wf
-from backend.rejection_flow import RejectionFlow, checkpointer
+from workflows import hiring as hr
+from services import recruiter as rc
+from workflows import replies
+from workflows import scheduling as sch
+from workflows import engine as wf
+from workflows.rejection_flow import RejectionFlow, checkpointer
 from core import config, db
 
 

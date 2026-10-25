@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import candidate as cx
+from services import candidate as cx
 from backend.main import create_app
 from core import config, db
 from graph.context import Deps
@@ -177,7 +177,7 @@ def test_adding_a_role_reuses_job_independent_judgments(env):
 
 
 def test_baseline_score_never_applies_to_a_job(env):
-    from backend import recruiter as rc
+    from services import recruiter as rc
     with db.connect(env.path) as c:
         rc.create_job(c, DS, "Data Scientist", "Demo Co")
     cid, _ = scored(env, [DS])
@@ -205,7 +205,7 @@ def test_targets_one_to_three_role_baselines_one_primary(env):
 
 
 def test_a_job_baseline_is_not_a_target_role(env):
-    from backend import recruiter as rc
+    from services import recruiter as rc
     with db.connect(env.path) as c:
         c.execute("INSERT INTO baselines (id, title, level, required_years, expected_reach, is_mock, owner_job_id) "
                   "VALUES ('job-b', 'Job', 'entry', 1, 2, 0, 'j1')")
@@ -282,7 +282,7 @@ def test_details_never_reach_a_model(env):
 
 
 def test_details_never_in_recruiter_responses(env):
-    from backend import recruiter as rc
+    from services import recruiter as rc
     api = env.api
     with db.connect(env.path) as c:
         job = rc.create_job(c, DS, "Data Scientist", "Demo Co")

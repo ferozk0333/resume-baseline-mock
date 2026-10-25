@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from backend import candidate as cx
+from services import candidate as cx
 from core import config
 
 TIPS_FILE = Path(__file__).resolve().parent.parent / "config" / "wait_tips.yaml"

@@ -19,8 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from backend import media
-from backend.tasks import TaskStore, clean_error
+from services import media
+from services.tasks import TaskStore, clean_error
 from core import config, db
 from core.models import Baseline
 from extraction import store
@@ -92,7 +92,7 @@ class State:
     def rejection(self):
         """The "Not moving forward" graph (paused drafts are checkpointed to SQLite)."""
         if self._rejection is None:
-            from backend.rejection_flow import RejectionFlow
+            from workflows.rejection_flow import RejectionFlow
             self._rejection = RejectionFlow(self.db_path, self.writer)
         return self._rejection
 
@@ -100,7 +100,7 @@ class State:
     def hiring(self):
         """The hiring workflow graph, one thread per application (checkpointed to SQLite)."""
         if self._hiring is None:
-            from backend.hiring_flow import HiringFlow
+            from workflows.hiring_flow import HiringFlow
             self._hiring = HiringFlow(self.db_path, self.writer, rejection=self.rejection)
         return self._hiring
 
@@ -552,7 +552,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         with conn() as c:
             cand = store.get_candidate(c, candidate_id) or not_found("Candidate")
             if baseline_id is None:
-                from backend import candidate as cx
+                from services import candidate as cx
                 baseline_id = (cx.primary(c, candidate_id) or {}).get("baseline_id") or next(iter(cx.role_baselines(c)))
             if db.get_baseline(c, baseline_id) is None:
                 not_found("Baseline")
@@ -563,7 +563,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             media.validate_links(videos)
             certs = [CertificationForm(**x) for x in json.loads(certifications or "[]")]
             refs = [ReferenceForm(**x) for x in json.loads(references or "[]")]
-            from backend import linkedin as li
+            from services import linkedin as li
             profile_url = li.normalize(linkedin_url) if (linkedin_url or "").strip() else None
         except media.MediaError as exc:
             raise HTTPException(422, str(exc)) from exc
@@ -577,19 +577,19 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             github=github or None, portfolio_url=portfolio_url or None, certifications=certs, references=refs,
             name=cand["name"], target_role=cand["target_role"], candidate_id=candidate_id)
         task_id = tasks.create("onboard", candidate_id)
-        from backend import wait_screens as ws               # the reading wait screen lists these (specs/17)
+        from services import wait_screens as ws               # the reading wait screen lists these (specs/17)
         added = ws.added_sources({"linkedin_pdf": inputs.linkedin_pdf, "github": inputs.github,
                                   "portfolio": inputs.portfolio_url})
         tasks.event(task_id, "queued", "Waiting to start", 0, result_json={"sources": added})
         if onboarding:
-            from backend import candidate as cx
+            from services import candidate as cx
             with conn() as c:
                 cx.set_step(c, candidate_id, "roles", read_task_id=task_id, confirmed_at=None)
 
         def work(progress):
             progress.say("ingest", "Reading your documents…", 2)
             if onboarding:
-                from backend import candidate as cx
+                from services import candidate as cx
                 on_event = cx.reading_progress(progress)
             else:
                 on_event = progress.on_event
@@ -611,7 +611,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     def public_warning(e: dict) -> str:
         """A failed source as the candidate sees it on Review: never model or provider details."""
-        from backend import candidate as cx
+        from services import candidate as cx
         label = {"resume": "Resume", "linkedin_pdf": "LinkedIn PDF", "portfolio": "Portfolio",
                  "github_repo": "GitHub repo"}.get(e["type"], e["type"])
         text = cx.public_error(e["error"])
@@ -625,10 +625,10 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             evidence = store.list_evidence(c, candidate_id)
             from dataclasses import asdict
             data = json.loads(json.dumps(asdict(profile), default=str))
-            from backend.review import review_view
+            from services.review import review_view
             review_view(data, profile, evidence, store.list_extra(c, candidate_id))
-            from backend import candidate as cx
-            from backend import wait_screens as ws
+            from services import candidate as cx
+            from services import wait_screens as ws
             from extraction.deletions import mentions as deletion_mentions
             from extraction.prompt_guard import notices as guard_notices
             ob = cx.onboarding(c, candidate_id)
@@ -766,7 +766,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             return db.list_runs(c, candidate_id)
 
     # --- Candidate experience (specs/17) ---------------------------------------------------------------------
-    from backend import candidate as cx
+    from services import candidate as cx
 
     def cand_or_404(c, candidate_id: str) -> dict:
         return store.get_candidate(c, candidate_id) or not_found("Candidate")
@@ -794,7 +794,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     @app.get("/candidates/{candidate_id}/reading-progress", tags=["candidate"])
     def reading_progress(candidate_id: str):
         """The document-reading wait: each added source's status and what was found in it. From saved data only."""
-        from backend import wait_screens as ws
+        from services import wait_screens as ws
         with conn() as c:
             cand_or_404(c, candidate_id)
             ob = cx.onboarding(c, candidate_id)
@@ -803,7 +803,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     @app.get("/candidates/{candidate_id}/scoring-progress", tags=["candidate"])
     def scoring_progress(candidate_id: str):
         """The scoring wait: per role, a status and a fill per dimension (no internal counts)."""
-        from backend import wait_screens as ws
+        from services import wait_screens as ws
         with conn() as c:
             cand_or_404(c, candidate_id)
             ob = cx.onboarding(c, candidate_id)
@@ -812,7 +812,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     @app.get("/config/wait-tips", tags=["candidate"])
     def wait_tips():
         """"Good to know" tips for the two waits, from config/wait_tips.yaml."""
-        from backend import wait_screens as ws
+        from services import wait_screens as ws
         return ws.tips()
 
     @app.put("/candidates/{candidate_id}/onboarding", tags=["candidate"])
@@ -967,7 +967,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     @app.get("/candidates/{candidate_id}/applications", tags=["candidate"])
     def candidate_applications(candidate_id: str):
         """My applications: candidate-facing status and timeline. Never scores, ranks, notes or scorecards."""
-        from backend import my_applications as ma
+        from services import my_applications as ma
         with conn() as c:
             cand_or_404(c, candidate_id)
             return ma.my_applications(c, candidate_id)
@@ -995,7 +995,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             return bad_request(cx.save_application_details, c, candidate_id, body)
 
     # --- Candidate Home and job detail (specs/17 §4–§6): code only, no model calls ---------------------------------
-    from backend import candidate_jobs as cj
+    from services import candidate_jobs as cj
 
     @app.get("/candidates/{candidate_id}/jobs", tags=["candidate"])
     def candidate_jobs(candidate_id: str):
@@ -1060,11 +1060,11 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             if not res.get("run_id"):
                 raise ValueError(res.get("blocked") or "Scoring did not start.")
             if not res.get("paused"):
-                from backend import recruiter
+                from services import recruiter
                 with conn() as c:
                     recruiter.attach_run(c, res["run_id"])     # the candidate now applies to the role's job
                     if application_id:
-                        from backend import jobs as jb
+                        from services import jobs as jb
                         jb.link_run(c, application_id, res["run_id"])
             return {"run_id": res["run_id"], "final": res.get("final"), "errors": res.get("errors") or [],
                     "paused": res.get("paused"), "_message": res.get("paused") or "Score ready"}
@@ -1263,8 +1263,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     # --- Recruiter (phase 11) ----------------------------------------------------------------------------
-    from backend import recruiter as rc
-    from backend import workflows as wf
+    from services import recruiter as rc
+    from workflows import engine as wf
 
     def job_or_404(c, job_id: str) -> dict:
         return rc.get_job(c, job_id) or not_found("Job")
@@ -1279,7 +1279,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             return rc.list_jobs(c)
 
     # --- Create, edit and publish jobs (specs/14) ------------------------------------------------------------
-    from backend import jobs as jb
+    from services import jobs as jb
 
     def draft_or_404(c, job_id: str) -> dict:
         try:
@@ -1663,14 +1663,14 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     # --- Weight assistant (specs/21): suggest → preview → Apply / Discard → Undo. Nothing changes until Apply. ---
 
     def suggestion_or_404(c, job_id: str, sid: str) -> dict:
-        from backend import weight_assistant as wa
+        from services import weight_assistant as wa
         return wa.get(c, job_id, sid) or not_found("Suggestion")
 
     @app.post("/jobs/{job_id}/weight-suggestions", tags=["recruiter"])
     def suggest_weights(job_id: str, body: WeightSuggestIn):
         """One model call (or the cache): weights only, from the recruiter's text and the job's title, level and
         weights. No applicant data is sent. The preview re-aggregates saved scores; nothing is applied."""
-        from backend import weight_assistant as wa
+        from services import weight_assistant as wa
         with conn() as c:
             j = job_or_404(c, job_id)
             try:
@@ -1683,7 +1683,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     @app.get("/jobs/{job_id}/weight-suggestions", tags=["recruiter"])
     def weight_suggestion_history(job_id: str):
-        from backend import weight_assistant as wa
+        from services import weight_assistant as wa
         with conn() as c:
             job_or_404(c, job_id)
             return wa.history(c, job_id)
@@ -1691,21 +1691,21 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     @app.get("/jobs/{job_id}/weight-suggestions/{sid}", tags=["recruiter"])
     def weight_suggestion(job_id: str, sid: str):
         """Re-open a suggestion: changes and preview against the job's weights now."""
-        from backend import weight_assistant as wa
+        from services import weight_assistant as wa
         with conn() as c:
             j = job_or_404(c, job_id)
             return wa.view(c, j, suggestion_or_404(c, job_id, sid))
 
     @app.post("/jobs/{job_id}/weight-suggestions/{sid}/apply", tags=["recruiter"])
     def apply_weight_suggestion(job_id: str, sid: str):
-        from backend import weight_assistant as wa
+        from services import weight_assistant as wa
         with conn() as c:
             j = job_or_404(c, job_id)
             return {"job": wa.apply(c, j, suggestion_or_404(c, job_id, sid))}
 
     @app.post("/jobs/{job_id}/weight-suggestions/{sid}/undo", tags=["recruiter"])
     def undo_weight_suggestion(job_id: str, sid: str):
-        from backend import weight_assistant as wa
+        from services import weight_assistant as wa
         with conn() as c:
             j = job_or_404(c, job_id)
             try:
@@ -1728,7 +1728,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     @app.post("/applications/{app_id}/opened", status_code=204, tags=["recruiter"])
     def panel_opened(app_id: str):
         """The recruiter opened this applicant's panel: an activity signal for the job (specs/17 §4.1)."""
-        from backend import candidate_jobs as cj
+        from services import candidate_jobs as cj
         with conn() as c:
             app_or_404(c, app_id)
             cj.record_panel_opened(c, app_id)
@@ -1792,7 +1792,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     @app.get("/jobs/{job_id}/pipeline", tags=["workflows"])
     def job_pipeline(job_id: str):
         """Board columns; each card carries its workflow status (Needs your action, Scheduled …)."""
-        from backend import hiring
+        from workflows import hiring
         with conn() as c:
             board = wf.pipeline(c, job_or_404(c, job_id))
             for col in board["stages"]:
@@ -1831,8 +1831,8 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         return state.rejection.draft(app_id, body.reason_ids if body else None, body.note if body else None)
 
     # --- Hiring workflow (specs/16): one per application; every email and decision waits for the recruiter ----
-    from backend import hiring as hr
-    from backend import replies as rp
+    from workflows import hiring as hr
+    from workflows import replies as rp
 
     def start_one(c, app_id: str, confirm_move: bool) -> dict:
         a = app_or_404(c, app_id)
@@ -1927,7 +1927,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     def recruiter_tasks():
         """Everything waiting for the recruiter across jobs, oldest first, including applications waiting longer than
         CLOSURE_DAYS for an answer (specs/17 §7: a reminder only; nothing is sent)."""
-        from backend import my_applications as ma
+        from services import my_applications as ma
         with conn() as c:
             return sorted(hr.tasks(c) + ma.closure_tasks(c), key=lambda t: t["since"] or "")
 

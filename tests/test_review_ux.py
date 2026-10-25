@@ -60,7 +60,7 @@ def test_upload_size_limit_and_settings(api, monkeypatch):  # noqa: F811
 def test_no_verified_wording_on_candidate_or_recruiter_screens():
     """We never check a credential, so nothing shown says "verified" (specs/19 item 5)."""
     import re
-    from backend.review import credential_status
+    from services.review import credential_status
     from scoring.explain import FORMULAS
     from scoring.peer_features import FEATURES
     hits = []
@@ -174,7 +174,7 @@ def test_date_conflict_between_resume_and_linkedin_is_flagged():
     b = RoleRec("Data Analyst", "Acme", None, date(2023, 3, 1), None, True, None, "q", "l")
     merged, _ = merge_profiles([Profile(roles=[a]), Profile(roles=[b])])
     assert merged.roles[0].review_reasons == ["sources_disagree_dates|l|2023-03|present"]
-    from backend.review import conflict_message
+    from services.review import conflict_message
     msg = conflict_message(merged.roles[0].review_reasons[0], "resume", {"l": "linkedin_pdf"})
     assert msg == "Your resume and LinkedIn give different dates for this role (LinkedIn: Mar 2023 – Present). Check them."
 
@@ -448,7 +448,7 @@ def test_display_only_items_never_reach_scoring(api):  # noqa: F811
 
 
 def test_recruiters_see_display_only_proof_and_honest_credential_wording(tmp_path):
-    from backend.recruiter import proof_shown
+    from services.recruiter import proof_shown
     conn = db.connect(tmp_path / "t.db")
     cid = store.create_candidate(conn, "Jane")
     eid = store.add_evidence(conn, cid, "resume", "upload", raw_text="x")

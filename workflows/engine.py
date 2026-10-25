@@ -17,8 +17,8 @@ import re
 
 from pydantic import BaseModel, Field
 
-from backend import mailer
-from backend import recruiter as rc
+from workflows import mailer
+from services import recruiter as rc
 from core import config, db
 from core.db import new_id, now_iso
 from providers.llm import LLMError

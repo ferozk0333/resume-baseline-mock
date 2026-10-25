@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from backend import recruiter as rc  # noqa: E402
+from services import recruiter as rc  # noqa: E402
 from core import config, db  # noqa: E402
 from extraction import store  # noqa: E402
 from graph.pipeline import run_scores  # noqa: E402

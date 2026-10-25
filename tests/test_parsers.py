@@ -333,6 +333,6 @@ def test_linkedin_honors_awards_become_award_claims_never_skills(tmp_path):
     assert [n for n, k in kinds.items() if k != "award"] == ["Excel", "SQL", "Power BI"]
     profile, _ = validate_extraction(SourceDoc("e", "linkedin_pdf", text, "LinkedIn"), res.extract,
                                      method_of=res.method_of)
-    from backend.recruiter import _evidence_items
+    from services.recruiter import _evidence_items
     listed = [i["text"] for i in _evidence_items(profile, {}) if i["kind"] == "listed"]
     assert listed == ["Excel", "SQL", "Power BI"]

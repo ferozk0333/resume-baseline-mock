@@ -24,7 +24,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from backend import scheduling as sch
+from workflows import scheduling as sch
 from core import config
 from providers.llm import LLMError
 from core.text import wrap_tag

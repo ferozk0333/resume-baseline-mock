@@ -384,7 +384,7 @@ def preview(conn, job: dict, weights: dict) -> dict:
 
 def apply(conn, job: dict, row: dict) -> dict:
     """The job's weights become the suggestion (re-aggregation only, no model call); the previous ones are kept."""
-    from backend import recruiter as rc
+    from services import recruiter as rc
     previous = job["weights"]
     rc.update_job(conn, job["id"], weights=json.loads(row["weights_json"]))
     with conn:
@@ -394,7 +394,7 @@ def apply(conn, job: dict, row: dict) -> dict:
 
 
 def undo(conn, job: dict, row: dict) -> dict:
-    from backend import recruiter as rc
+    from services import recruiter as rc
     if not row["applied"] or not row["previous_weights_json"]:
         raise ValueError("This suggestion was not applied.")
     rc.update_job(conn, job["id"], weights=json.loads(row["previous_weights_json"]))

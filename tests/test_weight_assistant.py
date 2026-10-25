@@ -7,8 +7,8 @@ import math
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import recruiter as rc
-from backend import weight_assistant as wa
+from services import recruiter as rc
+from services import weight_assistant as wa
 from backend.main import create_app
 from core import config, db
 from providers.llm import LLMError

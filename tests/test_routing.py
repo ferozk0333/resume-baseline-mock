@@ -379,7 +379,7 @@ def test_gemini_usage_rows_keep_the_bare_model_name(env):
 
 
 def test_candidates_never_see_model_or_provider_details():
-    from backend.candidate import BUSY_TEXT, public_error
+    from services.candidate import BUSY_TEXT, public_error
     assert public_error("extract_document: no model could answer after 4 attempt(s): gemini/gemini-3-flash-preview: "
                         "HTTP 503") == BUSY_TEXT
     assert public_error("extract_web: no valid answer from two models (gemini/gemini-3.5-flash-lite output was cut "

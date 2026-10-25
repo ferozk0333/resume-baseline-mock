@@ -337,7 +337,7 @@ def reading_progress(progress):
 def scoring_progress(progress, title: str, index: int, total: int):
     """Overall percentage across the roles being scored. The wait screen reads per-dimension progress from the saved
     scores (`scoring_view`), so these lines never show internal counts."""
-    from backend.tasks import SUBCATEGORY_COUNT
+    from services.tasks import SUBCATEGORY_COUNT
     span = 90 / total
     done = {"n": 0}
 

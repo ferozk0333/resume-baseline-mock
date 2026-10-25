@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import json
 
-from backend import recruiter as rc
-from backend import workflows as wf
+from services import recruiter as rc
+from workflows import engine as wf
 from core import config, db
 from core.db import new_id, now_iso
 from core.models import REACH_LABELS, Baseline, BaselineCriterion, level_years_warning

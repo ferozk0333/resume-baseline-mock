@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import recruiter as rc
+from services import recruiter as rc
 from backend.main import create_app
 from core import config, db
 from extraction import store

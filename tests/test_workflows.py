@@ -2,8 +2,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import mailer
-from backend import workflows as wf
+from workflows import mailer
+from workflows import engine as wf
 from backend.main import create_app
 from core import config, db
 from providers.llm import LLMError
@@ -128,7 +128,7 @@ def test_reasons_are_preselected_from_must_haves_gaps_and_missing_evidence(seede
     conn = db.connect(seeded)
     app = dict(conn.execute("SELECT a.* FROM applications a JOIN candidates c ON c.id = a.candidate_id "
                             "WHERE c.name = 'Keyword-heavy'").fetchone())
-    from backend import recruiter as rc
+    from services import recruiter as rc
     reasons = wf.build_reasons(conn, app, rc.get_job(conn, app["job_id"]))
     assert {r["source"] for r in reasons} >= {"must-have", "gap"}
     assert [r["selected"] for r in reasons][:3] == [True, True, True] and not any(r["selected"] for r in reasons[3:])
@@ -191,7 +191,7 @@ def test_send_after_a_restart_still_works(seeded):
     _, rows = ds_rows(api)
     app = by_name(rows, "Keyword-heavy")
     draft = api.post(f"/applications/{app['application_id']}/not-moving-forward").json()["email"]
-    from backend.rejection_flow import RejectionFlow
+    from workflows.rejection_flow import RejectionFlow
     flow = RejectionFlow(seeded, None)                                      # a new process: only the SQLite file
     paused = flow.graph.get_state({"configurable": {"thread_id": f"reject:{app['application_id']}"}})
     assert flow._paused_email(paused) == draft["id"]                         # the paused thread itself survived
