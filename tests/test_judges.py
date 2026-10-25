@@ -130,7 +130,7 @@ def test_claude_judge_yes_no_and_option_mismatch():
 
 
 def test_claude_judge_wraps_llm_errors():
-    from core.llm import LLMError
+    from providers.llm import LLMError
 
     class Failing:
         def parse(self, **kw):

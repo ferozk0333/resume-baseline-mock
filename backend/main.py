@@ -39,9 +39,9 @@ log = logging.getLogger("rightstaff.api")
 # --- Dependencies -----------------------------------------------------------------------------------
 
 def default_deps() -> Deps:
-    from core.llm import RoutedLLM
+    from providers.llm import RoutedLLM
     from judges.service import get_judge
-    from core.routing import models_of
+    from providers.routing import models_of
     models = [x for m in (config.EXTRACT_MODEL, config.JUDGE_FALLBACK_MODEL, config.COMPLEXITY_MODEL,
                           config.REASONING_MODEL) for x in models_of(m)]
     if not config.ANTHROPIC_API_KEY and not all(m.startswith(("groq/", "gemini/")) for m in models):
@@ -75,7 +75,7 @@ class State:
         scoring deps (and its Jev key check) is left to scoring."""
         if self._deps is not None or os.getenv("RIGHTSTAFF_DEPS_FACTORY"):
             return self.deps.writer
-        from core.llm import RoutedLLM
+        from providers.llm import RoutedLLM
         self._writer = getattr(self, "_writer", None) or RoutedLLM()
         return self._writer
 
@@ -84,7 +84,7 @@ class State:
         """The JD / market reader (specs/14, 15). Like `writer`, it never needs the judge."""
         if self._deps is not None or os.getenv("RIGHTSTAFF_DEPS_FACTORY"):
             return self.deps.job_llm
-        from core.llm import RoutedLLM
+        from providers.llm import RoutedLLM
         self._job_llm = getattr(self, "_job_llm", None) or RoutedLLM(max_tokens=config.EXTRACT_MAX_TOKENS)
         return self._job_llm
 

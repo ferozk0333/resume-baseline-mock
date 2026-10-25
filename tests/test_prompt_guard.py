@@ -111,7 +111,7 @@ def test_groq_guard_fails_over_to_the_small_model_and_needs_live():
     s = Session((500, ""), (200, "0.93"))
     assert pg.GroqGuard(session=s, api_key="k").score("text") == (0.93, "groq/meta-llama/llama-prompt-guard-2-22m")
     assert s.models == ["meta-llama/llama-prompt-guard-2-86m", "meta-llama/llama-prompt-guard-2-22m"]
-    from core.llm import LLMError
+    from providers.llm import LLMError
     with pytest.raises(LLMError):
         pg.GroqGuard(api_key="k").score("text")                                 # real session: LIVE guard
 

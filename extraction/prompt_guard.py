@@ -80,7 +80,7 @@ class GroqGuard:
     def __init__(self, session=None, api_key: str | None = None, limiter=None, sleep=None):
         import requests
         import time
-        from core.routing import LIMITER
+        from providers.routing import LIMITER
         self._real = session is None
         self.session = session or requests.Session()
         self.api_key = api_key if api_key is not None else config.GROQ_API_KEY
@@ -89,8 +89,8 @@ class GroqGuard:
         self.calls = 0
 
     def score(self, chunk: str) -> tuple[float, str]:
-        from core.llm import require_live
-        from core.routing import parse_duration
+        from providers.llm import require_live
+        from providers.routing import parse_duration
         if self._real:
             require_live("Groq")
         tokens = len(chunk) // 3 + 20

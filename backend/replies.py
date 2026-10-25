@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from backend import scheduling as sch
 from core import config
-from core.llm import LLMError
+from providers.llm import LLMError
 from core.text import wrap_tag
 from extraction.extract import load_prompt
 

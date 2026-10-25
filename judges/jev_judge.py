@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 
 from core import config, timing
-from core.limits import jev_slots
+from providers.limits import jev_slots
 from judges.base import Judge, Judgment, JudgeError, _as_text, question
 from judges.questions import Question
 
@@ -109,7 +109,7 @@ class JevJudge:
         if self._real and not config.LIVE:
             raise JevError("Real Jev calls are off: set LIVE=1 to call providers (make live does).")
         if self._real:
-            from core.spend import SpendCapReached, charge
+            from providers.spend import SpendCapReached, charge
             try:
                 charge("jev")                          # daily cap (deploy item 6): past it, the free route judges
             except SpendCapReached as exc:

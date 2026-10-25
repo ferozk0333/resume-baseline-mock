@@ -6,7 +6,7 @@ from backend import mailer
 from backend import workflows as wf
 from backend.main import create_app
 from core import config, db
-from core.llm import LLMError
+from providers.llm import LLMError
 from graph.context import Deps
 from judges.fake_judge import FakeJudge
 from tests import ui_fakes

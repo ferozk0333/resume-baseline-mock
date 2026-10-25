@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from core import config, db
-from core.llm import ClaudeLLM, LLMError, sampling_kwargs
+from providers.llm import ClaudeLLM, LLMError, sampling_kwargs
 from extraction import schemas, store
 from extraction.extract import build_user_message, extract_document, load_prompt, wrap_document
 from extraction.onboard import (
@@ -544,7 +544,7 @@ def test_cross_source_roles_need_overlapping_dates_and_a_shared_title_word():
 
 
 def test_effort_is_sent_only_to_models_that_support_it():
-    from core.llm import effort_kwargs
+    from providers.llm import effort_kwargs
     assert effort_kwargs("claude-sonnet-5-5", "medium") == {"output_config": {"effort": "medium"}}
     assert effort_kwargs("claude-haiku-5-5", "low") == {"output_config": {"effort": "low"}}
     assert effort_kwargs("claude-haiku-4-5-20251001", "low") == {}
@@ -669,7 +669,7 @@ def _groq_ok(content, finish="stop"):
 
 
 def test_groq_request_uses_strict_schema_and_fits_the_token_limit(monkeypatch):
-    from core.llm import GroqLLM
+    from providers.llm import GroqLLM
     monkeypatch.setattr(config, "GROQ_TPM", 8000)
     session = GroqSession(_groq_ok({"projects": [], "claims": []}))
     out = GroqLLM(session=session, api_key="k", max_tokens=12000).parse(
@@ -697,8 +697,8 @@ def test_groq_request_uses_strict_schema_and_fits_the_token_limit(monkeypatch):
 
 def test_groq_429_goes_to_the_router_with_the_stated_reset():
     """specs/18: no sleeping in the client; the router moves on and rests the model until the reset."""
-    from core.llm import GroqLLM
-    from core.routing import Throttled
+    from providers.llm import GroqLLM
+    from providers.routing import Throttled
     session = GroqSession((429, {"error": "Rate limit reached for requests per day (RPD)"},
                            {"retry-after": "2", "x-ratelimit-reset-requests": "7m54.72s"}))
     with pytest.raises(Throttled) as e:
@@ -709,7 +709,7 @@ def test_groq_429_goes_to_the_router_with_the_stated_reset():
 
 
 def test_groq_cut_off_and_invalid_output_are_errors():
-    from core.llm import GroqLLM
+    from providers.llm import GroqLLM
     cut = GroqSession(_groq_ok("{\"projects\": [", finish="length"))
     with pytest.raises(LLMError, match="cut off"):
         GroqLLM(session=cut, api_key="k").parse(model="groq/openai/gpt-oss-20b", system="S", user="U",
@@ -721,7 +721,7 @@ def test_groq_cut_off_and_invalid_output_are_errors():
 
 
 def test_router_sends_groq_models_to_groq_and_judgments_record_the_provider(monkeypatch):
-    from core.llm import ClaudeLLM, GroqLLM, RoutedLLM
+    from providers.llm import ClaudeLLM, GroqLLM, RoutedLLM
     from judges.claude_judge import method_of
     r = RoutedLLM()
     assert isinstance(r._for("groq/openai/gpt-oss-120b"), GroqLLM)

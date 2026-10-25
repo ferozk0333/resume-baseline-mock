@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from core import timing
-from core.llm import StructuredLLM
+from providers.llm import StructuredLLM
 from extraction import store
 from extraction.extract import extract_all
 from extraction.records import (

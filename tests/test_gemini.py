@@ -5,8 +5,8 @@ import json
 import pytest
 
 from core import config, db
-from core.llm import DailyLimitReached, GeminiLLM, LLMError, RoutedLLM, gemini_schema
-from core.routing import ModelLimiter, Overloaded, Router, Throttled, Unusable
+from providers.llm import DailyLimitReached, GeminiLLM, LLMError, RoutedLLM, gemini_schema
+from providers.routing import ModelLimiter, Overloaded, Router, Throttled, Unusable
 from extraction import schemas
 from tests.helpers import FakeResponse
 
@@ -144,7 +144,7 @@ def test_daily_limit_in_a_run_is_reported_as_paused(tmp_path):
     from graph.pipeline import Pipeline
     from judges.base import JudgeError
     from tests.fixtures.archetypes import ARCHETYPES, TODAY
-    from core.routing import daily_message
+    from providers.routing import daily_message
     import time
     path = str(tmp_path / "p.db")
     conn = db.init_app_db(path)

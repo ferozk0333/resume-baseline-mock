@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from core import config, db
 from core.db import new_id, now_iso
-from core.llm import LLMError
+from providers.llm import LLMError
 from core.text import wrap_tag
 
 log = logging.getLogger(__name__)
@@ -240,8 +240,8 @@ def _ask(llm, user: str) -> tuple[WeightsOut | None, str | None, str]:
     """(output, model, status) over the route's models in order. An unavailable model fails over as usual; an invalid
     answer (schema or code checks) is retried once on the next model, then status "invalid"."""
     from pydantic import ValidationError
-    from core.llm import DailyLimitReached
-    from core.routing import Overloaded, Throttled, Unusable, models_of
+    from providers.llm import DailyLimitReached
+    from providers.routing import Overloaded, Throttled, Unusable, models_of
     from extraction.extract import load_prompt
     busy = (Overloaded, Throttled, Unusable, DailyLimitReached)
     invalid = 0

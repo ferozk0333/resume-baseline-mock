@@ -11,8 +11,8 @@ from backend import recruiter as rc
 from backend import weight_assistant as wa
 from backend.main import create_app
 from core import config, db
-from core.llm import LLMError
-from core.routing import Overloaded
+from providers.llm import LLMError
+from providers.routing import Overloaded
 from graph.context import Deps
 from judges.fake_judge import FakeJudge
 from tests import ui_fakes

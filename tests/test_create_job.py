@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from backend.main import create_app
 from core import config, db
-from core.llm import LLMError
+from providers.llm import LLMError
 from extraction import job_reader as jr
 from graph.context import Deps
 from judges.fake_judge import FakeJudge

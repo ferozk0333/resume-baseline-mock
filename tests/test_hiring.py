@@ -12,7 +12,7 @@ from backend import workflows as wf
 from backend.hiring_flow import HiringFlow
 from backend.main import create_app
 from core import config, db
-from core.llm import LLMError
+from providers.llm import LLMError
 from graph.context import Deps
 from judges.fake_judge import FakeJudge
 from tests import ui_fakes
@@ -576,7 +576,7 @@ def test_workflows_do_not_need_the_judge(seeded, monkeypatch):
     monkeypatch.delenv("RIGHTSTAFF_DEPS_FACTORY", raising=False)
     monkeypatch.setattr(config, "DB_PATH", seeded)
     monkeypatch.setattr(main, "default_deps", lambda: (_ for _ in ()).throw(ValueError("JUDGE=jev needs JEV_API_KEY")))
-    monkeypatch.setattr("core.llm.RoutedLLM.parse", lambda self, **kw: (_ for _ in ()).throw(LLMError("offline")))
+    monkeypatch.setattr("providers.llm.RoutedLLM.parse", lambda self, **kw: (_ for _ in ()).throw(LLMError("offline")))
     api = TestClient(main.create_app())
     job, rows = ds(api)
     r = api.post(f"/applications/{rows[0]['application_id']}/workflow", json={"confirm_move": True})

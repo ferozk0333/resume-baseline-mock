@@ -1,7 +1,8 @@
 """Prototype deployment (docs/deploy.md): health check, upload rate limit, spending caps, the required demo redirect."""
 import pytest
 
-from core import config, db, spend
+from core import config, db
+from providers import spend
 from tests.test_api import DS, api  # noqa: F401  (fixture)
 
 

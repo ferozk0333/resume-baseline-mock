@@ -10,7 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import BaseDocTemplate, Frame, FrameBreak, PageTemplate, Paragraph
 
 from core import db
-from core.llm import ClaudeLLM, LLMError, RUNAWAY_MESSAGE, RunawayOutput, is_runaway
+from providers.llm import ClaudeLLM, LLMError, RUNAWAY_MESSAGE, RunawayOutput, is_runaway
 from extraction import schemas, store
 from extraction.onboard import OnboardingInputs, Upload, run_onboarding
 from extraction.validate import QuoteIndex

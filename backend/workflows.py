@@ -21,7 +21,7 @@ from backend import mailer
 from backend import recruiter as rc
 from core import config, db
 from core.db import new_id, now_iso
-from core.llm import LLMError
+from providers.llm import LLMError
 from core.text import wrap_tag
 from extraction import store
 from extraction.extract import load_prompt

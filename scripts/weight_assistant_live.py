@@ -40,7 +40,7 @@ def main() -> None:
     if a.live:
         if not config.LIVE:
             sys.exit("Live: set LIVE=1 LLM_PROVIDER=gemini, and only after the go.")
-        from core.llm import RoutedLLM
+        from providers.llm import RoutedLLM
         llm, mode = RoutedLLM(), "live"
     else:
         from tests.ui_fakes import StubWeightsLLM

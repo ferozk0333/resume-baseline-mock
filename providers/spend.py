@@ -25,7 +25,7 @@ def cap(provider: str) -> int:
 
 def used_today(provider: str, db_path: str | None = None) -> int:
     from core import db
-    from core.routing import pacific_day
+    from providers.routing import pacific_day
     conn = db.connect(db_path or config.DB_PATH)
     try:
         row = conn.execute("SELECT requests FROM provider_usage WHERE provider = ? AND model = ? AND day = ?",
@@ -38,7 +38,7 @@ def used_today(provider: str, db_path: str | None = None) -> int:
 def charge(provider: str, db_path: str | None = None) -> None:
     """Count one real request, or raise SpendCapReached when today's cap is used up (nothing is counted then)."""
     from core import db
-    from core.routing import pacific_day
+    from providers.routing import pacific_day
     limit = cap(provider)
     with _LOCK:
         conn = db.connect(db_path or config.DB_PATH)

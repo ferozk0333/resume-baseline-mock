@@ -118,7 +118,7 @@ class ClaudeLLM:
         self.effort = effort or None
 
     def _request(self, model: str, system: str, user: str, output_type: type[T]) -> dict:
-        from core.routing import current_budget
+        from providers.routing import current_budget
         return dict(model=model, max_tokens=current_budget(self.max_tokens), system=system,
                     messages=[{"role": "user", "content": user}], output_format=output_type,
                     **sampling_kwargs(model), **effort_kwargs(model, self.effort))
@@ -135,11 +135,11 @@ class ClaudeLLM:
             return stream.get_final_message()
 
     def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
-        from core.limits import claude_slots
-        from core.routing import Overloaded, Throttled
+        from providers.limits import claude_slots
+        from providers.routing import Overloaded, Throttled
         if self._real:
             require_live("Claude")
-            from core.spend import SpendCapReached, charge
+            from providers.spend import SpendCapReached, charge
             try:
                 charge("claude")                       # daily cap (deploy item 6)
             except SpendCapReached as exc:
@@ -172,7 +172,7 @@ class ClaudeLLM:
         return response.parsed_output
 
     def parse(self, *, model: str, system: str, user: str, output_type: type[T]) -> T:
-        from core.routing import routed
+        from providers.routing import routed
         if routed():                     # the router retries an invalid or cut-off answer on the next model
             return self._call(model, system, user, output_type)
         try:
@@ -236,13 +236,13 @@ class GroqLLM:
         self.effort = effort or config.GROQ_REASONING_EFFORT
 
     def _budget(self, model: str, system: str, user: str) -> int:
-        from core.routing import current_budget
+        from providers.routing import current_budget
         est_input = (len(system) + len(user)) // 3 + 200            # conservative chars → tokens
         tpm = config.model_limits(model).tpm or config.GROQ_TPM
         return min(current_budget(self.max_tokens), tpm - est_input)
 
     def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
-        from core.routing import LIMITER, Overloaded, Throttled, Unusable, current_timeout, parse_duration
+        from providers.routing import LIMITER, Overloaded, Throttled, Unusable, current_timeout, parse_duration
         if self._real:
             require_live("Groq")
         if not self.api_key:
@@ -298,10 +298,10 @@ class GroqLLM:
 
 class RoutedLLM:
     """Sends each call along its route (specs/18): a "route:<task>" list or a single model (Claude, "gemini/…",
-    "groq/…"), with immediate failover and fail fast (core/routing.py)."""
+    "groq/…"), with immediate failover and fail fast (providers/routing.py)."""
 
     def __init__(self, max_tokens: int | None = None, effort: str | None = None, router=None):
-        from core.routing import Router
+        from providers.routing import Router
         self.max_tokens, self.effort = max_tokens, effort
         self._claude = self._groq = self._gemini = None
         self.router = router or Router(self._for, max_tokens=max_tokens or config.EXTRACT_MAX_TOKENS)
@@ -384,7 +384,7 @@ class GeminiLLM:
         return "PerDay" in text or "per day" in text.lower()
 
     def _call(self, model: str, system: str, user: str, output_type: type[T]) -> T:
-        from core.routing import Overloaded, Throttled, Unusable, current_budget, current_timeout
+        from providers.routing import Overloaded, Throttled, Unusable, current_budget, current_timeout
         if self._real:
             require_live("Gemini")
         if not self.api_key:

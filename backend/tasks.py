@@ -12,7 +12,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 
 from core import db, timing
 from core.db import new_id, now_iso
-from core.llm import LLMError
+from providers.llm import LLMError
 from graph.pipeline import STEP_LABELS, TaskEvent, describe
 from ingest.documents import DocumentError
 

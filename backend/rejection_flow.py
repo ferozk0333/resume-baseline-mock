@@ -24,7 +24,7 @@ from langgraph.types import Command, interrupt
 
 from backend import workflows as wf
 from core import config, db
-from core.llm import LLMError
+from providers.llm import LLMError
 from backend import recruiter as rc
 
 

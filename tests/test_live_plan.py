@@ -4,7 +4,7 @@ import os
 import pytest
 
 from core import config, db
-from core.llm import ClaudeLLM
+from providers.llm import ClaudeLLM
 from graph.context import Deps
 from graph.pipeline import Pipeline
 from scoring.plan import Plan

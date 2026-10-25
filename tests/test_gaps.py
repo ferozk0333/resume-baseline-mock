@@ -4,7 +4,7 @@ from datetime import date
 import pytest
 
 from core import config, db
-from core.llm import LLMError
+from providers.llm import LLMError
 from extraction.records import Profile, RoleRec
 from graph.context import Deps
 from graph.pipeline import Pipeline, run_gaps
