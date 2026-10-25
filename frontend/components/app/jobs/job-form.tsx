@@ -63,23 +63,29 @@ export function JobFormPage({ jobId }: { jobId: string }) {
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<JobDraft | null>(null);
+  // Saves run one after another, and flush() resolves only once the last one has landed: Publish never reaches the
+  // server ahead of a save that a timer already started.
+  const saving = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => { get<JobForm>(`/jobs/${jobId}/draft`).then(setForm).catch((e) => toast.error(e.message)); }, [jobId]);
 
-  const flush = useCallback(async () => {
+  const flush = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     const d = pending.current;
-    if (!d) return;
     pending.current = null;
-    setSaved("saving");
-    try {
-      const f = await put<JobForm>(`/jobs/${jobId}/draft`, { draft: d });
-      // The role family follows the title until the recruiter picks one: take the server's suggestion.
-      setForm((cur) => (cur ? { ...cur, warnings: f.warnings, draft: cur.draft.details.role_family_auto === false ? cur.draft
-        : { ...cur.draft, details: { ...cur.draft.details, role_family: f.draft.details.role_family, role_family_auto: true } } } : f));
-      setSaved("saved");
-    } catch (e) { setSaved("error"); toast.error((e as Error).message); }
+    saving.current = saving.current.then(async () => {
+      if (!d) return;
+      setSaved("saving");
+      try {
+        const f = await put<JobForm>(`/jobs/${jobId}/draft`, { draft: d });
+        // The role family follows the title until the recruiter picks one: take the server's suggestion.
+        setForm((cur) => (cur ? { ...cur, warnings: f.warnings, draft: cur.draft.details.role_family_auto === false ? cur.draft
+          : { ...cur.draft, details: { ...cur.draft.details, role_family: f.draft.details.role_family, role_family_auto: true } } } : f));
+        setSaved("saved");
+      } catch (e) { setSaved("error"); toast.error((e as Error).message); }
+    });
+    return saving.current;
   }, [jobId]);
   useEffect(() => () => { void flush(); }, [flush]);
 
