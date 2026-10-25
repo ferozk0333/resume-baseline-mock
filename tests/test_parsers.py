@@ -291,7 +291,7 @@ def test_replay_judge_answers_only_what_was_recorded(tmp_path):
 
 def test_admin_extraction_endpoint_lists_parser_runs_and_hidden_text(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from backend.main import create_app
+    from api.app import create_app
     from graph.context import Deps
     from judges.fake_judge import FakeJudge
     path = str(tmp_path / "a.db")

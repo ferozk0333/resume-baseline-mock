@@ -3,7 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from services import recruiter as rc
-from backend.main import create_app
+from api.app import create_app
 from core import config, db
 from extraction import store
 from graph.context import Deps

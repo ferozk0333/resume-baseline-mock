@@ -14,7 +14,7 @@ def test_healthz_says_ok(api):  # noqa: F811
 def test_uploads_are_limited_per_address(api, monkeypatch):  # noqa: F811
     from tests.helpers import SAMPLE_RESUME_LINES, make_pdf
     monkeypatch.setattr(config, "UPLOAD_RATE_PER_HOUR", 2)
-    from backend.main import create_app
+    from api.app import create_app
     from fastapi.testclient import TestClient
     app = create_app(api.app.state.rs.deps)
     with TestClient(app) as c:
@@ -28,7 +28,7 @@ def test_uploads_are_limited_per_address(api, monkeypatch):  # noqa: F811
 
 
 def test_upload_limit_uses_the_forwarded_address_only_behind_the_proxy(monkeypatch):
-    from backend.main import UploadRateLimit
+    from api.app import UploadRateLimit
 
     class Req:
         headers = {"x-forwarded-for": "203.0.113.7, 10.0.0.2"}
@@ -75,7 +75,7 @@ def test_jev_past_its_cap_falls_back_without_sending(tmp_path, monkeypatch):
 
 
 def test_the_api_refuses_to_start_without_the_demo_redirect(monkeypatch):
-    from backend.main import create_app
+    from api.app import create_app
     monkeypatch.setattr(config, "REQUIRE_DEMO_EMAIL_TO", True)
     monkeypatch.setattr(config, "DEMO_EMAIL_TO", "")
     with pytest.raises(RuntimeError, match="DEMO_EMAIL_TO must be set"):

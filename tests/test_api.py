@@ -4,7 +4,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.main import create_app
+from api.app import create_app
 from core import config, db
 from graph.context import Deps
 from tests import ui_fakes

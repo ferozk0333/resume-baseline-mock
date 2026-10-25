@@ -88,11 +88,11 @@ def test_flags_never_reach_scoring_or_recruiter_code():
     """Only the screen itself, the candidate's hidden-text notice and Admin read the flags."""
     readers = [p for p in ROOT.glob("**/*.py") if ".venv" not in p.parts and "tests" not in p.parts
                and "prompt_guard_flags" in p.read_text()]
-    assert sorted(p.relative_to(ROOT).as_posix() for p in readers) == ["backend/main.py", "core/db.py",
+    assert sorted(p.relative_to(ROOT).as_posix() for p in readers) == ["api/routers/admin.py", "core/db.py",
                                                                       "extraction/prompt_guard.py",
                                                                       "scripts/purge_person.py"]   # deletes only
-    main = (ROOT / "backend" / "main.py").read_text()
-    assert main.count("prompt_guard_flags") == 1 and "def admin_screening" in main
+    admin = (ROOT / "api" / "routers" / "admin.py").read_text()
+    assert admin.count("prompt_guard_flags") == 1 and "def admin_screening" in admin
     for folder in ("scoring", "graph/nodes", "judges"):
         assert not any("prompt_guard" in p.read_text() for p in (ROOT / folder).glob("*.py"))
 

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.main import create_app
+from api.app import create_app
 from core import config, db
 from providers.llm import LLMError
 from extraction import job_reader as jr

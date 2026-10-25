@@ -6,12 +6,12 @@ UVICORN := .venv/bin/uvicorn
 
 dev:
 	@trap 'kill 0' INT TERM; \
-	$(UVICORN) backend.main:create_app --factory --reload --port 8000 & \
+	$(UVICORN) api.app:create_app --factory --reload --port 8000 & \
 	(cd frontend && npm run dev -- --port 3000) & \
 	wait
 
 api:
-	$(UVICORN) backend.main:create_app --factory --reload --port 8000
+	$(UVICORN) api.app:create_app --factory --reload --port 8000
 
 web:
 	cd frontend && npm run dev -- --port 3000
@@ -22,7 +22,7 @@ fake-api:
 	RIGHTSTAFF_DB=$${RIGHTSTAFF_DB:-/tmp/rightstaff-e2e.db} RIGHTSTAFF_UPLOADS=$${RIGHTSTAFF_UPLOADS:-/tmp/rightstaff-e2e-uploads} \
 	RIGHTSTAFF_DEPS_FACTORY=tests.ui_fakes:make_deps PRINT_TIMINGS=0 \
 	MIN_POOL=$${MIN_POOL:-5} MIN_GROUP=$${MIN_GROUP:-2} \
-	$(UVICORN) backend.main:create_app --factory --port $${API_PORT:-8010}
+	$(UVICORN) api.app:create_app --factory --port $${API_PORT:-8010}
 
 # Recruiter demo on fakes, kept between sessions in data/ (gitignored): the seeded demo plus the test
 # profiles scored with real judging (scripts/score_test_profiles.py writes there by default).
@@ -36,7 +36,7 @@ demo:
 # comparison pools (demo pool: 5 candidates, groups of 2). Stop `make demo` first: both serve port 8000.
 live:
 	LIVE=1 LLM_PROVIDER=gemini RIGHTSTAFF_DB=$${RIGHTSTAFF_DEMO_DB:-data/demo.db} MIN_POOL=$${MIN_POOL:-5} MIN_GROUP=$${MIN_GROUP:-2} \
-	$(UVICORN) backend.main:create_app --factory --port 8000
+	$(UVICORN) api.app:create_app --factory --port 8000
 
 test:
 	$(PY) -m pytest -q

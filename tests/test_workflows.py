@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from workflows import mailer
 from workflows import engine as wf
-from backend.main import create_app
+from api.app import create_app
 from core import config, db
 from providers.llm import LLMError
 from graph.context import Deps
