@@ -15,7 +15,6 @@ logs/
 *.log
 docs/
 specs/
-legacy/
 frontend/
 tests/extraction_reference/*.json
 tests/fixtures/profiles/rendered/

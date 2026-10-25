@@ -1,4 +1,4 @@
-# Runtime dependencies of the API image (Dockerfile): requirements.txt without the legacy UI and test tools.
+# Runtime dependencies of the API image (Dockerfile): requirements.txt without the test tools.
 anthropic>=1.12,<2
 langgraph>=0.6
 langgraph-checkpoint-sqlite>=3.1

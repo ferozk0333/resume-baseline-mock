@@ -3,7 +3,6 @@ langgraph>=0.6
 langgraph-checkpoint-sqlite>=3.1
 pydantic>=2.7
 python-dotenv>=1.0
-streamlit>=1.38
 pymupdf4llm==1.28.2  # AGPL-3.0, see README; pinned: its version is part of the normalizer key
 pymupdf==1.28.2
 python-docx>=1.1
