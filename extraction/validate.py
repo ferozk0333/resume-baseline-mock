@@ -281,8 +281,8 @@ _CLAUSE_END = re.compile(r"(?<=\w)[.;:](?:\s|$)|\s[–—]\s")
 
 def award_name(name: str, quote: str | None) -> str:
     """Award claims keep their event or context: when the name is a shorter piece of its quote
-    ("Top 10 finalist" in "Top 10 finalist out of 600+ teams, CSI National Hackathon: led a team of 4"),
-    use the clause of the quote that contains it ("… CSI National Hackathon"), at most one sentence and
+    ("Top 10 finalist" in "Top 10 finalist out of 400+ teams, Riverbend Civic Hackathon: led a team of 4"),
+    use the clause of the quote that contains it ("… Riverbend Civic Hackathon"), at most one sentence and
     about AWARD_MAX_CHARS characters (cut at a word boundary)."""
     q = re.sub(r"\s+", " ", (quote or "")).strip().strip("-•·,;. ")
     n = name.strip()
@@ -298,7 +298,7 @@ def award_name(name: str, quote: str | None) -> str:
 
 
 def looks_like_publication(c: schemas.Certification) -> bool:
-    """An authored paper, article, poster or talk listed as a certification (e.g. "Co-Author, 'The Lancet …'")."""
+    """An authored paper, article, poster or talk listed as a certification (e.g. "Co-Author, 'The Harbor Review …'")."""
     text = " ".join(x for x in (c.name, c.issuer, c.source.quote) if x)
     return bool(_AUTHORED.search(text)) and not _CREDENTIAL.search(text) and not c.credential_id
 
@@ -558,7 +558,7 @@ def same_claim(a: ClaimRec, b: ClaimRec) -> bool:
 
 
 def _hackathon_placement(award: ClaimRec, projects: list[ProjectRec]) -> ProjectRec | None:
-    """A hackathon item the award names (audit round, item 2e): "Top 10 Finalist … in CSI National Hackathon"."""
+    """A hackathon item the award names (audit round, item 2e): "Top 10 Finalist … in Riverbend Civic Hackathon"."""
     for p in projects:
         if p.kind != "hackathon" and "hackathon" not in normalize_name(p.name).split():
             continue
@@ -569,7 +569,7 @@ def _hackathon_placement(award: ClaimRec, projects: list[ProjectRec]) -> Project
 
 
 def _placement_text(award: str, event: str) -> str:
-    """"Top 10 Finalist from 600+ teams in CSI National Hackathon" → "Top 10 Finalist from 600+ teams"."""
+    """"Top 10 Finalist from 400+ teams in Riverbend Civic Hackathon" → "Top 10 Finalist from 400+ teams"."""
     m = re.search(re.escape(event), award, re.I)
     if not m:
         return award

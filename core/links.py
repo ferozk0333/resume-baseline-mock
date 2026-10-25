@@ -1,7 +1,7 @@
 """Links, exactly as written (audit round, item 4): one place that finds URLs in text, never re-encodes them.
 
 - A URL keeps every character it had: ( ) are not percent-encoded and an existing %XX is not encoded again.
-- Parentheses inside a URL are kept when balanced ("…/PIIS0140-6736(26)01714-9/abstract"); a closing bracket
+- Parentheses inside a URL are kept when balanced ("…/PIIS9999-0000(26)04217-3/abstract"); a closing bracket
   that closes the text around the link ("(see https://x.org/a)") is not part of it.
 - Trailing sentence punctuation (a final "." "," ";" ":" "!" "?" or a closing quote) is not part of the URL.
 - Markdown links "[text](url)" are read with balanced parentheses in the URL.

@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 // Show Review early (specs/18 phase 3): Review opens once the resume is read; LinkedIn is still being read (the fake
 // reader takes a few seconds over this PDF), its items join Review when it finishes, and Confirm waits for it.
-// Screenshots go to e2e/.tmp/spec18 (copied to docs/screenshots/spec18 for the report).
+// Screenshots go to e2e/.tmp/spec18.
 const OUT = "e2e/.tmp/spec18";
 const CV = path.join(__dirname, ".tmp/cv.pdf");
 const LINKEDIN = path.join(__dirname, ".tmp/linkedin-slow.pdf");

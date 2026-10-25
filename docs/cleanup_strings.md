@@ -2,7 +2,7 @@
 
 For review (cleanup item 3). One rule on every screen: remove text that explains how the system works, implementation details (file paths, config names, "cached", "in code", model or provider names, poll intervals, internal source values), restated obvious instructions and email addresses. Kept: labels, real data, plain empty and error states, the JobMatch "Preview" badge, "Shown to recruiters, not scored", the EEO title, the honest credential wording and tooltips that define a score (see docs/open_questions.md 47).
 
-119 changes. Screenshots: docs/screenshots/cleanup/.
+119 changes.
 
 
 ## Candidate screens

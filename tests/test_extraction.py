@@ -601,16 +601,16 @@ def test_flat_lists_split_but_parenthetical_names_and_slashes_stay_whole():
 
 def test_award_claims_keep_their_context_from_the_quote():
     from extraction.validate import award_name, validate_extraction
-    line = "Top 10 finalist out of 600+ teams, CSI National Hackathon"
+    line = "Top 10 finalist out of 400+ teams, Riverbend Civic Hackathon"
     out = schemas.ProfileExtract(roles=[], projects=[], certifications=[], claims=[
         schemas.Claim(kind="award", name="Top 10 finalist", bullet_ref=None, source=src(line)),
         schemas.Claim(kind="award", name="Dean's List", bullet_ref=None, source=src("Dean's List"))])
     profile, _ = validate_extraction(_doc(f"Awards\n- {line}\n- Dean's List"), out)
     assert [c.name_raw for c in profile.claims] == [line, "Dean's List"]
     assert award_name("Fellowship", "Graduate fellowship, 2025") == "Graduate fellowship, 2025"
-    long = ("Top 10 Finalist from 600+ teams in CSI National Hackathon: Led and managed a team of 4 members "
-            "through 3 jury rounds")
-    assert award_name("Top 10 Finalist", long) == "Top 10 Finalist from 600+ teams in CSI National Hackathon"
+    long = ("Top 10 Finalist from 400+ teams in Riverbend Civic Hackathon: Led a team of 3 members "
+            "through 2 judging rounds")
+    assert award_name("Top 10 Finalist", long) == "Top 10 Finalist from 400+ teams in Riverbend Civic Hackathon"
     assert award_name("Dean's List", "Dean's List. Awarded every semester for a GPA above 3.8.") == "Dean's List"
     huge = "Winner " + "of the very long regional innovation challenge " * 5
     assert len(award_name("Winner", huge)) <= 120 and award_name("Winner", huge).startswith("Winner of")
@@ -619,19 +619,19 @@ def test_award_claims_keep_their_context_from_the_quote():
 
 def test_co_authored_journal_paper_is_a_publication_not_a_certification():
     from extraction.validate import validate_extraction
-    paper = 'Co-Author, "The Lancet Commission on 21st Century Global Threats to Health," The Lancet Exp. Fall 2026'
+    paper = 'Co-Author, "The Harbor Commission on Coastal Health Futures," The Harbor Review Exp. Fall 2026'
     cert = "AWS Certified Solutions Architect – Associate (SAA-C03), Amazon Web Services 2026"
     text = f"CERTIFICATIONS & PUBLICATIONS\n{cert}\n{paper}"
     out = schemas.ProfileExtract(roles=[], projects=[], claims=[], certifications=[
         schemas.Certification(name="AWS Certified Solutions Architect – Associate", issuer="Amazon Web Services",
                               date="2026", credential_id=None, verify_url=None, source=src(cert)),
-        schemas.Certification(name='Co-Author, "The Lancet Commission on 21st Century Global Threats to Health"',
-                              issuer="The Lancet", date=None, credential_id=None, verify_url=None,
+        schemas.Certification(name='Co-Author, "The Harbor Commission on Coastal Health Futures"',
+                              issuer="The Harbor Review", date=None, credential_id=None, verify_url=None,
                               source=src(paper))])
     profile, _ = validate_extraction(_doc(text), out)
     assert [c.name for c in profile.certifications] == ["AWS Certified Solutions Architect – Associate"]
     assert [(p.kind, p.name) for p in profile.projects] == [
-        ("publication", 'Co-Author, "The Lancet Commission on 21st Century Global Threats to Health"')]
+        ("publication", 'Co-Author, "The Harbor Commission on Coastal Health Futures"')]
 
 
 def test_extraction_prompt_defines_publications_and_one_claim_per_name():

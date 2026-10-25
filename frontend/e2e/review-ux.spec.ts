@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 // Spec 19: upload drop zone, form styling, the Review entry card, bullet editing, skills, section menu, the attention
-// box, certifications after dedupe, More proof. Screenshots go to e2e/.tmp/spec19 (copied to docs/screenshots/spec19).
+// box, certifications after dedupe, More proof. Screenshots go to e2e/.tmp/spec19.
 const OUT = "e2e/.tmp/spec19";
 const CV = path.join(__dirname, ".tmp/cv.pdf");
 const LINKEDIN = path.join(__dirname, ".tmp/linkedin-slow.pdf");
