@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { EmailEditor, SendNotice } from "@/components/app/recruiter/email-editor";
+import { EmailEditor, SendNotice } from "@/components/features/recruiter/email-editor";
 import { cn } from "@/lib/utils";
 import type { FeedbackSummary, Message, Reading, Scorecard, WorkflowStep, WorkflowView } from "@/lib/api";
-import { LinkedText } from "@/components/app/ext-link";
+import { LinkedText } from "@/components/shared/ext-link";
 
 export type Act = (body: Record<string, unknown>, label?: string) => Promise<void>;
 

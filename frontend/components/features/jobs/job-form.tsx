@@ -1,5 +1,5 @@
 "use client";
-import { LinkedText } from "@/components/app/ext-link";
+import { LinkedText } from "@/components/shared/ext-link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PostingPreview } from "@/components/app/jobs/posting-preview";
+import { PostingPreview } from "@/components/features/jobs/posting-preview";
 import { ApiError, DIMENSIONS, del, get, post, put, REACH, titleCase, WORKPLACE, type JobDraft, type JobForm,
   type Baseline, type ReqRow } from "@/lib/api";
 import { cn } from "@/lib/utils";

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ActivityLine, JobDetailView, PreviewBadge } from "@/components/app/candidate/job-detail";
+import { ActivityLine, JobDetailView, PreviewBadge } from "@/components/features/candidate/job-detail";
 import { get, HIDE_REASONS, post, postedAgo, salaryText, WORKPLACE, type HomeJob, type HomeJobs } from "@/lib/api";
 import { cn } from "@/lib/utils";
 

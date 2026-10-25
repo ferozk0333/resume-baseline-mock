@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
-import { AppMain } from "@/components/app/app-main";
-import { ModeBanner } from "@/components/app/mode-banner";
-import { SiteHeader } from "@/components/app/site-header";
+import { AppMain } from "@/components/shared/app-main";
+import { ModeBanner } from "@/components/shared/mode-banner";
+import { SiteHeader } from "@/components/shared/site-header";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-sans", subsets: ["latin"] });

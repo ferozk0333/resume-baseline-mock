@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { doneHint, markedDoneToast, openProof, PROOF_SECTION } from "@/components/app/score/add-proof";
-import { StatusBadge } from "@/components/app/score/subcategory-row";
+import { doneHint, markedDoneToast, openProof, PROOF_SECTION } from "@/components/features/score/add-proof";
+import { StatusBadge } from "@/components/features/score/subcategory-row";
 import { useTask } from "@/hooks/use-task";
 import { get, post, type Benchmarks, type Plan, type PlanAction, type RunView, type ScoreCard } from "@/lib/api";
 

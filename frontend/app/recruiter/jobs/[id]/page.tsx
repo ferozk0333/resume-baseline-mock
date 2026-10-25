@@ -8,12 +8,12 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApplicantList } from "@/components/app/recruiter/applicant-list";
-import { RejectDrawer, StageEmailDrawer } from "@/components/app/recruiter/decision-drawers";
-import { useStartLoop } from "@/components/app/recruiter/start-loop";
-import { PipelineBoard } from "@/components/app/recruiter/pipeline-board";
-import { JobDescription } from "@/components/app/jobs/job-description";
-import { ProfilePanel, TABS, type Tab } from "@/components/app/recruiter/profile-panel";
+import { ApplicantList } from "@/components/features/recruiter/applicant-list";
+import { RejectDrawer, StageEmailDrawer } from "@/components/features/recruiter/decision-drawers";
+import { useStartLoop } from "@/components/features/recruiter/start-loop";
+import { PipelineBoard } from "@/components/features/recruiter/pipeline-board";
+import { JobDescription } from "@/components/features/jobs/job-description";
+import { ProfilePanel, TABS, type Tab } from "@/components/features/recruiter/profile-panel";
 import { get, patch, post, type ApplicantRow, type Job, type Panel, type Stage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 

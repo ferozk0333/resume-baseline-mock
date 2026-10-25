@@ -1,7 +1,7 @@
 import { Briefcase, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { WORKPLACE, type Posting } from "@/lib/api";
-import { LinkedText } from "@/components/app/ext-link";
+import { LinkedText } from "@/components/shared/ext-link";
 
 /** The posting as candidates see it (create-job preview, the job page's Job description tab, candidate Home). */
 export function PostingPreview({ p, compact }: { p: Pick<Posting, "title" | "company" | "department" | "location" |

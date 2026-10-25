@@ -4,7 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { Judgment, SubComputation, Subcategory } from "@/lib/api";
-import { SubcategoryComputation } from "@/components/app/score/computation";
+import { SubcategoryComputation } from "@/components/features/score/computation";
 
 const STATUS: Record<string, { label: string; className: string }> = {
   scored: { label: "shown", className: "bg-emerald-50 text-emerald-800 border-emerald-200" },

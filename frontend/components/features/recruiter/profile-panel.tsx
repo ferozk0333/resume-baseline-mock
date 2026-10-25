@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ExtLink, LinkedText } from "@/components/app/ext-link";
-import { DimensionComputation, FinalComputation, SubcategoryComputation, useComputation } from "@/components/app/score/computation";
-import { StatusBadge } from "@/components/app/score/subcategory-row";
+import { ExtLink, LinkedText } from "@/components/shared/ext-link";
+import { DimensionComputation, FinalComputation, SubcategoryComputation, useComputation } from "@/components/features/score/computation";
+import { StatusBadge } from "@/components/features/score/subcategory-row";
 import { API, DIMENSIONS, get, titleCase, topShare, type Activity, type Panel, type Stage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 

@@ -1,5 +1,5 @@
 "use client";
-import { LinkedText } from "@/components/app/ext-link";
+import { LinkedText } from "@/components/shared/ext-link";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -9,9 +9,9 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RejectDrawer } from "@/components/app/recruiter/decision-drawers";
-import { useStartLoop } from "@/components/app/recruiter/start-loop";
-import { ReplyBox, StepCard } from "@/components/app/recruiter/workflow-step";
+import { RejectDrawer } from "@/components/features/recruiter/decision-drawers";
+import { useStartLoop } from "@/components/features/recruiter/start-loop";
+import { ReplyBox, StepCard } from "@/components/features/recruiter/workflow-step";
 import { get, post, put, type TimelineItem, type WorkflowView } from "@/lib/api";
 import { cn } from "@/lib/utils";
 

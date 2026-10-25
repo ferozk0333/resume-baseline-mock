@@ -4,9 +4,9 @@ import { FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PostingPreview } from "@/components/app/jobs/posting-preview";
+import { PostingPreview } from "@/components/features/jobs/posting-preview";
 import { API, get, type Posting } from "@/lib/api";
-import { LinkedText } from "@/components/app/ext-link";
+import { LinkedText } from "@/components/shared/ext-link";
 
 /** The job page's Job description tab (specs/14 §5): the posting candidates see and the original JD. */
 export function JobDescription({ jobId }: { jobId: string }) {

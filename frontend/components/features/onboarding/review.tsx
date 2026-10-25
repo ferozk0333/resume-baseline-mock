@@ -4,15 +4,15 @@ import { AlertTriangle, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { AttentionBox } from "@/components/app/review/attention";
-import { AddButton, CertificationCard, ProjectCard, ReferenceCard, RoleCard } from "@/components/app/review/cards";
-import { ReviewEditProvider, useReviewEdit } from "@/components/app/review/edit-context";
-import { EDUCATION, MoreProof, NotScored, ProofCard, proofCount, proofItems } from "@/components/app/review/more-proof";
-import { ReviewApiCtx, type Edit, type ReviewApi } from "@/components/app/review/review-api";
-import { SectionMenu, type MenuEntry } from "@/components/app/review/section-menu";
-import { Skills } from "@/components/app/review/skills";
+import { AttentionBox } from "@/components/features/review/attention";
+import { AddButton, CertificationCard, ProjectCard, ReferenceCard, RoleCard } from "@/components/features/review/cards";
+import { ReviewEditProvider, useReviewEdit } from "@/components/features/review/edit-context";
+import { EDUCATION, MoreProof, NotScored, ProofCard, proofCount, proofItems } from "@/components/features/review/more-proof";
+import { ReviewApiCtx, type Edit, type ReviewApi } from "@/components/features/review/review-api";
+import { SectionMenu, type MenuEntry } from "@/components/features/review/section-menu";
+import { Skills } from "@/components/features/review/skills";
 import { patch, type ProfileResponse } from "@/lib/api";
-import { LinkedText } from "@/components/app/ext-link";
+import { LinkedText } from "@/components/shared/ext-link";
 
 const PROJECT_KINDS = new Set(["project", "repo", "work_sample"]);
 

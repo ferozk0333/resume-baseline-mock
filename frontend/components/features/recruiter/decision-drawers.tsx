@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { EmailEditor, SendNotice } from "@/components/app/recruiter/email-editor";
+import { EmailEditor, SendNotice } from "@/components/features/recruiter/email-editor";
 import { get, post, put, type Email, type Reason, type Stage } from "@/lib/api";
 
 const SOURCE: Record<string, string> = { "must-have": "Must-have", gap: "Top gap", "missing evidence": "Missing evidence" };

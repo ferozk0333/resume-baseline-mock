@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { isWorkspace } from "@/components/app/app-main";
-import { ViewingAs } from "@/components/app/candidate/switch-profile";
+import { isWorkspace } from "@/components/shared/app-main";
+import { ViewingAs } from "@/components/features/candidate/switch-profile";
 import { get, type RecruiterTask } from "@/lib/api";
 import { cn } from "@/lib/utils";
 

@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, get, post, useUploadLimit, type MarketPosting, type MarketRole, type MarketVersion, type Suggestion } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { ExtLink } from "@/components/app/ext-link";
+import { ExtLink } from "@/components/shared/ext-link";
 
 type FetchResult = { boards: number; seen: number; new: number; excluded_titles: number; closed: number; errors: string[];
   skipped: number };

@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { get, post, postedAgo, salaryText, WORKPLACE, type JobActivity, type JobDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { LinkedText } from "@/components/app/ext-link";
+import { LinkedText } from "@/components/shared/ext-link";
 
 /** "Preview" badge on every JobMatch number (specs/17 §1, §6). */
 export function PreviewBadge() {

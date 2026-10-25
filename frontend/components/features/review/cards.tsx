@@ -10,7 +10,7 @@ import { friendlyMonth, friendlyRange, monthValue } from "./dates";
 import { useReviewEdit } from "./edit-context";
 import { EntryCard, type FieldSpec } from "./entry-card";
 import { same, useReviewApi } from "./review-api";
-import { ExtLink, LinkedText } from "@/components/app/ext-link";
+import { ExtLink, LinkedText } from "@/components/shared/ext-link";
 
 /** A draft that starts from the saved values whenever the card enters edit mode, and marks the card dirty. */
 export function useDraft<T>(id: string, initial: () => T) {

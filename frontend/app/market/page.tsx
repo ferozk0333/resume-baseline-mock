@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LoadError } from "@/components/app/candidate/load-error";
+import { LoadError } from "@/components/features/candidate/load-error";
 import { get, type MarketView } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
