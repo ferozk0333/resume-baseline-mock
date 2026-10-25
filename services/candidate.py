@@ -11,6 +11,7 @@ percentiles, peer signals or ranking (tests/test_candidate.py checks all of thes
 from __future__ import annotations
 
 import json
+import re as _re
 from datetime import date
 
 from core import config, db
@@ -349,8 +350,6 @@ def scoring_progress(progress, title: str, index: int, total: int):
 
 
 # --- Errors people see ---------------------------------------------------------------------------------------------
-
-import re as _re
 
 _TECHNICAL = _re.compile(r"gemini|groq|claude|jev|gpt|gemma|qwen|llama|HTTP \d|extract_|judge_|route|"
                          r"no model could|no valid answer|attempt\(s\)|timeout|overloaded", _re.I)

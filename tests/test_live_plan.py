@@ -7,7 +7,6 @@ from core import config, db
 from providers.llm import ClaudeLLM
 from graph.context import Deps
 from graph.pipeline import Pipeline
-from scoring.plan import Plan
 from tests.fixtures.archetypes import TODAY, keyword_heavy, project_strong_grad, stale_expert
 
 pytestmark = pytest.mark.skipif(os.getenv("RIGHTSTAFF_LIVE") != "1", reason="live model test; set RIGHTSTAFF_LIVE=1")

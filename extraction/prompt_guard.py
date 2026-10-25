@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
 from concurrent.futures import Future, ThreadPoolExecutor
 
 from core import config, db

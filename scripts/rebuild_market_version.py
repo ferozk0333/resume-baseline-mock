@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core import config, db  # noqa: E402
+from core import db  # noqa: E402
 from market import baseline as mb  # noqa: E402
 from market import normalize, sources  # noqa: E402
 

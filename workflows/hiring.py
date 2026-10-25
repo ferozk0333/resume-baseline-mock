@@ -11,7 +11,7 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -19,7 +19,7 @@ from services import recruiter as rc
 from workflows import replies
 from workflows import scheduling as sch
 from workflows import engine as wf
-from core import config, db
+from core import config
 from core.db import new_id, now_iso
 from providers.llm import LLMError
 from core.text import wrap_tag

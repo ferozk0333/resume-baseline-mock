@@ -44,7 +44,6 @@ def best(q, c):
 class AlwaysPlanner:
     def parse(self, *, model, system, user, output_type):
         CALLS["planner"] += 1
-        import json
         import re
         keys = re.findall(r'"key": "(\w+)"', user)
         return Plan(actions=[Action(type="build_project", title="Build an A/B test project",

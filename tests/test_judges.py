@@ -1,10 +1,8 @@
 """Phase 4: judge catalogue, ClaudeJudge (fake client), FakeJudge, judgment cache and storage."""
-from types import SimpleNamespace
 
 import pytest
 
 from core import config, db
-from core.models import BaselineCriterion
 from judges import questions as qmod
 from judges.base import Judgment, JudgeError, render_context
 from judges.claude_judge import ClaudeJudge, output_model, system_prompt

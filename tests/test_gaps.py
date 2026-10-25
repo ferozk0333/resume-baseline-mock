@@ -8,7 +8,6 @@ from providers.llm import LLMError
 from extraction.records import Profile, RoleRec
 from graph.context import Deps
 from graph.pipeline import Pipeline, run_gaps
-from judges.fake_judge import FakeJudge
 from scoring.formulas import SubScore
 from scoring.gaps import gap_details, rank_gaps, top_gaps
 from tests.fixtures.archetypes import TODAY, keyword_heavy
@@ -87,7 +86,7 @@ def test_validation_strength_gap_lists_relevant_certifications(tmp_path):
 
 # --- Improvement plan -------------------------------------------------------------------------
 
-from scoring.plan import Action, Plan, build_user_message, generate_plan, load_plan, validate_action  # noqa: E402
+from scoring.plan import Action, Plan, generate_plan, load_plan, validate_action  # noqa: E402
 
 
 class ScriptedPlanner:

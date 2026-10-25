@@ -85,7 +85,6 @@ def test_onboard_streams_progress_and_stops_at_review(api):
 
 def test_review_edits_add_edit_delete_and_add_back(api):
     from extraction import schemas
-    from judges.fake_judge import FakeJudge
     extract = sample_resume_extract()
     extract.claims.append(schemas.Claim(kind="tool", name="Spark", bullet_ref=None,
                                         source=schemas.Source(quote="Spark", location="")))
