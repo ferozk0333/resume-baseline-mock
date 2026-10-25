@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from core import config
 from core.db import new_id, now_iso
-from core.llm import LLMError, StructuredLLM
+from providers.llm import LLMError, StructuredLLM
 from core.models import Baseline
 from core.text import contains_phrase, normalize_name, wrap_tag
 from extraction.extract import load_prompt
@@ -273,7 +273,7 @@ def generate_plan(conn: sqlite3.Connection, run_id: str, subscores: dict, weight
     gap_keys = {g.subcategory for g in gaps}
     user = build_user_message(baseline, subscores, weights, gaps, profile, peer_lines)
     first_attempt: list[dict] = []
-    from core.routing import clear_last
+    from providers.routing import clear_last
     clear_last()
     try:
         plan = _ask(planner, model, user)
@@ -288,7 +288,7 @@ def generate_plan(conn: sqlite3.Connection, run_id: str, subscores: dict, weight
         log.warning("plan generation failed: %s", exc)
         return PlanResult(run_id, weights, gaps, error=str(exc))
 
-    from core.routing import last_model
+    from providers.routing import last_model
     model = last_model(model)                       # the model that answered (failover may change it)
     quick_wins, not_actionable = plan.quick_wins[:3], plan.not_actionable
     dropped = list(rejected)

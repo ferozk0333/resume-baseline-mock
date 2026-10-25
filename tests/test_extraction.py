@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from core import config, db
-from core.llm import ClaudeLLM, LLMError, sampling_kwargs
+from providers.llm import ClaudeLLM, LLMError, sampling_kwargs
 from extraction import schemas, store
 from extraction.extract import build_user_message, extract_document, load_prompt, wrap_document
 from extraction.onboard import (
@@ -544,7 +544,7 @@ def test_cross_source_roles_need_overlapping_dates_and_a_shared_title_word():
 
 
 def test_effort_is_sent_only_to_models_that_support_it():
-    from core.llm import effort_kwargs
+    from providers.llm import effort_kwargs
     assert effort_kwargs("claude-sonnet-5-5", "medium") == {"output_config": {"effort": "medium"}}
     assert effort_kwargs("claude-haiku-5-5", "low") == {"output_config": {"effort": "low"}}
     assert effort_kwargs("claude-haiku-4-5-20251001", "low") == {}
@@ -601,16 +601,16 @@ def test_flat_lists_split_but_parenthetical_names_and_slashes_stay_whole():
 
 def test_award_claims_keep_their_context_from_the_quote():
     from extraction.validate import award_name, validate_extraction
-    line = "Top 10 finalist out of 600+ teams, CSI National Hackathon"
+    line = "Top 10 finalist out of 400+ teams, Riverbend Civic Hackathon"
     out = schemas.ProfileExtract(roles=[], projects=[], certifications=[], claims=[
         schemas.Claim(kind="award", name="Top 10 finalist", bullet_ref=None, source=src(line)),
         schemas.Claim(kind="award", name="Dean's List", bullet_ref=None, source=src("Dean's List"))])
     profile, _ = validate_extraction(_doc(f"Awards\n- {line}\n- Dean's List"), out)
     assert [c.name_raw for c in profile.claims] == [line, "Dean's List"]
     assert award_name("Fellowship", "Graduate fellowship, 2025") == "Graduate fellowship, 2025"
-    long = ("Top 10 Finalist from 600+ teams in CSI National Hackathon: Led and managed a team of 4 members "
-            "through 3 jury rounds")
-    assert award_name("Top 10 Finalist", long) == "Top 10 Finalist from 600+ teams in CSI National Hackathon"
+    long = ("Top 10 Finalist from 400+ teams in Riverbend Civic Hackathon: Led a team of 3 members "
+            "through 2 judging rounds")
+    assert award_name("Top 10 Finalist", long) == "Top 10 Finalist from 400+ teams in Riverbend Civic Hackathon"
     assert award_name("Dean's List", "Dean's List. Awarded every semester for a GPA above 3.8.") == "Dean's List"
     huge = "Winner " + "of the very long regional innovation challenge " * 5
     assert len(award_name("Winner", huge)) <= 120 and award_name("Winner", huge).startswith("Winner of")
@@ -619,19 +619,19 @@ def test_award_claims_keep_their_context_from_the_quote():
 
 def test_co_authored_journal_paper_is_a_publication_not_a_certification():
     from extraction.validate import validate_extraction
-    paper = 'Co-Author, "The Lancet Commission on 21st Century Global Threats to Health," The Lancet Exp. Fall 2026'
+    paper = 'Co-Author, "The Harbor Commission on Coastal Health Futures," The Harbor Review Exp. Fall 2026'
     cert = "AWS Certified Solutions Architect – Associate (SAA-C03), Amazon Web Services 2026"
     text = f"CERTIFICATIONS & PUBLICATIONS\n{cert}\n{paper}"
     out = schemas.ProfileExtract(roles=[], projects=[], claims=[], certifications=[
         schemas.Certification(name="AWS Certified Solutions Architect – Associate", issuer="Amazon Web Services",
                               date="2026", credential_id=None, verify_url=None, source=src(cert)),
-        schemas.Certification(name='Co-Author, "The Lancet Commission on 21st Century Global Threats to Health"',
-                              issuer="The Lancet", date=None, credential_id=None, verify_url=None,
+        schemas.Certification(name='Co-Author, "The Harbor Commission on Coastal Health Futures"',
+                              issuer="The Harbor Review", date=None, credential_id=None, verify_url=None,
                               source=src(paper))])
     profile, _ = validate_extraction(_doc(text), out)
     assert [c.name for c in profile.certifications] == ["AWS Certified Solutions Architect – Associate"]
     assert [(p.kind, p.name) for p in profile.projects] == [
-        ("publication", 'Co-Author, "The Lancet Commission on 21st Century Global Threats to Health"')]
+        ("publication", 'Co-Author, "The Harbor Commission on Coastal Health Futures"')]
 
 
 def test_extraction_prompt_defines_publications_and_one_claim_per_name():
@@ -669,7 +669,7 @@ def _groq_ok(content, finish="stop"):
 
 
 def test_groq_request_uses_strict_schema_and_fits_the_token_limit(monkeypatch):
-    from core.llm import GroqLLM
+    from providers.llm import GroqLLM
     monkeypatch.setattr(config, "GROQ_TPM", 8000)
     session = GroqSession(_groq_ok({"projects": [], "claims": []}))
     out = GroqLLM(session=session, api_key="k", max_tokens=12000).parse(
@@ -697,8 +697,8 @@ def test_groq_request_uses_strict_schema_and_fits_the_token_limit(monkeypatch):
 
 def test_groq_429_goes_to_the_router_with_the_stated_reset():
     """specs/18: no sleeping in the client; the router moves on and rests the model until the reset."""
-    from core.llm import GroqLLM
-    from core.routing import Throttled
+    from providers.llm import GroqLLM
+    from providers.routing import Throttled
     session = GroqSession((429, {"error": "Rate limit reached for requests per day (RPD)"},
                            {"retry-after": "2", "x-ratelimit-reset-requests": "7m54.72s"}))
     with pytest.raises(Throttled) as e:
@@ -709,7 +709,7 @@ def test_groq_429_goes_to_the_router_with_the_stated_reset():
 
 
 def test_groq_cut_off_and_invalid_output_are_errors():
-    from core.llm import GroqLLM
+    from providers.llm import GroqLLM
     cut = GroqSession(_groq_ok("{\"projects\": [", finish="length"))
     with pytest.raises(LLMError, match="cut off"):
         GroqLLM(session=cut, api_key="k").parse(model="groq/openai/gpt-oss-20b", system="S", user="U",
@@ -721,7 +721,7 @@ def test_groq_cut_off_and_invalid_output_are_errors():
 
 
 def test_router_sends_groq_models_to_groq_and_judgments_record_the_provider(monkeypatch):
-    from core.llm import ClaudeLLM, GroqLLM, RoutedLLM
+    from providers.llm import ClaudeLLM, GroqLLM, RoutedLLM
     from judges.claude_judge import method_of
     r = RoutedLLM()
     assert isinstance(r._for("groq/openai/gpt-oss-120b"), GroqLLM)
@@ -743,25 +743,6 @@ def test_prompts_have_no_provider_specific_wording():
     for path in config.PROMPTS_DIR.glob("*.txt"):
         text = path.read_text().lower()
         assert not any(name in text for name in ("claude", "gemini", "groq", "haiku", "sonnet")), path.name
-
-
-def test_compare_helpers_report_kinds_and_structural_proof_density():
-    import importlib.util
-    from core import config
-    spec = importlib.util.spec_from_file_location("compare_extraction", config.ROOT / "scripts" / "compare_extraction.py")
-    cmp = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cmp)
-    profile = {"roles": [{"title": "Analyst", "employer": "Acme", "bullets": [{"text": "Built churn model in Python"}]}],
-               "projects": [{"kind": "publication", "name": "Paper on SQL tuning", "description": None, "bullets": []}],
-               "claims": [{"kind": "tool", "name_raw": "Python", "name_norm": "python"},
-                          {"kind": "tool", "name_raw": "SQL", "name_norm": "sql"},
-                          {"kind": "skill", "name_raw": "Tableau", "name_norm": "tableau"}],
-               "certifications": []}
-    score, counts = cmp.structural_proof_density(profile)
-    assert counts == {"artifact": 1, "bullet": 1, "claimed_only": 1} and score == pytest.approx(0.5)
-    other = {**profile, "claims": [{"kind": "skill", "name_raw": "Python", "name_norm": "python"}]}
-    assert cmp.kinds(profile)["python"] == "tool" and cmp.kinds(other)["python"] == "skill"
-    assert set(cmp.items(profile)) == {"role", "bullet", "project", "claim", "certification"}
 
 
 def test_runs_record_provider_and_models():

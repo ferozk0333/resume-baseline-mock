@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { JobDetailView } from "@/components/app/candidate/job-detail";
+import { JobDetailView } from "@/components/features/candidate/job-detail";
 import { useCurrentCandidate } from "@/lib/current-candidate";
 
 export default function JobPage() {

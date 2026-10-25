@@ -10,12 +10,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DetailsForm } from "@/components/app/candidate/details-form";
-import { GoodToKnow } from "@/components/app/candidate/good-to-know";
-import { ReadingWait, ScoringWait } from "@/components/app/candidate/wait-progress";
-import { EeatTip, RoleScoreCard } from "@/components/app/candidate/score-card";
-import { Review } from "@/components/app/onboarding/review";
-import { UploadForm } from "@/components/app/onboarding/upload-form";
+import { DetailsForm } from "@/components/features/candidate/details-form";
+import { GoodToKnow } from "@/components/features/candidate/good-to-know";
+import { ReadingWait, ScoringWait } from "@/components/features/candidate/wait-progress";
+import { EeatTip, RoleScoreCard } from "@/components/features/candidate/score-card";
+import { Review } from "@/components/features/onboarding/review";
+import { UploadForm } from "@/components/features/onboarding/upload-form";
 import { ApiError, get, post, put, STEP_LABELS, type ApplicationDetails, type Candidate, type OnboardingState,
   type OnboardingStep, type ProfileResponse, type ScoreCard, type Target } from "@/lib/api";
 import { useCurrentCandidate } from "@/lib/current-candidate";

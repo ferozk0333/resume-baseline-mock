@@ -8,7 +8,7 @@ import os
 import pytest
 
 from core import config
-from core.llm import ClaudeLLM
+from providers.llm import ClaudeLLM
 from extraction.extract import extract_document
 from extraction.validate import SourceDoc, normalize_claim, validate_extraction
 from ingest.documents import extract_text
@@ -62,7 +62,7 @@ def test_adversarial_hidden_text_does_not_change_extraction():
     ("PM4", "product-manager", "PM4_resume.docx"),          # DOCX
 ])
 def test_rendered_profile_extraction_matches_the_parsed_profile(pid, folder, filename):
-    from core.llm import RoutedLLM
+    from providers.llm import RoutedLLM
     from extraction.structured import read_profile_file, resume_profile
     rendered = config.ROOT / "tests" / "fixtures" / "profiles" / "rendered" / filename
     if not rendered.exists():

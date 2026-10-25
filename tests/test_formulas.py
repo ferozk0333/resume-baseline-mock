@@ -147,7 +147,7 @@ def test_scope_role_selection_prefers_relevant_then_recent():
 
 def test_scope_values_and_missing():
     r = role()
-    assert [f.scope(r, l).score for l in ("meets", "partly", "below")] == [1.0, 0.5, 0.0]
+    assert [f.scope(r, label).score for label in ("meets", "partly", "below")] == [1.0, 0.5, 0.0]
     assert f.scope(None, None).status == "missing"
     assert f.scope(r, None).status == "error"
 

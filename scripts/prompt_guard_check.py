@@ -4,7 +4,7 @@
     LIVE=1 python scripts/prompt_guard_check.py --run
 
 Screens the 16 synthetic test profiles' documents (the rendered resume and LinkedIn PDFs as read, their READMEs and
-portfolio text) and the READMEs saved for the latest live profile (public repositories). The first call prints the raw
+portfolio text). The first call prints the raw
 answer so the response format is confirmed. Flags go to timings/prompt_guard_check.json, never to a candidate or a
 recruiter. Scores are cached by chunk text (prompt_guard_cache in the scratch copy).
 """
@@ -48,16 +48,6 @@ def documents() -> list[tuple[str, str, str]]:
                     out.append((pf.id, f"README {repo.name}", repo.readme))
         if pf.sections.get("Portfolio"):
             out.append((pf.id, "portfolio", pf.sections["Portfolio"]))
-    from parser_gates import latest_live_candidate
-    from extraction.parse.readme import repo_from_text
-    conn = db.connect(str(ROOT / "data" / "demo.db"))
-    cid = os.getenv("LIVE_CANDIDATE_ID") or latest_live_candidate(conn)
-    for (raw,) in conn.execute("SELECT raw_text FROM evidence_items WHERE candidate_id = ? AND type = 'github_repo'",
-                               (cid,)):
-        repo = repo_from_text(raw)
-        if repo.readme:
-            out.append(("live profile (saved)", f"README {repo.name}", repo.readme))
-    conn.close()
     return out
 
 
@@ -72,9 +62,8 @@ def run() -> None:
     if not config.LIVE:
         sys.exit("Live: set LIVE=1, only after the go.")
     import requests
-    from parser_gates import db_copy
     if not WORK.exists():
-        db_copy(ROOT / "data" / "demo.db", WORK)
+        db.copy_db(ROOT / "data" / "demo.db", WORK)
     docs = documents()
     # The first call, raw: what the model returns.
     first = pg.chunks(docs[0][2])[0]

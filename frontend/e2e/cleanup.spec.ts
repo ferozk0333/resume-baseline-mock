@@ -38,8 +38,15 @@ async function openPanel(page: Page, jobTitle: string, name: string) {
   await page.getByRole("link", { name: jobTitle, exact: true }).click();
   const list = page.getByRole("list", { name: "Applicants" });
   await expect(list.getByRole("listitem").first()).toBeVisible({ timeout: 20_000 });
-  await (await reveal(list, list.getByRole("button", { name: new RegExp(`^${name}`) }))).click();
+  const row = list.getByRole("button", { name: new RegExp(`^${name}`) });
   const panel = page.getByRole("article", { name: new RegExp(`Profile of ${name}`) });
+  // The list is virtual: a row exists only while scrolled into its window, and the list can be re-rendered from the top
+  // while the page settles (the dev server reloads a page it has just compiled). Find and click the row again until
+  // its panel is open.
+  await expect(async () => {
+    await (await reveal(list, row)).click({ timeout: 5_000 });
+    await expect(panel).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 60_000 });
   await panel.getByRole("tab", { name: "LinkedIn" }).click();
   return panel;
 }

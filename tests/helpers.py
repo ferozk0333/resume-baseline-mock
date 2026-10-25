@@ -135,7 +135,7 @@ class FakeLLM:
         self.calls.append({"model": model, "system": system, "user": user, "output_type": output_type})
         for tag, out in self.outputs.items():
             if user.count(f"<{tag}>") and tag in self.fail:
-                from core.llm import LLMError
+                from providers.llm import LLMError
                 raise LLMError(f"scripted failure for {tag}")
             if f"<{tag}>" in user:
                 return out
@@ -219,7 +219,7 @@ class FakeJobReader:
     (the manual-form fallback)."""
 
     def parse(self, *, model, system, user, output_type):
-        from core.llm import LLMError
+        from providers.llm import LLMError
         if "Brightwater Systems" not in user:
             raise LLMError("fake reader: only the Brightwater fixture is scripted")
         return brightwater_extract()

@@ -27,6 +27,6 @@ def no_workflow_ticker(monkeypatch):
 def never_live(monkeypatch):
     """specs/18 §2 item 8: tests never call a real provider, whatever the environment says."""
     from core import config
-    from core.routing import LIMITER
+    from providers.routing import LIMITER
     monkeypatch.setattr(config, "LIVE", False)
     LIMITER.reset()

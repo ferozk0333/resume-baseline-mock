@@ -2,7 +2,7 @@
 import { Suspense } from "react";
 import { useParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { JobFormPage } from "@/components/app/jobs/job-form";
+import { JobFormPage } from "@/components/features/jobs/job-form";
 
 export default function EditJob() {
   return <Suspense fallback={<Skeleton className="h-96" />}><Inner /></Suspense>;

@@ -5,9 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from backend import candidate_jobs as cj
-from backend import demo_jobs
-from backend import jobs as jb
+from services import candidate_jobs as cj
+from services import demo_jobs
+from services import jobs as jb
 from core import config, db
 from tests.test_candidate import DETAILS, env, roles, scored  # noqa: F401  (fixture)
 
@@ -289,7 +289,7 @@ def test_apply_needs_a_confirmed_profile(seeded_env):
 
 
 def test_the_first_demo_jobs_get_fixed_dates_and_activity(env):  # noqa: F811
-    from backend import recruiter as rc
+    from services import recruiter as rc
     now = datetime(2026, 10, 16, 12, tzinfo=timezone.utc)
     with db.connect(env.path) as c:
         ids = {co: rc.create_job(c, DS, "Data Scientist", co) for co in ("Northwind Analytics", "Quarry Labs", "Fernway Health")}

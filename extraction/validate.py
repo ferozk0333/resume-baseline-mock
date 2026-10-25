@@ -281,8 +281,8 @@ _CLAUSE_END = re.compile(r"(?<=\w)[.;:](?:\s|$)|\s[–—]\s")
 
 def award_name(name: str, quote: str | None) -> str:
     """Award claims keep their event or context: when the name is a shorter piece of its quote
-    ("Top 10 finalist" in "Top 10 finalist out of 600+ teams, CSI National Hackathon: led a team of 4"),
-    use the clause of the quote that contains it ("… CSI National Hackathon"), at most one sentence and
+    ("Top 10 finalist" in "Top 10 finalist out of 400+ teams, Riverbend Civic Hackathon: led a team of 4"),
+    use the clause of the quote that contains it ("… Riverbend Civic Hackathon"), at most one sentence and
     about AWARD_MAX_CHARS characters (cut at a word boundary)."""
     q = re.sub(r"\s+", " ", (quote or "")).strip().strip("-•·,;. ")
     n = name.strip()
@@ -298,7 +298,7 @@ def award_name(name: str, quote: str | None) -> str:
 
 
 def looks_like_publication(c: schemas.Certification) -> bool:
-    """An authored paper, article, poster or talk listed as a certification (e.g. "Co-Author, 'The Lancet …'")."""
+    """An authored paper, article, poster or talk listed as a certification (e.g. "Co-Author, 'The Harbor Review …'")."""
     text = " ".join(x for x in (c.name, c.issuer, c.source.quote) if x)
     return bool(_AUTHORED.search(text)) and not _CREDENTIAL.search(text) and not c.credential_id
 
@@ -387,8 +387,7 @@ def validate_extraction(
 
 def repo_profile(doc: SourceDoc, readme_extract: schemas.PortfolioExtract | None,
                  today: date | None = None, method_of=None) -> tuple[Profile, ValidationReport]:
-    """A GitHub repo becomes one project from API metadata; its README adds bullets and tool claims.
-    A parsed README (PARSE_README) brings the kept README text as the description instead of bullets."""
+    """A GitHub repo becomes one project from API metadata; its README adds bullets and tool claims."""
     repo = doc.repo
     pushed = date.fromisoformat(repo.pushed_at[:10]) if repo.pushed_at else None
     created = date.fromisoformat(repo.created_at[:10]) if repo.created_at else None
@@ -404,8 +403,6 @@ def repo_profile(doc: SourceDoc, readme_extract: schemas.PortfolioExtract | None
         sub, report = validate_extraction(doc, readme_extract, today, method_of)
         for p in sub.projects:  # fold README "projects" into the repo instead of duplicating it
             project.bullets += p.bullets
-            if p.method in ("parser", "jev") and p.description:
-                project.description, project.method = p.description, p.method   # kept README text, verbatim
             project.description = project.description or p.description
             report.project_remap[p.id] = project.id
         for d in report.dropped_items:  # dropped README bullets now belong to the repo project
@@ -531,15 +528,11 @@ def _add_sources(into, other) -> None:
 def claim_key(c: ClaimRec) -> tuple[str, str]:
     """One claim per name (specs/19 item 17): awards apart from skills and tools."""
     group = "award" if c.kind == "award" else "skill"
-    if not config.DEDUPE_NAMES:
-        return group, c.name_norm
     k = dedupe.canonical(c.name_raw)
     return group, CLAIM_SYNONYMS.get(k, k)
 
 
 def _same_project(a: ProjectRec, b: ProjectRec) -> bool:
-    if not config.DEDUPE_NAMES:
-        return normalize_name(a.name) == normalize_name(b.name)
     if dedupe.same_project_name(a.name, b.name):
         return True
     ua, ub = dedupe.url_key(a.url), dedupe.url_key(b.url)
@@ -549,7 +542,7 @@ def _same_project(a: ProjectRec, b: ProjectRec) -> bool:
 def same_claim(a: ClaimRec, b: ClaimRec) -> bool:
     """One claim per name; awards (audit round, item 2d): the same award key, or, from different documents, one
     award's key found whole in the other award's text ("… Fellowship" in "Recognized with the … Fellowship for …")."""
-    if a.kind == "award" and b.kind == "award" and config.DEDUPE_NAMES:
+    if a.kind == "award" and b.kind == "award":
         ka, kb = dedupe.award_key(a.name_raw), dedupe.award_key(b.name_raw)
         if ka == kb:
             return True
@@ -558,7 +551,7 @@ def same_claim(a: ClaimRec, b: ClaimRec) -> bool:
 
 
 def _hackathon_placement(award: ClaimRec, projects: list[ProjectRec]) -> ProjectRec | None:
-    """A hackathon item the award names (audit round, item 2e): "Top 10 Finalist … in CSI National Hackathon"."""
+    """A hackathon item the award names (audit round, item 2e): "Top 10 Finalist … in Riverbend Civic Hackathon"."""
     for p in projects:
         if p.kind != "hackathon" and "hackathon" not in normalize_name(p.name).split():
             continue
@@ -569,7 +562,7 @@ def _hackathon_placement(award: ClaimRec, projects: list[ProjectRec]) -> Project
 
 
 def _placement_text(award: str, event: str) -> str:
-    """"Top 10 Finalist from 600+ teams in CSI National Hackathon" → "Top 10 Finalist from 600+ teams"."""
+    """"Top 10 Finalist from 400+ teams in Riverbend Civic Hackathon" → "Top 10 Finalist from 400+ teams"."""
     m = re.search(re.escape(event), award, re.I)
     if not m:
         return award
@@ -578,8 +571,6 @@ def _placement_text(award: str, event: str) -> str:
 
 
 def _same_certification(a: CertificationRec, b: CertificationRec) -> bool:
-    if not config.DEDUPE_NAMES:
-        return normalize_name(a.name) == normalize_name(b.name)
     if dedupe.canonical(a.name) != dedupe.canonical(b.name):
         return False
     return not (a.issuer and b.issuer) or dedupe.canonical(a.issuer) == dedupe.canonical(b.issuer)
@@ -660,7 +651,7 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
                 match.is_fork, match.own_commits = project.is_fork, project.own_commits
                 if project.end_date and (match.end_date is None or project.end_date > match.end_date):
                     match.end_date = project.end_date
-            if config.DEDUPE_NAMES and {match.kind, project.kind} == {"project", "repo"}:
+            if {match.kind, project.kind} == {"project", "repo"}:
                 match.kind = "project"             # a resume project and its repository: one project (item 16)
             match.details = {**project.details, **match.details}
             bullet_remap.update(_take_bullets(match, project, report))
@@ -676,7 +667,7 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
                 out.claims.append(claim)
                 continue
             report.merged += 1
-            if claim.kind == "award" and config.DEDUPE_NAMES:
+            if claim.kind == "award":
                 # the most complete name (with its amount) is kept, with every source
                 if dedupe.award_completeness(claim.name_raw) > dedupe.award_completeness(match.name_raw):
                     _add_sources(claim, match)
@@ -684,11 +675,7 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
                 else:
                     _add_sources(match, claim)
                 continue
-            if config.DEDUPE_NAMES:
-                stronger = _claim_strength(claim, artifacts) > _claim_strength(match, artifacts)
-            else:
-                stronger = match.bullet_id is None and claim.bullet_id is not None
-            if stronger:                           # keep the strongest evidence link, and every source
+            if _claim_strength(claim, artifacts) > _claim_strength(match, artifacts):                           # keep the strongest evidence link, and every source
                 _add_sources(claim, match)
                 claim.skill_group = claim.skill_group or match.skill_group
                 out.claims[out.claims.index(match)] = claim
@@ -701,22 +688,21 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
                 out.certifications.append(cert)
             else:
                 _fill(match, cert, ("issuer", "issued_date", "credential_id", "verify_url"))
-                if config.DEDUPE_NAMES and dedupe.exam_code(cert.name) and not dedupe.exam_code(match.name):
+                if dedupe.exam_code(cert.name) and not dedupe.exam_code(match.name):
                     match.name = cert.name         # keep the exam code for display
                 _add_sources(match, cert)
                 report.merged += 1
 
         out.references += prof.references
-    if config.DEDUPE_NAMES:
-        for claim in [c for c in out.claims if c.kind == "award"]:
-            event = _hackathon_placement(claim, out.projects)
-            if event is None:
-                continue
-            if not (event.details or {}).get("placement"):
-                event.details = {**(event.details or {}), "placement": _placement_text(claim.name_raw, event.name)}
-            _add_sources(event, claim)
-            out.claims.remove(claim)
-            report.placements.append((claim.name_raw, event.name))
+    for claim in [c for c in out.claims if c.kind == "award"]:
+        event = _hackathon_placement(claim, out.projects)
+        if event is None:
+            continue
+        if not (event.details or {}).get("placement"):
+            event.details = {**(event.details or {}), "placement": _placement_text(claim.name_raw, event.name)}
+        _add_sources(event, claim)
+        out.claims.remove(claim)
+        report.placements.append((claim.name_raw, event.name))
     return out, report
 
 

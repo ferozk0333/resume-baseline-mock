@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Stepper } from "@/components/app/jobs/job-form";
+import { Stepper } from "@/components/features/jobs/job-form";
 import { get, post, useUploadLimit, type JobForm, type JobTemplate } from "@/lib/api";
 
 /** Create job, step 1 (specs/14 §3): from a job description, a copy of an existing job, or from scratch. */

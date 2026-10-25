@@ -1,6 +1,6 @@
 # Spec 21 — Recruiter weight assistant (describe what you're looking for → suggested weights)
 
-Status: approved by Feroz (2026-10-22). Scope: **weights only** (dimension and subcategory weights). No must-haves, no scope/complexity settings, no baseline changes. Spec 20 stays reserved for the quality work (gold set, quote validation, backed vs claimed, verified references).
+Status: approved by the owner (2026-10-22). Scope: **weights only** (dimension and subcategory weights). No must-haves, no scope/complexity settings, no baseline changes. Spec 20 stays reserved for the quality work (gold set, quote validation, backed vs claimed, verified references).
 
 ## 0. Principle
 **The model suggests, the recruiter decides, code does the math.** Weights remain a company preference layer: they don't change any label or formula, only how saved subcategory scores are combined.
@@ -86,7 +86,7 @@ Recruiter → Job settings → Weights section:
     - "someone who will work closely with product and stakeholders" → Scope of impact up;
     - 2 texts containing protected attributes, which must be ignored;
     - 1 vague text ("a great engineer"), which should give small changes and say so.
-19. Offline tests use recorded model outputs. A live run on the sample set happens only after Feroz says go, within free limits. Report each suggestion for his review: weights, reasons, ignored phrases, preview on the AI Engineer demo job.
+19. Offline tests use recorded model outputs. A live run on the sample set happens only after the owner says go, within free limits. Report each suggestion for the owner's review: weights, reasons, ignored phrases, preview on the AI Engineer demo job.
 
 ## 8. Tests (offline)
 - validation (unknown keys, negatives, bounds);

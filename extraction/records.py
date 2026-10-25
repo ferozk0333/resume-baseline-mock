@@ -1,13 +1,10 @@
 """Validated profile records: the shape saved to SQLite and shown in the review step."""
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
 from datetime import date
 
-
-def new_id() -> str:
-    return str(uuid.uuid4())
+from core.db import new_id
 
 
 # Reason codes stored in roles/projects.review_reasons, with the review-screen text.

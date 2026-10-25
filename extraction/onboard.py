@@ -9,8 +9,8 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import date
 
-from core import config, timing
-from core.llm import StructuredLLM
+from core import timing
+from providers.llm import StructuredLLM
 from extraction import store
 from extraction.extract import extract_all
 from extraction.records import (
@@ -122,8 +122,7 @@ def ingest(conn: sqlite3.Connection, inputs: OnboardingInputs, *,
         with timing.span(timing.INGEST, "github") as t:
             try:
                 client = github_client or github.GitHubClient(session=CachedSession(conn))
-                repos = client.fetch_repos(
-                    username, include_readme=config.GITHUB_README_EXTRACTION)
+                repos = client.fetch_repos(username)
             except github.GitHubError as exc:
                 warnings.append(f"GitHub: {exc}")
                 repos = exc.partial

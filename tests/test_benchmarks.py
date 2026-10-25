@@ -161,7 +161,7 @@ def test_percentiles_and_signals_recompute_when_a_new_run_is_saved(tmp_path, mon
 
 def test_api_endpoint_and_plan_input(pool_db, demo_limits):
     from fastapi.testclient import TestClient
-    from backend.main import create_app
+    from api.app import create_app
     from judges.fake_judge import FakeJudge
     from scoring.plan import build_user_message
     path, runs = pool_db

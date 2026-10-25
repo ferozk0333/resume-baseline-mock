@@ -1,0 +1,8 @@
+# Lint: pyflakes and the basic pycodestyle errors (ruff's long-standing default set, pinned because newer ruff
+# versions enable more by default). `uvx ruff check .`
+line-length = 120
+target-version = "py313"
+extend-exclude = ["frontend", "rightstaff-test-profiles"]
+
+[lint]
+select = ["E4", "E7", "E9", "F"]

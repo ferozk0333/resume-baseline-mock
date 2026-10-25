@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BaselineForm, EMPTY_BASELINE } from "@/components/app/baselines/baseline-form";
+import { BaselineForm, EMPTY_BASELINE } from "@/components/features/baselines/baseline-form";
 import { del, get, post, put, type Baseline } from "@/lib/api";
 
 export default function BaselineEdit() {

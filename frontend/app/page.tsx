@@ -7,10 +7,10 @@ import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LoadError } from "@/components/app/candidate/load-error";
-import { PercentileLine } from "@/components/app/candidate/score-card";
-import { JobsBrowser } from "@/components/app/candidate/jobs-browser";
-import { ADD_PROOF_HINT, markedDoneToast, openProof, PROOF_SECTION, THEN_CONFIRM } from "@/components/app/score/add-proof";
+import { LoadError } from "@/components/features/candidate/load-error";
+import { PercentileLine } from "@/components/features/candidate/score-card";
+import { JobsBrowser } from "@/components/features/candidate/jobs-browser";
+import { ADD_PROOF_HINT, markedDoneToast, openProof, PROOF_SECTION, THEN_CONFIRM } from "@/components/features/score/add-proof";
 import { ApiError, get, post, STEP_LABELS, type CardAction, type OnboardingState, type ScoreCard } from "@/lib/api";
 import { useCurrentCandidate } from "@/lib/current-candidate";
 

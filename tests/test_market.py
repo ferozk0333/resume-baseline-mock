@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.main import create_app
+from api.app import create_app
 from core import config, db
 from graph.context import Deps
 from judges.fake_judge import FakeJudge
@@ -237,7 +237,7 @@ def test_a_posting_the_model_could_not_read_is_listed_with_the_draft(conn, roles
 
     class Unavailable:
         def parse(self, **kw):
-            from core.llm import LLMError
+            from providers.llm import LLMError
             raise LLMError("gemini-3.8-flash: daily limit reached")
     v = mb.recompute(conn, roles["ai_engineer"], llm=Unavailable(), at=NOW)
     assert v["basis"] == "Based on 3 postings from 3 companies"

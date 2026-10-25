@@ -111,7 +111,7 @@ def test_remove_profile_repos_from_saved_profile(tmp_path):
         return ProjectRec(kind="repo", name=name, description=None, url=None, start_date=None, end_date=None,
                           quote=name, evidence_id=eid, is_fork=False, own_commits=3)
     store.save_profile(conn, cid, Profile(projects=[repo("jdoe-dev"), repo("jdoe-dev.github.io"),
-                                                    repo("RoPE-Explainer")]))
+                                                    repo("attention-heatmaps")]))
     assert sorted(store.remove_profile_repos(conn, cid)) == ["jdoe-dev", "jdoe-dev.github.io"]
-    assert [p.name for p in store.load_profile(conn, cid).projects] == ["RoPE-Explainer"]
+    assert [p.name for p in store.load_profile(conn, cid).projects] == ["attention-heatmaps"]
     assert len([e for e in store.list_evidence(conn, cid) if e["type"] == "github_repo"]) == 1

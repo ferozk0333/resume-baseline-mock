@@ -3,10 +3,10 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SendNotice } from "@/components/app/recruiter/email-editor";
+import { SendNotice } from "@/components/features/recruiter/email-editor";
 import { get, type Email } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { LinkedText } from "@/components/app/ext-link";
+import { LinkedText } from "@/components/shared/ext-link";
 
 const KIND: Record<string, string> = { not_moving_forward: "Not moving forward", scheduling: "Scheduling", stage: "Stage",
   nudge: "Nudge", answer: "Answer", confirmation: "Confirmation", offer: "Offer note" };

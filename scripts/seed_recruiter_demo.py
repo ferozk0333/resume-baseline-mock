@@ -34,7 +34,7 @@ def demo_email(conn, cid: str) -> None:
 
 def seed(db_path: str, reset: bool = False) -> dict:
     sys.path.insert(0, str(ROOT))
-    from backend import recruiter as rc
+    from services import recruiter as rc
     from core import db
     from extraction.structured import DEMO_SOURCE, VARIANT_SOURCE, is_variant, load_all, read_profile_file
     from graph.context import Deps
@@ -81,7 +81,7 @@ def seed(db_path: str, reset: bool = False) -> dict:
             conn.execute("UPDATE candidates SET data_source = 'archetype' WHERE id = ?", (cid,))
         res = Pipeline(Deps(db_path, judge, today=TODAY), print_timings=False).score(cid, ds)
         rc.add_application(conn, jobs[ds], cid, res["run_id"])
-    from backend import demo_jobs                      # the candidate Home's demo jobs (specs/17 §9)
+    from services import demo_jobs                      # the candidate Home's demo jobs (specs/17 §9)
     seeded = demo_jobs.seed(conn)
     conn.close()
     return {"jobs": len(jobs), "demo_jobs": seeded["added"], "parsed_profiles": sum(1 for p in ids if not is_variant(p)),

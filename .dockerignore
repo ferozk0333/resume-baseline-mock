@@ -15,16 +15,12 @@ logs/
 *.log
 docs/
 specs/
-legacy/
 frontend/
-tests/extraction_reference/*.json
 tests/fixtures/profiles/rendered/
 **/.pytest_cache
 AI_Engineer_JD_Brightwater.pdf
 .claude/
 .hypothesis/
 **/.DS_Store
-specs_old/
-ITERATION_2.md
 CLAUDE.md
 .verify/

@@ -5,14 +5,15 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import hiring as hr
-from backend import mailer, replies
-from backend import scheduling as sch
-from backend import workflows as wf
-from backend.hiring_flow import HiringFlow
-from backend.main import create_app
+from workflows import hiring as hr
+from workflows import mailer
+from workflows import replies
+from workflows import scheduling as sch
+from workflows import engine as wf
+from workflows.hiring_flow import HiringFlow
+from api.app import create_app
 from core import config, db
-from core.llm import LLMError
+from providers.llm import LLMError
 from graph.context import Deps
 from judges.fake_judge import FakeJudge
 from tests import ui_fakes
@@ -572,12 +573,12 @@ def test_errors_reach_the_browser_with_cors_headers(seeded, monkeypatch):
 
 def test_workflows_do_not_need_the_judge(seeded, monkeypatch):
     """Starting a workflow builds only the email model, never the scoring deps (no Jev key needed)."""
-    from backend import main
+    from api import state
     monkeypatch.delenv("RIGHTSTAFF_DEPS_FACTORY", raising=False)
     monkeypatch.setattr(config, "DB_PATH", seeded)
-    monkeypatch.setattr(main, "default_deps", lambda: (_ for _ in ()).throw(ValueError("JUDGE=jev needs JEV_API_KEY")))
-    monkeypatch.setattr("core.llm.RoutedLLM.parse", lambda self, **kw: (_ for _ in ()).throw(LLMError("offline")))
-    api = TestClient(main.create_app())
+    monkeypatch.setattr(state, "default_deps", lambda: (_ for _ in ()).throw(ValueError("JUDGE=jev needs JEV_API_KEY")))
+    monkeypatch.setattr("providers.llm.RoutedLLM.parse", lambda self, **kw: (_ for _ in ()).throw(LLMError("offline")))
+    api = TestClient(create_app())
     job, rows = ds(api)
     r = api.post(f"/applications/{rows[0]['application_id']}/workflow", json={"confirm_move": True})
     assert r.status_code == 200 and r.json()["step"]["email"]["template"]

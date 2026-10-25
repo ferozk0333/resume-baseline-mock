@@ -53,7 +53,6 @@ def main() -> None:
     names = [r[0] for r in conn.execute(f"SELECT name FROM candidates WHERE id IN ({','.join('?' * len(cands))})",
                                         list(cands))] if cands else []
     print(f"candidates: {len(cands)} ({', '.join(sorted(set(names)))})")
-    ev = ids(conn, "SELECT id FROM evidence_items WHERE candidate_id IN ({q})", cands)
     shas = ids(conn, "SELECT file_sha256 FROM evidence_items WHERE candidate_id IN ({q})", cands)
     files = ids(conn, "SELECT file_path FROM evidence_items WHERE candidate_id IN ({q})", cands)
     runs = ids(conn, "SELECT id FROM runs WHERE candidate_id IN ({q})", cands)

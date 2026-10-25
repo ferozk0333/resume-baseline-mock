@@ -1,6 +1,6 @@
 {
  "version": 1,
- "_about": "Reviewed award matching rules (audit round, item 2d). drop_words are removed only when matching two award names (the name shown keeps them). '&' = 'and', an amount in brackets such as '($17,000)', a leading 'Recognized with the …' and a trailing 'for …' clause are dropped by code. groups: names that are one award spelled differently.",
+ "_about": "Reviewed award matching rules (audit round, item 2d). drop_words are removed only when matching two award names (the name shown keeps them). '&' = 'and', an amount in brackets such as '($12,000)', a leading 'Recognized with the …' and a trailing 'for …' clause are dropped by code. groups: names that are one award spelled differently.",
  "drop_words": ["merit", "award", "awarded"],
  "lead_phrases": ["recognized with the", "recognized with", "recognised with the", "recognised with", "recipient of the", "recipient of", "received the", "awarded the", "winner of the", "winner of"],
  "groups": []

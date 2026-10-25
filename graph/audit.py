@@ -327,7 +327,7 @@ def _recency(ctx, trail, labels, s):
 
 
 def _criteria(key: str, values: dict):
-    from graph.nodes.expertise import ALL_BULLETS, PART, best_label, criterion_text
+    from graph.nodes.expertise import ALL_BULLETS, best_label, criterion_text
 
     def compute(ctx, trail, labels, s):
         kind = "tool" if key == "tool_evidence" else "skill"
@@ -336,16 +336,14 @@ def _criteria(key: str, values: dict):
             vals = []
             for c in ctx.baseline.items(kind, prio):
                 subjects = [a.subject_id for a in labels.asks if a.key == key and
-                            (a.subject_id == c.id or a.subject_id == c.id + ALL_BULLETS
-                             or a.subject_id.startswith(f"{c.id}{ALL_BULLETS}{PART}"))]
+                            a.subject_id in (c.id, c.id + ALL_BULLETS)]
                 found = [labels.get(key, sid) for sid in subjects]
                 label = best_label(key, *found)
                 value = values.get(label) if label else None
                 who = []
                 for sid in subjects:
                     w = trail.who(key, sid)
-                    w["route"] = "alias match" if sid == c.id else "all bullets" + (
-                        f" ({sid.split(PART, 1)[1][:8]}…)" if PART in sid else "")
+                    w["route"] = "alias match" if sid == c.id else "all bullets"
                     who.append(w)
                 inputs.append(_row(f"{prio} {kind}", criterion_text(c), label=label, value=value, who=who,
                                    factors={"routes": len(subjects), "best of": [x for x in found if x]}))

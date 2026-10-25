@@ -1,5 +1,5 @@
-"""Code-first extraction (specs/18 §4, Phase 3): shared blocks, the LinkedIn and README parsers, the resume shadow
-parser, flags, method per item, hidden-text removal. Offline: synthetic files, FakeLabeller (no Jev), FakeLLM."""
+"""Code-first extraction (specs/18 §4, Phase 3): shared blocks, the LinkedIn parser, the flag, method per item,
+hidden-text removal. Offline: synthetic files, FakeLabeller (no Jev), FakeLLM."""
 import io
 import json
 import sys
@@ -8,15 +8,13 @@ from pathlib import Path
 import pytest
 
 from core import config, db
-from extraction import schemas, store
+from extraction import store
 from extraction.extract import extract_all
 from extraction.parse import dates, sections
 from extraction.parse.claims import find_names, split_skills_text, vocabulary
-from extraction.parse.labeller import Answer, FakeLabeller, NoLabeller, RecordedLabeller
+from extraction.parse.labeller import Answer, FakeLabeller, NoLabeller
 from extraction.parse.linkedin import parse_linkedin
-from extraction.parse.readme import blocks, parse_readme
-from extraction.parse.resume import parse_resume
-from extraction.parse.run import Parsers, wait_shadow
+from extraction.parse.run import Parsers
 from extraction.validate import SourceDoc, validate_extraction
 from ingest.documents import normalize_document
 from ingest.github import Repo
@@ -131,7 +129,7 @@ def test_a_resume_is_not_mistaken_for_a_linkedin_export():
     assert res.extract is None and res.report.reasons[0].startswith("not a LinkedIn Save to PDF layout")
 
 
-# --- README ---------------------------------------------------------------------------------------------------------
+# --- A repository (read by the LLM) ---------------------------------------------------------------------------------
 
 README = """# churn-model
 [![build](https://img.shields.io/badge/build-passing-green.svg)](https://ci)
@@ -169,72 +167,6 @@ def repo(readme=README) -> Repo:
                 languages={"Python": 9000, "Dockerfile": 200}, own_commits=12, readme=readme)
 
 
-def test_readme_blocks_by_rule_and_jev_for_the_unclear_one():
-    seen = []
-
-    def script(a):
-        seen.append(a.key)
-        if a.kind == "choice":
-            return ("built", 0.9)
-        return ("yes", 0.9)
-    lab = FakeLabeller(script)
-    res = parse_readme(repo(), VOCAB, lab)
-    assert res.report.ok
-    desc = res.extract.projects[0].description
-    assert desc.startswith("Churn model\n\nPredicts which members will cancel")
-    assert "We ran the model each Monday" in desc                                      # "built", kept by Jev
-    assert "PR-AUC" not in desc and "pip install" not in desc and "MIT" not in desc and "shields.io" not in desc
-    bullets = res.extract.projects[0].bullets                                         # results: one per sentence/item/row
-    assert [b.text for b in bullets] == [
-        "PR-AUC 0.81 on a held-out month; the top decile catches 46% of churners.",
-        "Used weekly by 3 retention managers.", "Cut manual review time from 6 hours to 1 a week.",
-        "Two teams adopted it.", "Model | PR-AUC\nXGBoost tuned with Optuna | 0.81\nLogistic regression | 0.64"]
-    assert bullets[0].source.quote == "PR-AUC **0.81** on a held-out month; the top decile catches 46% of churners."
-    assert {res.method_of(b) for b in bullets} == {"parser"}
-    assert res.method_of(res.extract.projects[0]) == "jev"
-    claims = {c.name: res.method_of(c) for c in res.extract.claims}
-    assert claims["Python"] == "parser" and claims.get("XGBoost") == "jev" and "Dockerfile" not in claims
-    assert any(k.startswith("block_") for k in seen)
-    assert [b.kind for b in blocks(README)][:2] == ["prose", "code"]
-
-
-def test_a_results_table_is_one_bullet_capped_in_rows(monkeypatch):
-    monkeypatch.setattr(config, "README_TABLE_MAX_ROWS", 1)
-    res = parse_readme(repo(), VOCAB, FakeLabeller(lambda a: ("built", 0.9) if a.kind == "choice" else ("no", 0.9)))
-    table = res.extract.projects[0].bullets[-1]
-    assert table.text == "Model | PR-AUC\nXGBoost tuned with Optuna | 0.81"
-    assert table.source.quote == "| Model | PR-AUC |\n|---|---|\n| XGBoost tuned with Optuna | 0.81 |"
-
-
-def test_readme_bullets_pass_the_quote_check_and_reach_the_repo_project():
-    from extraction.validate import repo_profile
-    rp = repo()
-    res = parse_readme(rp, VOCAB, FakeLabeller(lambda a: ("built", 0.9) if a.kind == "choice" else ("no", 0.9)))
-    profile, report = repo_profile(SourceDoc("g", "github_repo", rp.as_text(), "repo", repo=rp), res.extract,
-                                   method_of=res.method_of)
-    project = profile.projects[0]
-    assert report.dropped == 0 and len(project.bullets) == 5 and project.description.startswith("Churn model")
-    assert {b.method for b in project.bullets} == {"parser"} and project.is_github
-
-
-def test_readme_low_confidence_or_too_many_unclear_blocks_fall_back():
-    low = parse_readme(repo(), VOCAB, FakeLabeller(lambda a: ("built", 0.2)))
-    assert low.extract is None and "below the confidence threshold" in low.report.reasons[0]
-    many = README + "".join(f"\n## Mystery {i}\nSome words about part {i} of it.\n" for i in range(4))
-    out = parse_readme(repo(many), VOCAB, NoLabeller())
-    assert out.extract is None and "unclear line(s) after Jev" in out.report.reasons[0]
-
-
-def test_recorded_labeller_replays_answers(tmp_path):
-    path = tmp_path / "jev.json"
-    live = FakeLabeller(lambda a: ("built", 0.95) if a.kind == "choice" else ("no", 0.9))
-    first = parse_readme(repo(), VOCAB, RecordedLabeller(path, live))
-    again = RecordedLabeller(path)                                   # no live labeller: replay only
-    second = parse_readme(repo(), VOCAB, again)
-    assert first.extract.projects[0].description == second.extract.projects[0].description
-    assert again.counts.unanswered == 0
-
-
 def test_jev_answers_are_parsed():
     from extraction.parse.common import states_use
     from extraction.parse.labeller import parse
@@ -257,27 +189,24 @@ def docs(linkedin_pdf, with_readme=True):
 
 
 def test_flags_off_send_every_document_to_the_llm(linkedin_pdf, monkeypatch):
-    for flag in ("PARSE_LINKEDIN", "PARSE_README"):
-        monkeypatch.setattr(config, flag, False)
-    monkeypatch.setattr(config, "PARSE_RESUME", "off")
+    monkeypatch.setattr(config, "PARSE_LINKEDIN", False)
     assert not Parsers.any_on()
     llm = FakeLLM({"resume": sample_resume_extract()})
     out = extract_all(docs(linkedin_pdf), llm, parsers=None)
     assert len(llm.calls) == 3 and not any(hasattr(v, "report") for v in out.values())
 
 
-def test_flags_on_parse_linkedin_and_readme_in_code(linkedin_pdf, monkeypatch, tmp_path):
+def test_flag_on_parses_linkedin_in_code(linkedin_pdf, monkeypatch, tmp_path):
     monkeypatch.setattr(config, "PARSE_LINKEDIN", True)
-    monkeypatch.setattr(config, "PARSE_README", True)
     path = str(tmp_path / "p.db")
     db.init_app_db(path).close()
     llm = FakeLLM({"resume": sample_resume_extract()})
     out = extract_all(docs(linkedin_pdf), llm, parsers=Parsers(path, NoLabeller(), VOCAB))
-    assert len(llm.calls) == 1 and "<resume>" in llm.calls[0]["user"]          # only the resume used the LLM
-    assert out["l"].report.ok and out["g"].report.ok
+    assert len(llm.calls) == 2 and not any("<linkedin_pdf>" in c["user"] for c in llm.calls)   # LinkedIn in code
+    assert out["l"].report.ok
     conn = db.connect(path)
     rows = conn.execute("SELECT doc_type, mode, outcome FROM parser_runs ORDER BY doc_type").fetchall()
-    assert [tuple(r) for r in rows] == [("github_repo", "on", "parsed"), ("linkedin_pdf", "on", "parsed")]
+    assert [tuple(r) for r in rows] == [("linkedin_pdf", "on", "parsed")]
 
 
 def test_a_document_the_gate_rejects_goes_to_the_llm(monkeypatch, tmp_path):
@@ -298,53 +227,6 @@ def test_method_per_item_is_saved_and_loaded(tmp_path):
     store.save_profile(conn, cid, profile)
     loaded = store.load_profile(conn, cid)
     assert {r.method for r in loaded.roles} == {"llm"} and {c.method for c in loaded.claims} == {"llm"}
-
-
-# --- Resume shadow mode -------------------------------------------------------------------------------------------
-
-RESUME = ["Ada Lovelace", "ada@example.com", "EXPERIENCE", "Data Analyst | Acme Retail    Jan 2023 - Present",
-          "- Built a churn model in Python and scikit-learn that cut churn 12%.",
-          "- Automated weekly sales reports with SQL, saving 5 hours per week.", "SKILLS",
-          "Languages: Python, SQL, Tableau"]
-
-
-def test_resume_shadow_never_changes_extraction_and_logs_a_comparison(monkeypatch, tmp_path):
-    monkeypatch.setattr(config, "PARSE_RESUME", "shadow")
-    path = str(tmp_path / "s.db")
-    conn = db.init_app_db(path)
-    cid = store.create_candidate(conn, "Ada")
-    pdf = tmp_path / "cv.pdf"
-    pdf.write_bytes(make_pdf(RESUME))
-    text = normalize_document("cv.pdf", pdf.read_bytes())
-    eid = store.add_evidence(conn, cid, "resume", "upload", raw_text=text, file_path=str(pdf))
-    llm = FakeLLM({"resume": schemas.ProfileExtract(roles=[], projects=[], claims=[], certifications=[])})
-    out = extract_all([SourceDoc(eid, "resume", text, "Resume", file_path=str(pdf))], llm,
-                      parsers=Parsers(path, NoLabeller(), VOCAB))
-    wait_shadow()
-    assert out[eid].roles == [] and len(llm.calls) == 1                  # the LLM's answer is what is used
-    row = conn.execute("SELECT mode, outcome, comparison_json FROM parser_runs").fetchone()
-    assert row["mode"] == "shadow" and row["outcome"] == "parsed"
-    comparison = json.loads(row["comparison_json"])
-    assert comparison["counts"]["role"] == {"reference": 0, "parser": 1, "found": 0, "missing": 0, "extra": 1}
-
-
-def test_resume_parser_reads_roles_bullets_and_skills(tmp_path):
-    data = make_pdf(RESUME)
-    text = normalize_document("cv.pdf", data)
-    res = parse_resume("cv.pdf", data, text, VOCAB, NoLabeller())
-    assert res.report.ok, res.report.reasons
-    r = res.extract.roles[0]
-    assert (r.title, r.employer, r.start, r.is_current, len(r.bullets)) == ("Data Analyst", "Acme Retail", "2023-01",
-                                                                           True, 2)
-    assert [c.name for c in res.extract.claims] == ["Python", "SQL", "Tableau"]
-
-
-def test_resume_gate_falls_back_without_dates():
-    data = make_pdf(["Ada Lovelace, ada@example.com", "EXPERIENCE", "Data Analyst | Acme Retail",
-                     "- Built dashboards for the regional sales team in Tableau and SQL every week.", "SKILLS",
-                     "Python, SQL, Tableau, Excel, statistics, forecasting"])
-    res = parse_resume("cv.pdf", data, normalize_document("cv.pdf", data), VOCAB, NoLabeller())
-    assert res.extract is None and "no dates" in res.report.reasons[0]
 
 
 # --- Hidden text (spec item 20) -------------------------------------------------------------------------------------
@@ -409,7 +291,7 @@ def test_replay_judge_answers_only_what_was_recorded(tmp_path):
 
 def test_admin_extraction_endpoint_lists_parser_runs_and_hidden_text(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from backend.main import create_app
+    from api.app import create_app
     from graph.context import Deps
     from judges.fake_judge import FakeJudge
     path = str(tmp_path / "a.db")
@@ -426,126 +308,6 @@ def test_admin_extraction_endpoint_lists_parser_runs_and_hidden_text(tmp_path, m
         out = api.get(f"/admin/candidates/{cid}/extraction").json()
     assert out["documents"][0]["hidden_text"][0]["text"] == "secret"
     assert out["parser_runs"][0]["outcome"] == "parsed"
-
-
-class ClaimsLLM:
-    """The small claims call (item 18c): one real name and one the model rewrote (must be dropped)."""
-
-    def __init__(self):
-        self.calls = []
-
-    def parse(self, *, model, system, user, output_type):
-        from extraction.parse.resume import SkillNames
-        self.calls.append(user)
-        assert output_type is SkillNames and "<bullets>" in user
-        return SkillNames.model_validate({"names": [{"name": "Sisense", "bullet": 1},
-                                                    {"name": "Sisense BI", "bullet": 1}]})
-
-
-SHADOW_RESUME = ["Ada Lovelace", "ada@example.com", "EXPERIENCE", "Data Analyst | Acme Retail    Jan 2023 - Present",
-                 "- Set up Sisense views that the sales team reads every Monday morning.",
-                 "- Built a churn model in Python and scikit-learn that cut churn 12%.", "SKILLS",
-                 "Languages: SQL, Tableau"]
-
-
-def test_shadow_calls_are_off_by_default_and_on_ask_jev_and_the_claims_call(monkeypatch, tmp_path):
-    monkeypatch.setattr(config, "PARSE_RESUME", "shadow")
-    pdf = tmp_path / "cv.pdf"
-    pdf.write_bytes(make_pdf(SHADOW_RESUME))
-    text = normalize_document("cv.pdf", pdf.read_bytes())
-    asked = []
-    lab = FakeLabeller(lambda a: (asked.append(a.key), ("yes", 0.9))[1])
-    llm = ClaimsLLM()
-    doc = SourceDoc("ev", "resume", text, "Resume", file_path=str(pdf))
-    empty = schemas.ProfileExtract(roles=[], projects=[], claims=[], certifications=[])
-
-    monkeypatch.setattr(config, "PARSE_SHADOW_CALLS", False)
-    Parsers(None, lab, VOCAB, llm=llm).shadow(doc, empty)
-    wait_shadow()
-    assert asked == [] and llm.calls == []                       # no Jev, no LLM without PARSE_SHADOW_CALLS
-
-    res = parse_resume("cv.pdf", pdf.read_bytes(), text, VOCAB, lab, llm=llm)
-    claims = {c.name: res.method_of(c) for c in res.extract.claims}
-    assert claims["Python"] == "jev" and claims["scikit-learn"] == "jev"          # vocabulary names, Jev-confirmed
-    assert claims["Sisense"] == "llm" and "Sisense BI" not in claims       # verbatim only
-    assert len(llm.calls) == 1 and "Sisense views" in llm.calls[0] and "churn model" not in llm.calls[0]
-    assert res.report.llm_calls == 1
-
-    monkeypatch.setattr(config, "PARSE_SHADOW_CALLS", True)
-    Parsers(None, lab, VOCAB, llm=llm).shadow(doc, empty)
-    wait_shadow()
-    assert len(llm.calls) == 2
-
-
-def test_resume_gate_falls_back_on_table_pdfs_and_wrapped_titles():
-    from render_test_profiles import resume_pdf_table
-    import tempfile
-    md = ("**Ada Lovelace**\nData Analyst · ada@example.com\n\n**Experience**\n\n"
-          "**Data Analyst** — Acme Retail, Seattle, WA · Jan 2023 – Present\n- Built a churn model in Python.\n"
-          "- Automated weekly sales reports with SQL.\n\n**Analytics Intern** — Beta Corp, Austin, TX · Jun 2022 – Aug 2022\n"
-          "- Cleaned survey data with pandas.\n\n**Skills**\nPython, SQL, pandas")
-    with tempfile.TemporaryDirectory() as d:
-        path = Path(d) / "t.pdf"
-        resume_pdf_table(md, path)
-        data = path.read_bytes()
-    res = parse_resume("t.pdf", data, normalize_document("t.pdf", data), VOCAB, NoLabeller())
-    assert res.extract is None and res.report.reasons[0].startswith("table layout in a PDF")
-
-
-def test_build_steps_become_bullets_and_lead_ins_are_dropped():
-    readme = """# fraud-model
-Detects fraudulent card payments from transaction data with a tuned gradient boosting model.
-
-## How it was built
-**1. Data processing:** A processing job cleans the data. It writes train and test splits.
-
-**2. Training:** Four algorithms were tuned with Bayesian search on PR-AUC.
-
-## Features
-- Live scoring: Scores each payment in under 50 ms.
-- Alerts: Flags risky payments to the review queue.
-
-## Implementation
-- Built a feature store over Kafka streams.
-- Deployed the model behind an API gateway.
-
-## Results
-Compared to an unregularized baseline:
-
-| Model | PR-AUC |
-|---|---|
-| XGBoost | 0.83 |
-"""
-    res = parse_readme(repo(readme), VOCAB, NoLabeller())
-    p = res.extract.projects[0]
-    assert "Detects fraudulent card payments" in p.description and "processing job" not in p.description
-    assert "Live scoring: Scores each payment" in p.description                 # a feature list stays description
-    assert [b.text for b in p.bullets] == [
-        "1. Data processing: A processing job cleans the data. It writes train and test splits.",
-        "2. Training: Four algorithms were tuned with Bayesian search on PR-AUC.",
-        "Built a feature store over Kafka streams.", "Deployed the model behind an API gateway.",
-        "Model | PR-AUC\nXGBoost | 0.83"]
-    assert p.bullets[0].source.quote.startswith("**1. Data processing:**")
-
-
-def test_no_gain_gate_for_keyword_stuffers_and_padded_profiles(tmp_path):
-    """Spec 18 wrap-up: ID 2 or a padded variant must not gain unless its own evidence text changed."""
-    from parser_gates import no_gain_gate
-    from extraction.records import RoleRec
-    conn = db.init_app_db(str(tmp_path / "n.db"))
-    same_a, same_b, other = (store.create_candidate(conn, n) for n in ("a", "b", "c"))
-    for cid, title in ((same_a, "Data Analyst"), (same_b, "Data Analyst"), (other, "Data Scientist")):
-        p = store.load_profile(conn, cid)
-        p.roles.append(RoleRec(title=title, employer="Acme", industry=None, start_date=None, end_date=None,
-                               is_current=True, team_size=None, quote=title, evidence_id=None))
-        store.save_profile(conn, cid, p)
-    lines = no_gain_gate(conn, {
-        "AI2": {"control": 54.6, "parser": 57.1, "control_cid": same_a, "cid": same_b},        # same text: FAIL
-        "DS4_padded": {"control": 72.4, "parser": 73.9, "control_cid": same_a, "cid": other},  # text changed: PASS
-        "PM2": {"control": 46.2, "parser": 46.0, "control_cid": same_a, "cid": same_b},        # no gain: PASS
-        "PM1": {"control": 87.7, "parser": 89.7, "control_cid": same_a, "cid": same_b}})       # not a stuffer
-    assert [ln.rsplit("→ ", 1)[1] for ln in lines] == ["FAIL", "PASS", "PASS"]
-    assert "gained with the same evidence text" in lines[0]
 
 
 LINKEDIN_HONORS_MD = LINKEDIN_MD.replace("Licenses & certifications", """Honors-Awards
@@ -571,6 +333,6 @@ def test_linkedin_honors_awards_become_award_claims_never_skills(tmp_path):
     assert [n for n, k in kinds.items() if k != "award"] == ["Excel", "SQL", "Power BI"]
     profile, _ = validate_extraction(SourceDoc("e", "linkedin_pdf", text, "LinkedIn"), res.extract,
                                      method_of=res.method_of)
-    from backend.recruiter import _evidence_items
+    from services.recruiter import _evidence_items
     listed = [i["text"] for i in _evidence_items(profile, {}) if i["kind"] == "listed"]
     assert listed == ["Excel", "SQL", "Power BI"]

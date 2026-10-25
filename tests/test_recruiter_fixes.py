@@ -1,7 +1,7 @@
 """specs/13 §0: review fixes. Fixed inputs and FakeJudge; no network."""
 import pytest
 
-from backend import recruiter as rc
+from services import recruiter as rc
 from core import config, db
 from extraction import store
 from graph.context import Deps

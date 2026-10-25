@@ -7,8 +7,8 @@ import pytest
 from pydantic import BaseModel
 
 from core import config, db, timing
-from core.llm import DailyLimitReached, LLMError, RoutedLLM
-from core.routing import ModelLimiter, Overloaded, Router, Throttled, Unusable, last_model, models_of, parse_duration
+from providers.llm import DailyLimitReached, LLMError, RoutedLLM
+from providers.routing import ModelLimiter, Overloaded, Router, Throttled, Unusable, last_model, models_of, parse_duration
 
 A, B, C = "gemini/gemini-3.5-flash-lite", "gemini/gemini-3.1-flash-lite", "groq/openai/gpt-oss-120b"
 
@@ -232,25 +232,6 @@ def test_concurrency_per_model_up_to_its_limit(env, monkeypatch):
     assert results == ["A slow"]
 
 
-# --- Hedging (off by default) --------------------------------------------------------------------------------------
-
-def test_hedging_is_off_by_default_and_the_first_answer_wins_when_on(env, monkeypatch):
-    assert config.HEDGE_AFTER_S == 0
-    monkeypatch.setattr(config, "HEDGE_AFTER_S", 0.05)
-    gate = threading.Event()
-
-    def slow():
-        gate.wait(2)
-        return Out(label="A late")
-    s = Script(**{A: [slow]})
-    rec = timing.Recorder()
-    with timing.recording(rec):
-        out = Router(s.client_for, limiter=env.lim, sleep=time.sleep, clock=env.clock).parse(
-            model="route:judge_single", system="S", user="U", output_type=Out)
-    gate.set()
-    assert out.label == B and rec.counters["hedged"] == 1                # the duplicate on B answered first
-
-
 # --- Routes in config ---------------------------------------------------------------------------------------------
 
 def test_a_claude_model_at_the_top_of_a_route_works_with_no_code_change(env, monkeypatch):
@@ -270,7 +251,7 @@ def test_a_single_model_is_a_one_model_route(env):
 # --- LIVE guard ---------------------------------------------------------------------------------------------------
 
 def test_real_providers_need_live(monkeypatch):
-    from core.llm import ClaudeLLM, GeminiLLM, GroqLLM
+    from providers.llm import ClaudeLLM, GeminiLLM, GroqLLM
     from judges.jev_judge import JevError, JevJudge
     monkeypatch.setattr(config, "LIVE", False)
     for client in (GeminiLLM(api_key="k"), GroqLLM(api_key="k")):
@@ -299,7 +280,7 @@ def test_routed_llm_records_the_answering_model_for_extraction(env, tmp_path, mo
 # --- Answer budgets per task and the bad-output rule (spec 18 Phase 1 review) --------------------------------------
 
 def _gemini_router(env, *responses):
-    from core.llm import GeminiLLM
+    from providers.llm import GeminiLLM
     from tests.test_gemini import Session
     session = Session(*responses)
     client = GeminiLLM(session=session, api_key="k")
@@ -339,8 +320,8 @@ def test_web_pages_and_documents_use_their_task_budgets(env, monkeypatch):
 
 
 def test_groq_budget_is_the_task_budget_within_its_token_limit():
-    from core.llm import GroqLLM
-    from core.routing import answer_budget
+    from providers.llm import GroqLLM
+    from providers.routing import answer_budget
     g = GroqLLM(session=object(), api_key="k", max_tokens=12000)
     with answer_budget(1024):
         assert g._budget("groq/openai/gpt-oss-120b", "S", "U") == 1024
@@ -369,7 +350,7 @@ def test_a_routed_call_makes_one_attempt_per_model(env):
 # --- Fixes after live run 1 -----------------------------------------------------------------------------------------
 
 def test_document_reading_gets_a_longer_timeout_than_a_question(env, monkeypatch):
-    from core.llm import GeminiLLM
+    from providers.llm import GeminiLLM
     from tests.test_gemini import Session, ok
     session = Session(ok({"label": "x"}), ok({"label": "y"}))
     client = GeminiLLM(session=session, api_key="k")
@@ -398,7 +379,7 @@ def test_gemini_usage_rows_keep_the_bare_model_name(env):
 
 
 def test_candidates_never_see_model_or_provider_details():
-    from backend.candidate import BUSY_TEXT, public_error
+    from services.candidate import BUSY_TEXT, public_error
     assert public_error("extract_document: no model could answer after 4 attempt(s): gemini/gemini-3-flash-preview: "
                         "HTTP 503") == BUSY_TEXT
     assert public_error("extract_web: no valid answer from two models (gemini/gemini-3.5-flash-lite output was cut "
