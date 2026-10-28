@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
 // Candidate experience, phase A (specs/17): first run → onboarding (5 steps) → Home, My scores, Profile.
-// Screenshots go to e2e/.tmp/spec17 (copied to docs/screenshots/spec17 for the report).
+// Screenshots go to e2e/.tmp/spec17.
 const OUT = "e2e/.tmp/spec17";
 const CV = path.join(__dirname, ".tmp/cv.pdf");
 fs.mkdirSync(OUT, { recursive: true });

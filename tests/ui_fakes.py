@@ -44,7 +44,6 @@ def best(q, c):
 class AlwaysPlanner:
     def parse(self, *, model, system, user, output_type):
         CALLS["planner"] += 1
-        import json
         import re
         keys = re.findall(r'"key": "(\w+)"', user)
         return Plan(actions=[Action(type="build_project", title="Build an A/B test project",
@@ -60,14 +59,14 @@ def make_deps() -> Deps:
     import os
     writer = None
     if os.getenv("EMAIL_LIVE") == "1":
-        from core.llm import RoutedLLM
+        from providers.llm import RoutedLLM
         writer = RoutedLLM()
     job_llm = None
     if os.getenv("JOB_EXTRACT_FAKE") == "1":                # e2e: the scripted Brightwater answer, else the fallback
         from tests.helpers import FakeJobReader
         job_llm = FakeJobReader()
     if os.getenv("JOB_EXTRACT_LIVE") == "1":                # reading job descriptions with JOB_EXTRACT_MODEL (demo)
-        from core.llm import RoutedLLM
+        from providers.llm import RoutedLLM
         job_llm = RoutedLLM(max_tokens=config.EXTRACT_MAX_TOKENS)
     return Deps(str(config.DB_PATH), FakeJudge(script=best), llm=SlowLinkedIn({"resume": sample_resume_extract()}),
                 planner=AlwaysPlanner(), writer=writer, job_llm=job_llm, weights_llm=StubWeightsLLM())
@@ -85,7 +84,7 @@ class StubWeightsLLM:
     def stub(text: str):
         import yaml
         from pathlib import Path
-        from backend.weight_assistant import DimWeight, Reason, SubWeight, WeightsOut
+        from services.weight_assistant import DimWeight, Reason, SubWeight, WeightsOut
         texts = yaml.safe_load((Path(__file__).parent / "fixtures" / "weight_texts.yaml").read_text())["texts"]
         t = next((x for x in texts if x["text"].strip().lower() == text.strip().lower()),
                  next(x for x in texts if x["id"] == "vague"))["stub"]

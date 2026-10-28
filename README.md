@@ -3,8 +3,9 @@
 Scores a candidate profile (resume, LinkedIn PDF, GitHub, portfolio) against a baseline role
 profile with the EEAT framework (Experience, Expertise, Authority, Trust; 19 subcategories), then
 ranks the gaps and writes an improvement plan. Non-production: it exists to check that the scoring
-logic works end to end. `CLAUDE.md` and `specs/` describe the design; `ITERATION_2.md` the current
-iteration.
+logic works end to end. Where things live: [docs/architecture.md](docs/architecture.md); the tables:
+[docs/schema.md](docs/schema.md); the design: [specs/](specs/README.md) (`specs/04_scoring_rules.md` is the source of
+truth for scoring).
 
 ## Setup
 ```bash
@@ -14,11 +15,15 @@ cp .env.example .env        # then fill in ANTHROPIC_API_KEY, JEV_API_KEY and (r
 cd frontend && npm install && cd ..
 make dev                    # API on :8000 (docs at /docs) + web app on :3000
 ```
-`make api` and `make web` start them separately.
+`make api` and `make web` start them separately. Python 3.13 (the venv and the API image).
 
-The previous Streamlit UI is retired to `legacy/app/` unchanged and no longer maintained. It still runs with
-`PYTHONPATH=. .venv/bin/streamlit run legacy/app/Home.py`. What it showed that the new app doesn't yet is
-listed in `docs/backlog.md`.
+### Databases
+`make dev` and `make api` use `rightstaff.db` in the repo root; `make demo` and `make live` use `data/demo.db`
+(`RIGHTSTAFF_DB` overrides either). Both are gitignored, created on first use and migrated when opened.
+- `make reset-db`: an empty database at the current schema with only the seed baselines (`seed/baselines.json`).
+- `make reseed`: the demo database: the synthetic profiles scored from the judgment archive, plus the demo jobs.
+Both move the old file aside (`<db>.before-reset`, `<db>.before-reseed`) and make no model calls.
+
 `GITHUB_TOKEN` can be a fine-grained, read-only token for public repositories. Without it GitHub
 allows 60 requests an hour, which one profile with ~20 repos nearly uses up. GitHub responses are
 cached in the database for 24 hours either way.
@@ -180,24 +185,19 @@ human reviewers: don't send real personal data on the free tier.
   every model is busy is there a wait of at most `ROUTE_MAX_WAIT_S` (5 s). At most `ROUTE_MAX_ATTEMPTS` (4) calls per
   request. Every model out of quota for the day: fail fast ("Daily free-tier limit reached…"; saved work is kept).
 - **Limits per model** (requests and tokens per minute and per day, from `MODEL_LIMITS`); calls in flight per model up
-  to its requests per minute; timeouts Gemini 45 s, Groq 20 s. Optional hedging (`HEDGE_AFTER_S`, off).
+  to its requests per minute; timeouts Gemini 45 s, Groq 20 s.
 - **Early start:** the roles picked during reading are judged as soon as the documents are read; Confirm only
   finishes what's left (an item edited in Review is judged again).
 - **LIVE guard:** real provider calls only with `LIVE=1` (`make live` sets it). Scripts that call real models need it too.
 - Logs (`rightstaff.routing`): `failover: <task> <model> → <next> (<why>)`, `all busy: …`, `fail fast: …`. Runs record
   calls per task per model (`calls_by_task`) and failovers in their timings.
 
-### Code-first extraction (specs/18, phase 3; PARSE_LINKEDIN on; README and resume parsing parked)
+### Code-first extraction (specs/18, phase 3; PARSE_LINKEDIN on)
 - **Design:** code builds the structure, Jev decides what is unclear, the LLM is the fallback. Every field is a
   verbatim span of the source, so the usual quote check, claim, award and publication rules apply unchanged.
 - **`PARSE_LINKEDIN`** (on by default): a parser for LinkedIn's "Save to PDF" layout (sidebar + main column, font
   tiers read from the document). A real export shows less than the profile: only the top 3 skills, certificate names
-  without issuer, date or credential ID, and no projects; the parser reads what the export shows, as the LLM does. **`PARSE_README`:** README blocks kept by rule (overview, features, architecture, results) or by Jev;
-  setup, install, licence, badges and code are dropped. Kept "what was built" text becomes the repository's
-  description (after its GitHub description, ≤1,500 characters); kept results become the project's bullets, one per
-  sentence, list item or table row, verbatim.
-  **`PARSE_RESUME=shadow`:** the résumé is still read by the LLM; afterwards the parser reads it too and the
-  comparison is logged (`parser_runs`); nothing from it is shown or scored.
+  without issuer, date or credential ID, and no projects; the parser reads what the export shows, as the LLM does.
 - **Confidence gate:** a document goes to the LLM when it doesn't look like the expected layout, a role has no dates,
   more than `PARSER_MAX_UNCLEAR` lines stay unclear, reading order looks scrambled, or a Jev label is below
   `JEV_CONFIDENCE_THRESHOLD`. Every item records how it was read (`method`: parser | jev | llm).
@@ -212,28 +212,10 @@ human reviewers: don't send real personal data on the free tier.
   the same field grid in view and edit, one card in edit at a time, bullets edited one by one (drag or ↑/↓, paste
   splits lines), delete with Undo, grouped and searchable skills (`config/skill_groups.yaml`), a section menu,
   "Needs your attention" and a sticky Confirm bar. Duplicates merge on a normalized name or
-  `config/claim_aliases.json` (never on similarity; near misses are listed by `scripts/dedupe_report.py`, which also
-  writes the offline before/after report to `timings/dedupe_report.md`). Education, patents, volunteering, courses
+  `config/claim_aliases.json` (never on similarity). Education, patents, volunteering, courses
   and languages are display only: shown to recruiters, never judged or scored.
-- **Gates:** `scripts/parser_gates.py` (offline; replays recorded judgments, `judges/replay_judge.py`) writes
-  `timings/parser_gates.md`. `scripts/render_test_profiles.py --stress` renders the layout stress set.
-  `scripts/readme_live_gate.py --estimate` counts the calls of the README gate on the latest live profile; `--run`
-  (LIVE=1, after approval) runs it.
-- **Shadow calls** (`PARSE_SHADOW_CALLS=1`): Jev confirms vocabulary skills inside résumé bullets, and one small call
-  per document (`prompts/bullet_skills_system.txt`, the judge fallback model) lists skill and tool names from bullets
-  that matched no vocabulary; names not written exactly as in their bullet are dropped.
-
-### Fewer calls, more model families (specs/18 phase 2; all flags off, parked — see docs/spec18_summary.md)
-- **`GROUPED_ITEM_JUDGING`:** complexity and work-sample questions in one batched call per family (same schema, a
-  quote required above the lowest label, each failed item retried alone; complexity reasons first).
-- **`REPO_CAP`** (`MAX_REPOS` 8): read and judge only the repositories most relevant to the role (then latest push,
-  then stars); the others stay listed. **`GEMMA_JUDGE` / `GROQ_JUDGE`:** judging calls take turns across Flash-Lite and
-  the family (Groq: single items only, never grouped calls, extraction or plans).
-- **`PARTITIONED_BATCHES`:** the all-bullets skill/tool checks per source document; an unchanged document keeps its
-  saved answer and the label is the best across sources.
 - **Capabilities per model** (`config.model_caps`, override `MODEL_CAPS`): a request sends only what the model accepts
-  (Gemma: no thinking setting). `scripts/phase2_compare.py --estimate` states the calls per flag; `--run FLAG` (LIVE)
-  compares on vs off on the test profiles.
+  (Gemma: no thinking setting). `scripts/render_test_profiles.py --stress` renders the layout stress set.
 
 ### Prompt-injection screen (specs/18 phase 4; `PROMPT_GUARD` on)
 Llama Prompt Guard 2 on Groq (86M, then 22M; 512-token window, so overlapping chunks), in the background: never
@@ -251,15 +233,10 @@ RIGHTSTAFF_LIVE=1 .venv/bin/python -m pytest -q     # adds the live model checks
 local Chrome, against the API on fakes (`make fake-api`: FakeJudge, scripted extraction and plan, throwaway
 database). No model calls.
 
-`tests/test_regression.py` pins the FakeJudge archetype scores: they must not change in iteration 2.
+`tests/test_regression.py` pins the FakeJudge archetype scores: they must not change unless a scoring change is
+intended and approved.
 
-## Timing a run
-```bash
-.venv/bin/python scripts/time_run.py --resume R.pdf --linkedin L.pdf --github USER \
-    --github-fixture timings/github.json --label before
-```
-Uses a fresh database (nothing cached), records GitHub responses on the first run and replays them
-afterwards, and writes a timing table, token counts and an estimated Claude cost to `timings/`.
+`make lint` runs ruff (`ruff.toml`), eslint and the TypeScript check.
 
 ## Third-party licences
 - **PyMuPDF, pymupdf4llm and pymupdf-layout** (PDF → Markdown in `ingest/documents.py`) are

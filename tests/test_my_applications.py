@@ -3,17 +3,18 @@ Mark done, and the Market template labels. Offline."""
 import json
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
-from backend import hiring as hr
-from backend import my_applications as ma
-from backend import workflows as wf
+from services import my_applications as ma
+from workflows import engine as wf
 from core import config, db
-from tests.test_candidate import env, scored  # noqa: F401  (fixture)
-from tests.test_candidate_jobs import DS, dj, seeded_env  # noqa: F401  (fixture)
+from tests import test_candidate, test_candidate_jobs
+from tests.test_candidate import scored
+from tests.test_candidate_jobs import DS, dj
+
+env, seeded_env = test_candidate.env, test_candidate_jobs.seeded_env      # the fixtures this module's tests use
 
 
-def applied(env):  # noqa: F811
+def applied(env):
     cid, runs = scored(env, [DS])
     job = dj("cedarpine-ds1")
     env.api.tasks.wait(env.api.post(f"/candidates/{cid}/apply", json={"job_id": job}).json()["task_id"])
@@ -178,7 +179,7 @@ def test_mark_done_moves_to_the_next_action_changes_no_score_and_undoes(env):  #
 # --- Market templates ---------------------------------------------------------------------------------------------
 
 def test_market_templates_say_what_they_are_based_on(env):  # noqa: F811
-    from backend import jobs as jb
+    from services import jobs as jb
     with db.connect(env.path) as c:
         for vid, ver, test, title in (("v1", 1, 1, "AI Engineer"), ("v2", 2, 0, "Data Scientist")):
             c.execute("INSERT INTO baselines (id, title, level, required_years, expected_reach, is_mock, "

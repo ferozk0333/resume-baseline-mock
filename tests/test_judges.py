@@ -1,10 +1,8 @@
 """Phase 4: judge catalogue, ClaudeJudge (fake client), FakeJudge, judgment cache and storage."""
-from types import SimpleNamespace
 
 import pytest
 
 from core import config, db
-from core.models import BaselineCriterion
 from judges import questions as qmod
 from judges.base import Judgment, JudgeError, render_context
 from judges.claude_judge import ClaudeJudge, output_model, system_prompt
@@ -130,7 +128,7 @@ def test_claude_judge_yes_no_and_option_mismatch():
 
 
 def test_claude_judge_wraps_llm_errors():
-    from core.llm import LLMError
+    from providers.llm import LLMError
 
     class Failing:
         def parse(self, **kw):

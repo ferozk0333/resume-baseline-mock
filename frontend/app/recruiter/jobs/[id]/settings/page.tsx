@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
-import { InterviewPlan } from "@/components/app/recruiter/interview-plan";
-import { WeightAssistant } from "@/components/app/recruiter/weight-assistant";
+import { InterviewPlan } from "@/components/features/recruiter/interview-plan";
+import { WeightAssistant } from "@/components/features/recruiter/weight-assistant";
 import { DIMENSIONS, get, put, titleCase, type Job, type Weights } from "@/lib/api";
 
 export default function SettingsPage() {

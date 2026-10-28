@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DetailsForm } from "@/components/app/candidate/details-form";
-import { LoadError } from "@/components/app/candidate/load-error";
+import { DetailsForm } from "@/components/features/candidate/details-form";
+import { LoadError } from "@/components/features/candidate/load-error";
 import { get, put, type ApplicationDetails, type OnboardingState, type ProfileResponse } from "@/lib/api";
 import { useCurrentCandidate } from "@/lib/current-candidate";
 

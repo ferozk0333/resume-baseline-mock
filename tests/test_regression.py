@@ -1,4 +1,4 @@
-"""Iteration 2 rule 1: FakeJudge archetype scores must not change (ITERATION_2.md, specs/09 §3).
+"""Iteration 2 rule 1: FakeJudge archetype scores must not change (docs/archive/ITERATION_2.md, specs/09 §3).
 
 The snapshot was recorded at the start of phase 9 on v0.1-mock. It covers every archetype
 against every seeded baseline: final score, dimension scores, each subcategory's status and

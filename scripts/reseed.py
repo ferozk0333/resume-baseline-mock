@@ -55,7 +55,7 @@ def main() -> None:
 
     import seed_recruiter_demo
     print(seed_recruiter_demo.seed(str(db_path), reset=True))
-    from backend import demo_jobs
+    from services import demo_jobs
     from core import config, db
     conn = db.init_app_db(str(db_path))
     print(demo_jobs.seed(conn))

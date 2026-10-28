@@ -189,8 +189,8 @@ def test_upgrading_bullet_label_never_lowers_authority(bullets, expected_reach, 
        st.lists(st.sampled_from(list(f.SKILL_EVIDENCE)), max_size=5), st.data())
 def test_upgrading_skill_evidence_never_lowers_score(req, pref, data):
     order = ["missing", "keyword", "bullet"]
-    req_d = {f"r{i}": l for i, l in enumerate(req)}
-    pref_d = {f"p{i}": l for i, l in enumerate(pref)}
+    req_d = {f"r{i}": label for i, label in enumerate(req)}
+    pref_d = {f"p{i}": label for i, label in enumerate(pref)}
     key = data.draw(st.sampled_from(sorted(req_d) + sorted(pref_d)))
     better_req, better_pref = dict(req_d), dict(pref_d)
     target = better_req if key in better_req else better_pref

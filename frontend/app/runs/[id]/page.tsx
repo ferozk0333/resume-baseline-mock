@@ -2,7 +2,7 @@
 import { Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScoreView } from "@/components/app/score/score-view";
+import { ScoreView } from "@/components/features/score/score-view";
 
 export default function ScorePage() {
   return <Suspense fallback={<Skeleton className="h-96" />}><Inner /></Suspense>;

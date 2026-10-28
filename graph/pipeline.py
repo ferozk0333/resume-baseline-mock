@@ -146,18 +146,6 @@ def _extract(deps: Deps):
         from extraction.parse.run import Parsers
         docs = [doc_from_state(d) for d in state["docs"]]
         to_extract = docs_to_extract(docs)
-        if config.REPO_CAP:                               # read at most MAX_REPOS READMEs (specs/18 item 11)
-            conn = db.connect(deps.db_path)
-            try:
-                baseline = db.get_baseline(conn, state.get("baseline_id")) if state.get("baseline_id") else None
-            finally:
-                conn.close()
-            if baseline is not None:
-                from extraction.repo_cap import keep
-                repos = [(d.evidence_id, d.text, d.repo.pushed_at, d.repo.stars) for d in docs
-                         if d.type == "github_repo" and d.repo.counted]
-                kept = keep(repos, baseline)
-                to_extract = [d for d in to_extract if d.type != "github_repo" or d.evidence_id in kept]
         # A re-run for an existing candidate ("Re-run extraction") always asks the model again.
         rerun = bool((state.get("inputs") or {}).get("candidate_id"))
         conn = db.connect(deps.db_path)
@@ -177,7 +165,7 @@ def _extract(deps: Deps):
                                 needs_extraction={d.evidence_id for d in to_extract}, today=deps.today,
                                 on_ready=deps.on_source_ready)
         saver.start()
-        parsers = Parsers(deps.db_path, deps.labeller, llm=deps.llm) if Parsers.any_on() else None
+        parsers = Parsers(deps.db_path, deps.labeller) if Parsers.any_on() else None
         cache_conn = db.connect(deps.db_path) if deps.extraction_cache and not rerun else None
         try:
             if to_extract:

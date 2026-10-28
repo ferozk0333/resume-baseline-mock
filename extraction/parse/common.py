@@ -98,11 +98,6 @@ def line_role(key: str, line: str, before: str, after: str) -> Ask:
                ((key, line), (f"{key}_before", before), (f"{key}_after", after)))
 
 
-def same_item(key: str, line: str, previous: str) -> Ask:
-    return Ask(key, "noul", f"Does the line in `{key}` belong to the same item (the same job, project, degree or "
-               f"entry) as the line in `{key}_previous`?",
-               ((True, "Same item: it continues or describes the previous line's entry."),
-                (False, "A new item starts with this line.")), ((key, line), (f"{key}_previous", previous)))
 
 
 def states_use(key: str, name: str, text: str) -> Ask:
@@ -110,9 +105,3 @@ def states_use(key: str, name: str, text: str) -> Ask:
                ((True, "Yes: the candidate used, built with, worked in or knows it."),
                 (False, "No: it is mentioned in passing, as someone else's, as not used, or it is not a skill or "
                         "tool here.")), ((f"{key}_name", name), (f"{key}_text", text)))
-
-
-def skill_or_tool(key: str, name: str) -> Ask:
-    return Ask(key, "choice", f"Is `{key}` a tool or a skill?",
-               (("tool", "A programming language, library, framework, platform, cloud service or product."),
-                ("skill", "A method, technique or ability.")), ((key, name),))

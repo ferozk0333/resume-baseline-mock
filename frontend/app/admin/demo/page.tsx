@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { PostingPreview } from "@/components/app/jobs/posting-preview";
+import { PostingPreview } from "@/components/features/jobs/posting-preview";
 import { ApiError, get, post, WORKPLACE, type Baseline, type Candidate, type Posting, type Task } from "@/lib/api";
 
 type Run = { id: string; baseline_id: string; baseline_title: string; status: string; started_at: string };

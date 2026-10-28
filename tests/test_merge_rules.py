@@ -131,15 +131,15 @@ def test_degree_groups_from_the_reviewed_file():
 
 
 def test_education_merges_same_school_same_degree_group_overlapping_or_missing_dates():
-    a = {"school": "University of Washington", "degree": "MS", "field": "Information Management", "start": "2024-09",
-         "end": "2026-06"}
-    assert store.same_education(a, {"school": "University of Washington", "degree": "Master of Science"})
-    assert store.same_education(a, {"school": "the University of Washington", "degree": "Master's",
-                                    "start": "2025-01", "end": "2026-06"})
-    assert not store.same_education(a, {"school": "University of Washington", "degree": "BS"})
-    assert not store.same_education(a, {"school": "University of Washington", "degree": "MS", "start": "2018-09",
-                                        "end": "2020-06"})                          # an earlier, separate degree
-    assert not store.same_education(a, {"school": "Washington State University", "degree": "MS"})
+    a = {"school": "University of Northgate", "degree": "MS", "field": "Information Systems", "start": "2023-09",
+         "end": "2025-06"}
+    assert store.same_education(a, {"school": "University of Northgate", "degree": "Master of Science"})
+    assert store.same_education(a, {"school": "the University of Northgate", "degree": "Master's",
+                                    "start": "2024-01", "end": "2025-06"})
+    assert not store.same_education(a, {"school": "University of Northgate", "degree": "BS"})
+    assert not store.same_education(a, {"school": "University of Northgate", "degree": "MS", "start": "2017-09",
+                                        "end": "2019-06"})                          # an earlier, separate degree
+    assert not store.same_education(a, {"school": "Northgate State University", "degree": "MS"})
 
 
 def test_education_entries_merge_keeping_the_first_documents_text_and_both_sources(tmp_path):
@@ -160,23 +160,23 @@ def test_education_entries_merge_keeping_the_first_documents_text_and_both_sourc
 
 # --- 2d awards ---------------------------------------------------------------------------------------------------
 
-HOROWITZ = ["Donald & Lynda Horowitz Endowed Merit Fellowship ($17,000)",
-            "Donald and Lynda Horowitz Endowed Fellowship",
-            "Recognized with the Donald & Lynda Horowitz Endowed Fellowship for work in responsible AI systems"]
+WHITFIELD = ["Margaret & Alan Whitfield Endowed Merit Fellowship ($12,000)",
+            "Margaret and Alan Whitfield Endowed Fellowship",
+            "Recognized with the Margaret & Alan Whitfield Endowed Fellowship for work in accessible design"]
 
 
-def test_the_three_horowitz_awards_are_one_with_the_amount_and_every_source():
-    merged, report = merge_profiles([Profile(claims=[_award("r", HOROWITZ[0])]),
-                                     Profile(claims=[_award("l", HOROWITZ[1]), _award("l", HOROWITZ[2])])], TYPES)
+def test_the_three_whitfield_awards_are_one_with_the_amount_and_every_source():
+    merged, report = merge_profiles([Profile(claims=[_award("r", WHITFIELD[0])]),
+                                     Profile(claims=[_award("l", WHITFIELD[1]), _award("l", WHITFIELD[2])])], TYPES)
     [award] = merged.claims
-    assert award.name_raw == HOROWITZ[0] and award.evidence_id == "r" and award.sources == ["l"]
+    assert award.name_raw == WHITFIELD[0] and award.evidence_id == "r" and award.sources == ["l"]
     assert report.merged == 2
 
 
 def test_a_more_complete_later_award_name_is_kept():
-    merged, _ = merge_profiles([Profile(claims=[_award("r", HOROWITZ[1])]), Profile(claims=[_award("l", HOROWITZ[0])])],
+    merged, _ = merge_profiles([Profile(claims=[_award("r", WHITFIELD[1])]), Profile(claims=[_award("l", WHITFIELD[0])])],
                                TYPES)
-    assert merged.claims[0].name_raw == HOROWITZ[0] and merged.claims[0].sources == ["r"]
+    assert merged.claims[0].name_raw == WHITFIELD[0] and merged.claims[0].sources == ["r"]
 
 
 def test_award_containment_needs_two_documents_and_whole_words():
@@ -186,19 +186,19 @@ def test_award_containment_needs_two_documents_and_whole_words():
     assert len(merge_profiles([Profile(claims=[c, d])], TYPES)[0].claims) == 2     # same document: kept apart
     e, f = _award("r", "Best Paper"), _award("l", "Best Paper Runner-up, ACM KDD 2025")
     assert len(merge_profiles([Profile(claims=[e]), Profile(claims=[f])], TYPES)[0].claims) == 1
-    assert dedupe.award_key("Chancellor's Merit Scholarship Award") == dedupe.award_key("Chancellor's Scholarship")
+    assert dedupe.award_key("Provost's Merit Scholarship Award") == dedupe.award_key("Provost's Scholarship")
 
 
 # --- 2e hackathon placements -------------------------------------------------------------------------------------
 
 def test_a_hackathon_award_becomes_that_hackathons_placement():
-    award = _award("r", "Top 10 Finalist from 600+ teams in CSI National Hackathon")
-    merged, report = merge_profiles([Profile(projects=[_project("r", "CSI National Hackathon", kind="hackathon")],
-                                             claims=[award, _award("r", "Chancellor's Merit Scholarship Award")])],
+    award = _award("r", "Top 10 Finalist from 400+ teams in Riverbend Civic Hackathon")
+    merged, report = merge_profiles([Profile(projects=[_project("r", "Riverbend Civic Hackathon", kind="hackathon")],
+                                             claims=[award, _award("r", "Provost's Merit Scholarship Award")])],
                                     TYPES)
-    assert [c.name_raw for c in merged.claims] == ["Chancellor's Merit Scholarship Award"]
-    assert merged.projects[0].details["placement"] == "Top 10 Finalist from 600+ teams"
-    assert report.placements == [(award.name_raw, "CSI National Hackathon")]
+    assert [c.name_raw for c in merged.claims] == ["Provost's Merit Scholarship Award"]
+    assert merged.projects[0].details["placement"] == "Top 10 Finalist from 400+ teams"
+    assert report.placements == [(award.name_raw, "Riverbend Civic Hackathon")]
 
 
 def test_a_placement_already_entered_is_kept_and_an_unrelated_award_stays():

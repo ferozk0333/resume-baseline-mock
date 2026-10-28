@@ -80,7 +80,6 @@ sortedcontainers==2.4.0
 soupsieve==2.10
 sqlite-vec==0.1.9
 starlette==1.7.0
-streamlit==1.65.0
 tabulate==0.10.0
 tenacity==9.2.1
 toml==0.10.2

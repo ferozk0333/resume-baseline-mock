@@ -2,7 +2,7 @@
 import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { JobsBrowser } from "@/components/app/candidate/jobs-browser";
+import { JobsBrowser } from "@/components/features/candidate/jobs-browser";
 import { useCurrentCandidate } from "@/lib/current-candidate";
 
 export default function JobsPage() {

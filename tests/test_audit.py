@@ -91,7 +91,7 @@ def test_weights_from_the_sliders_change_only_the_dimension_and_final_arithmetic
 
 def test_the_api_serves_it_only_when_the_flag_is_on(runs, monkeypatch):
     from fastapi.testclient import TestClient
-    from backend.main import create_app
+    from api.app import create_app
     from judges.fake_judge import FakeJudge
     path, out = runs
     run_id = next(iter(out.values()))

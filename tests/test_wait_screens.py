@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from backend import wait_screens as ws
+from services import wait_screens as ws
 from core import config, db
 from tests.helpers import SAMPLE_RESUME_LINES, make_pdf
 from tests.test_candidate import env, roles, scored  # noqa: F401  (fixture)
@@ -158,7 +158,7 @@ def test_no_internal_details_in_tips_progress_or_wait_screen_text(env):  # noqa:
     with db.connect(env.path) as c:
         texts += [r[0] for r in c.execute("SELECT e.message FROM task_events e JOIN tasks t ON t.id = e.task_id "
                                           "WHERE t.candidate_id = ?", (cid,))]
-    files = ["frontend/components/app/candidate/wait-progress.tsx", "frontend/components/app/candidate/good-to-know.tsx",
+    files = ["frontend/components/features/candidate/wait-progress.tsx", "frontend/components/features/candidate/good-to-know.tsx",
              "frontend/app/onboarding/page.tsx", "config/wait_tips.yaml"]
     for f in files:                            # visible strings only: JSX text and string literals, not identifiers
         src = (ROOT / f).read_text()

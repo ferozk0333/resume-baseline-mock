@@ -1,7 +1,7 @@
 """LinkedIn profile link in the recruiter view: entered on the form, or found in the candidate's documents."""
 import pytest
 
-from backend import linkedin as li
+from services import linkedin as li
 from core import db
 from tests.test_api import DS, api, onboard  # noqa: F401  (fixture)
 

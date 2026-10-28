@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
 from core import config, timing
-from core.llm import LLMError, StructuredLLM
+from providers.llm import LLMError, StructuredLLM
 from core.text import wrap_tag
 from extraction import schemas
 from extraction.validate import SourceDoc
@@ -47,12 +47,12 @@ def model_for(doc: SourceDoc) -> str:
 
 def cache_model(model: str) -> str:
     """The cache key names a route by its first model, so outputs saved before routing are still found."""
-    from core.routing import models_of
+    from providers.routing import models_of
     return models_of(model)[0]
 
 
 def extract_document(doc: SourceDoc, llm: StructuredLLM, model: str | None = None):
-    from core.routing import answer_budget
+    from providers.routing import answer_budget
     budget = None if doc.type in ("resume", "linkedin_pdf") else config.TASK_MAX_TOKENS["extract_web"]
     with answer_budget(budget):                       # résumé/LinkedIn keep EXTRACT_MAX_TOKENS
         return _extract(doc, llm, model)
@@ -108,7 +108,7 @@ def extract_all(docs: list[SourceDoc], llm: StructuredLLM, cache: ExtractionCach
         return result
 
     def _run(doc: SourceDoc):
-        from core.routing import last_model
+        from providers.routing import last_model
         if parsers is not None and parsers.wants(doc):
             with timing.span(timing.EXTRACT, doc.type, model="parser", chars=len(doc.text)) as t:
                 parsed = parsers.parse(doc)
@@ -120,10 +120,8 @@ def extract_all(docs: list[SourceDoc], llm: StructuredLLM, cache: ExtractionCach
             hit = cache.get(doc, cache_model(model)) if cache is not None else None
             if hit is not None:
                 t["cached"] = True
-                if parsers is not None:
-                    parsers.shadow(doc, hit)
                 return doc.evidence_id, hit
-            from core.routing import clear_last
+            from providers.routing import clear_last
             clear_last()
             try:
                 out = extract_document(doc, llm, model)
@@ -132,8 +130,6 @@ def extract_all(docs: list[SourceDoc], llm: StructuredLLM, cache: ExtractionCach
             t["model"] = last_model(model)                # the model that answered
             if cache is not None:
                 cache.put(doc, cache_model(model), out, used=t["model"])
-        if parsers is not None:
-            parsers.shadow(doc, out)                      # résumé shadow parse, in the background
         return doc.evidence_id, out
 
     with ThreadPoolExecutor(max_workers=config.EXTRACT_CONCURRENCY) as pool:

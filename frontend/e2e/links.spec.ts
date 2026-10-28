@@ -6,8 +6,8 @@ import { hrefFor } from "../lib/links";
 // Admin pages, for the seeded test profiles plus one with hard URLs added through Review.
 const API = process.env.E2E_API ?? "http://localhost:8010";
 const HARD = {
-  lancet: "https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(26)01714-9/abstract",
-  cert: "https://www.credly.com/badges/8c0a3fb1-e88c-4706-94e5-93991c08a908/linked_in_profile?src=a%2Fb&x=1#top",
+  paper: "https://journals.example.org/harbor/article/PIIS9999-0000(26)04217-3/abstract",
+  cert: "https://www.credly.com/badges/3f6b2d1e-0a4c-4b7e-9d21-5c8e7a1f0b42/linked_in_profile?src=a%2Fb&x=1#top",
   doi: "https://doi.org/10.1016/S0140-6736(20)30183-5",
 };
 
@@ -38,7 +38,7 @@ test("every rendered link is its stored URL, character for character", async ({ 
   const cands: { id: string; name: string }[] = await (await request.get(`${API}/candidates`)).json();
   const lena = cands.find((c) => c.name === "Lena Park")!;
   for (const [item, data] of [
-    ["project", { kind: "publication", name: "Lancet Commission (audit link test)", url: HARD.lancet }],
+    ["project", { kind: "publication", name: "Harbor Commission (audit link test)", url: HARD.paper }],
     ["project", { kind: "publication", name: "DOI link test", url: HARD.doi }],
     ["certification", { name: "Credly link test", issuer: "Test", verify_url: HARD.cert }],
   ] as const) {

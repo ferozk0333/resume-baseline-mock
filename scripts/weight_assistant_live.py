@@ -34,19 +34,18 @@ def main() -> None:
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--job", default="AI Engineer")
     a = ap.parse_args()
-    from backend import recruiter as rc
-    from backend import weight_assistant as wa
-    from parser_gates import db_copy
+    from services import recruiter as rc
+    from services import weight_assistant as wa
     from tests.test_weight_assistant import check_direction
     if a.live:
         if not config.LIVE:
             sys.exit("Live: set LIVE=1 LLM_PROVIDER=gemini, and only after the go.")
-        from core.llm import RoutedLLM
+        from providers.llm import RoutedLLM
         llm, mode = RoutedLLM(), "live"
     else:
         from tests.ui_fakes import StubWeightsLLM
         llm, mode = StubWeightsLLM(), "stubs"
-    db_copy(ROOT / "data" / "demo.db", WORK)
+    db.copy_db(ROOT / "data" / "demo.db", WORK)
     conn = db.connect(str(WORK))
     job = next(rc.get_job(conn, j["id"]) for j in rc.list_jobs(conn) if j["title"] == a.job)
     texts = yaml.safe_load((ROOT / "tests" / "fixtures" / "weight_texts.yaml").read_text())["texts"]

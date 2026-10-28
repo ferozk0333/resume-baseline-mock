@@ -73,12 +73,3 @@ FEATURES: list[Feature] = [
             "have at least a year of relevant experience (roles or counted projects)",
             lambda d: d.get("relevant_years") is not None and 12 * d["relevant_years"] >= RELEVANT_MONTHS),
 ]
-
-
-def relevant_months_bucket(details: dict) -> str | None:
-    """Depth's relevant experience as a bucket (shown as a count only, never per person)."""
-    years = details.get("relevant_years")
-    if years is None:
-        return None
-    months = 12 * years
-    return "under 6 months" if months < 6 else "6–12 months" if months < 12 else "1–2 years" if months < 24 else "2+ years"

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { get } from "@/lib/api";
-import { ExtLink } from "@/components/app/ext-link";
+import { ExtLink } from "@/components/shared/ext-link";
 
 type Flag = { id: string; evidence_id: string | null; source: string; chunk_index: number; chunk: string; score: number;
   hidden: number; model: string; created_at: string };

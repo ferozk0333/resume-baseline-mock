@@ -307,7 +307,7 @@ def test_progression_starts_during_review(tmp_path, monkeypatch):
 def test_rate_limits_and_retries_are_counted(tmp_path):
     from types import SimpleNamespace
     from core import timing
-    from core.llm import count_response
+    from providers.llm import count_response
     from judges.fake_judge import FakeJudge
     from judges.jev_judge import JevJudge
     from tests.test_judges import PostSession

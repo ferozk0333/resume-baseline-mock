@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from backend import demo_jobs  # noqa: E402
+from services import demo_jobs  # noqa: E402
 from core import db  # noqa: E402
 
 
