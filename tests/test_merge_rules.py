@@ -85,6 +85,37 @@ def test_a_resume_project_and_its_portfolio_case_study_become_one():
     assert merged.projects[0].sources == ["p"] and report.merged == 1
 
 
+def _repo(eid, name, url):
+    return ProjectRec(kind="repo", name=name, description=None, url=url, start_date=None, end_date=None,
+                      quote=f"Repository: jdoe/{name}", evidence_id=eid, is_fork=False, own_commits=0)
+
+
+def test_a_project_merged_with_its_github_repo_takes_the_repo_url():
+    # AIE-01: the resume's ragcheck came back with the header's portfolio URL; the repo's URL must win.
+    resume = _project("r", "ragcheck", url="sushmitaadhikari.dev")
+    merged, _ = merge_profiles([Profile(projects=[resume]),
+                                Profile(projects=[_repo("g", "ragcheck", "https://github.com/jdoe/ragcheck")])],
+                               {**TYPES, "g": "github_repo"})
+    (p,) = merged.projects
+    assert (p.url, p.is_github, p.sources) == ("https://github.com/jdoe/ragcheck", True, ["g"])
+
+
+def test_a_github_repo_url_is_kept_when_a_later_document_gives_another_link():
+    merged, _ = merge_profiles([Profile(projects=[_repo("g", "ragcheck", "https://github.com/jdoe/ragcheck")]),
+                                Profile(projects=[_project("l", "ragcheck", url="sushmitaadhikari.dev")])],
+                               {"g": "github_repo", "l": "linkedin_pdf"})
+    assert merged.projects[0].url == "https://github.com/jdoe/ragcheck"
+
+
+def test_a_link_the_candidate_edited_is_kept_over_the_repo_url():
+    edited = _project("r", "ragcheck", url="https://ragcheck.dev")
+    edited.source = "user_edit"
+    merged, _ = merge_profiles([Profile(projects=[edited]),
+                                Profile(projects=[_repo("g", "ragcheck", "https://github.com/jdoe/ragcheck")])],
+                               {**TYPES, "g": "github_repo"})
+    assert merged.projects[0].url == "https://ragcheck.dev"
+
+
 # --- 2c education ----------------------------------------------------------------------------------------------
 
 def test_degree_groups_from_the_reviewed_file():

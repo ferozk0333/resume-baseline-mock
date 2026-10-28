@@ -538,6 +538,10 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     async def onboard(candidate_id: str, baseline_id: str | None = Form(None), resume: UploadFile = File(...),
                       linkedin_pdf: UploadFile | None = File(None), github: str | None = Form(None),
                       portfolio_url: str | None = Form(None),
+                      github_pdf: UploadFile | None = File(None, description="Saved GitHub profile page (PDF); "
+                                                                                 "used instead of `github`"),
+                      portfolio_pdf: UploadFile | None = File(None, description="Portfolio saved as PDF; used "
+                                                                                    "instead of `portfolio_url`"),
                       linkedin_url: str | None = Form(None, description="LinkedIn profile URL (display only)"),
                       demo_videos: str = Form("[]", description='JSON list of YouTube/Loom URLs (max 3)'),
                       certifications: str = Form("[]", description="JSON list of {name, issuer, date, "
@@ -574,12 +578,17 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             linkedin_pdf=Upload(linkedin_pdf.filename or "linkedin.pdf",
                                 await read_upload(linkedin_pdf, "The LinkedIn PDF"))
             if linkedin_pdf is not None and linkedin_pdf.filename else None,
+            github_pdf=Upload(github_pdf.filename or "github.pdf", await read_upload(github_pdf, "The GitHub PDF"))
+            if github_pdf is not None and github_pdf.filename else None,
+            portfolio_pdf=Upload(portfolio_pdf.filename or "portfolio.pdf",
+                                 await read_upload(portfolio_pdf, "The portfolio PDF"))
+            if portfolio_pdf is not None and portfolio_pdf.filename else None,
             github=github or None, portfolio_url=portfolio_url or None, certifications=certs, references=refs,
             name=cand["name"], target_role=cand["target_role"], candidate_id=candidate_id)
         task_id = tasks.create("onboard", candidate_id)
         from backend import wait_screens as ws               # the reading wait screen lists these (specs/17)
-        added = ws.added_sources({"linkedin_pdf": inputs.linkedin_pdf, "github": inputs.github,
-                                  "portfolio": inputs.portfolio_url})
+        added = ws.added_sources({"linkedin_pdf": inputs.linkedin_pdf, "github": inputs.github or inputs.github_pdf,
+                                  "portfolio": inputs.portfolio_url or inputs.portfolio_pdf})
         tasks.event(task_id, "queued", "Waiting to start", 0, result_json={"sources": added})
         if onboarding:
             from backend import candidate as cx

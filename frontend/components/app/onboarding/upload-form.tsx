@@ -27,6 +27,8 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
 }) {
   const [resume, setResume] = useState<File | null>(null);
   const [linkedin, setLinkedin] = useState<File | null>(null);
+  const [githubPdf, setGithubPdf] = useState<File | null>(null);
+  const [portfolioPdf, setPortfolioPdf] = useState<File | null>(null);
   const [github, setGithub] = useState("");
   const [portfolio, setPortfolio] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");
@@ -47,6 +49,8 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
     if (onboarding) form.append("onboarding", "true");
     form.append("resume", resume);
     if (linkedin) form.append("linkedin_pdf", linkedin);
+    if (githubPdf) form.append("github_pdf", githubPdf);
+    if (portfolioPdf) form.append("portfolio_pdf", portfolioPdf);
     if (github.trim()) form.append("github", github.trim());
     if (portfolio.trim()) form.append("portfolio_url", portfolio.trim());
     if (linkedinUrl.trim()) form.append("linkedin_url", linkedinUrl.trim());
@@ -82,6 +86,12 @@ export function UploadForm({ candidateId, ensureCandidate, baselineId, onboardin
                 On your LinkedIn profile, open <span className="font-medium">More → Save to PDF</span> and upload that file.
               </p>
             </>} />
+          <FileDrop id="github-pdf" label="GitHub PDF" what="GitHub PDF" accept={[".pdf"]} typesLabel="PDF"
+            file={githubPdf} onFile={setGithubPdf} maxBytes={maxBytes}
+            hint={<p className="text-xs text-muted-foreground">Used instead of the GitHub field below.</p>} />
+          <FileDrop id="portfolio-pdf" label="Portfolio PDF" what="portfolio PDF" accept={[".pdf"]} typesLabel="PDF"
+            file={portfolioPdf} onFile={setPortfolioPdf} maxBytes={maxBytes}
+            hint={<p className="text-xs text-muted-foreground">Used instead of the portfolio URL below.</p>} />
           <div className="space-y-1.5">
             <Label htmlFor="linkedin-url">LinkedIn profile URL</Label>
             <Input id="linkedin-url" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)}

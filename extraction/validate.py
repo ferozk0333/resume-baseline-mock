@@ -658,6 +658,8 @@ def merge_profiles(profiles: list[Profile], evidence_types: dict[str, str] | Non
             _fill(match, project, ("description", "url", "start_date", "end_date", "role_id"))
             if project.is_github and not match.is_github:
                 match.is_fork, match.own_commits = project.is_fork, project.own_commits
+                if project.url and match.source != "user_edit":
+                    match.url = project.url        # the repository is the project's link, not a URL a document gave
                 if project.end_date and (match.end_date is None or project.end_date > match.end_date):
                     match.end_date = project.end_date
             if config.DEDUPE_NAMES and {match.kind, project.kind} == {"project", "repo"}:

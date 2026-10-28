@@ -53,8 +53,10 @@ class OnboardingInputs:
     resume: Upload | None
     linkedin_pdf: Upload | None = None
     github: str | None = None
+    github_pdf: Upload | None = None    # a saved GitHub profile page: read in code, used instead of `github`
     portfolio_url: str | None = None
     portfolio_text: str | None = None   # pasted content when the page is JavaScript-rendered
+    portfolio_pdf: Upload | None = None  # the portfolio saved as PDF: its text is used instead of `portfolio_url`
     certifications: list[CertificationForm] = field(default_factory=list)
     references: list[ReferenceForm] = field(default_factory=list)
     name: str | None = None
@@ -94,6 +96,14 @@ def ingest(conn: sqlite3.Connection, inputs: OnboardingInputs, *,
     """Create the candidate and evidence items. Returns (candidate_id, docs to extract, warnings)."""
     warnings: list[str] = []
     username = github.parse_username(inputs.github)
+    pdf_repos: list[github.Repo] | None = None
+    if inputs.github_pdf:                       # used instead of the GitHub field (no API call)
+        with timing.span(timing.INGEST, "github_pdf") as t:
+            from ingest.github_pdf import parse_github_pdf
+            pdf_user, pdf_repos, pdf_warnings = parse_github_pdf(inputs.github_pdf.data)
+            t["repos"] = len(pdf_repos)
+        warnings += [w.replace("GitHub PDF:", "GitHub:", 1) for w in pdf_warnings]
+        username = username or pdf_user
     if inputs.candidate_id and store.get_candidate(conn, inputs.candidate_id):
         candidate_id = inputs.candidate_id
         store.reset_candidate_evidence(conn, candidate_id)
@@ -116,9 +126,15 @@ def ingest(conn: sqlite3.Connection, inputs: OnboardingInputs, *,
         if linkedin:
             docs.append(linkedin)
 
-    if inputs.github and not username:
+    if pdf_repos is not None:
+        path = documents.save_upload(candidate_id, inputs.github_pdf.filename, inputs.github_pdf.data)
+        for repo in pdf_repos:
+            eid = store.add_evidence(conn, candidate_id, "github_repo", "upload", raw_text=repo.as_text(),
+                                     file_path=str(path), file_sha256=documents.sha256(inputs.github_pdf.data))
+            docs.append(SourceDoc(eid, "github_repo", repo.as_text(), f"GitHub repo {repo.name}", repo=repo))
+    elif inputs.github and not username:
         warnings.append(f"GitHub: '{inputs.github}' is not a valid GitHub username or profile URL.")
-    if username:
+    elif username:
         with timing.span(timing.INGEST, "github") as t:
             try:
                 client = github_client or github.GitHubClient(session=CachedSession(conn))
@@ -132,23 +148,34 @@ def ingest(conn: sqlite3.Connection, inputs: OnboardingInputs, *,
             eid = store.add_evidence(conn, candidate_id, "github_repo", "api", raw_text=repo.as_text())
             docs.append(SourceDoc(eid, "github_repo", repo.as_text(), f"GitHub repo {repo.name}", repo=repo))
 
-    if inputs.portfolio_text or inputs.portfolio_url:
+    page, source = None, None
+    if inputs.portfolio_pdf:                    # used instead of the portfolio URL (nothing is fetched)
+        pdf = inputs.portfolio_pdf
+        path = documents.save_upload(candidate_id, pdf.filename, pdf.data)
+        try:
+            with timing.span(timing.INGEST, "portfolio_pdf"):
+                page = portfolio.page_from_text(None, documents.extract_text(pdf.filename, pdf.data, conn))
+            source = "upload"
+        except documents.DocumentError as exc:
+            store.add_evidence(conn, candidate_id, "portfolio", "upload", file_path=str(path),
+                               file_sha256=documents.sha256(pdf.data), status="failed", error=str(exc))
+            warnings.append(f"Portfolio: {exc}")
+    elif inputs.portfolio_text or inputs.portfolio_url:
         try:
             with timing.span(timing.INGEST, "portfolio"):
                 page = (portfolio.page_from_text(inputs.portfolio_url, inputs.portfolio_text) if inputs.portfolio_text
                         else portfolio.fetch_portfolio(inputs.portfolio_url, portfolio_session))
         except portfolio.PortfolioError as exc:
             warnings.append(f"Portfolio: {exc}")
-            page = None
-        if page is not None:
-            source = "form" if inputs.portfolio_text else "url"
-            if page.warning:
-                warnings.append(f"Portfolio: {page.warning}")
-                store.add_evidence(conn, candidate_id, "portfolio", source, raw_text=page.text,
-                                   status="failed", error=page.warning)
-            else:
-                eid = store.add_evidence(conn, candidate_id, "portfolio", source, raw_text=page.text)
-                docs.append(SourceDoc(eid, "portfolio", page.text, "Portfolio"))
+        source = "form" if inputs.portfolio_text else "url"
+    if page is not None:
+        if page.warning:
+            warnings.append(f"Portfolio: {page.warning}")
+            store.add_evidence(conn, candidate_id, "portfolio", source, raw_text=page.text,
+                               status="failed", error=page.warning)
+        else:
+            eid = store.add_evidence(conn, candidate_id, "portfolio", source, raw_text=page.text)
+            docs.append(SourceDoc(eid, "portfolio", page.text, "Portfolio"))
     return candidate_id, docs, warnings
 
 

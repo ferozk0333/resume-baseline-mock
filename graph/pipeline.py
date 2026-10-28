@@ -104,7 +104,8 @@ def inputs_from_state(d: dict) -> OnboardingInputs:
     up = lambda u: Upload(**u) if u else None  # noqa: E731
     return OnboardingInputs(
         resume=up(d.get("resume")), linkedin_pdf=up(d.get("linkedin_pdf")), github=d.get("github"),
-        portfolio_url=d.get("portfolio_url"), portfolio_text=d.get("portfolio_text"),
+        github_pdf=up(d.get("github_pdf")), portfolio_url=d.get("portfolio_url"),
+        portfolio_text=d.get("portfolio_text"), portfolio_pdf=up(d.get("portfolio_pdf")),
         certifications=[CertificationForm(**c) for c in d.get("certifications", [])],
         references=[ReferenceForm(**r) for r in d.get("references", [])],
         name=d.get("name"), target_role=d.get("target_role"), candidate_id=d.get("candidate_id"),
